@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Authentication APIs</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        h2 {
+            color: #0066cc;
+        }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Authentication APIs</h1>
+
+    <div class="test-section">
+        <h2>1. Login</h2>
+        <input type="text" id="login-username" placeholder="Username" value="admin">
+        <input type="password" id="login-password" placeholder="Password" value="admin123">
+        <button onclick="testLogin()">Test Login</button>
+        <div class="result" id="login-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Verify Token</h2>
+        <button onclick="testVerify()">Test Verify</button>
+        <div class="result" id="verify-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Change Password</h2>
+        <input type="password" id="current-pwd" placeholder="Current Password" value="admin123">
+        <input type="password" id="new-pwd" placeholder="New Password" value="admin456">
+        <button onclick="testChangePassword()">Test Change Password</button>
+        <div class="result" id="change-pwd-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Add User (Admin Only)</h2>
+        <input type="text" id="new-user" placeholder="Username" value="testuser">
+        <input type="password" id="new-user-pwd" placeholder="Password" value="test123">
+        <select id="new-user-role">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+        </select>
+        <button onclick="testAddUser()">Test Add User</button>
+        <div class="result" id="add-user-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. Logout</h2>
+        <button onclick="testLogout()">Test Logout</button>
+        <div class="result" id="logout-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Current Token</h2>
+        <div class="result" id="token-display"></div>
+        <button onclick="showToken()">Show Token</button>
+        <button onclick="clearToken()">Clear Token</button>
+    </div>
+
+    <script>
+        function showResult(elementId, data) {
+            document.getElementById(elementId).textContent = JSON.stringify(data, null, 2);
+        }
+
+        function getToken() {
+            return localStorage.getItem('authToken');
+        }
+
+        async function testLogin() {
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const result = await response.json();
+                showResult('login-result', result);
+
+                if (result.success) {
+                    localStorage.setItem('authToken', result.token);
+                    localStorage.setItem('username', result.username);
+                    localStorage.setItem('userRole', result.role);
+                    showToken();
+                }
+            } catch (error) {
+                showResult('login-result', { error: error.message });
+            }
+        }
+
+        async function testVerify() {
+            const token = getToken();
+            if (!token) {
+                showResult('verify-result', { error: 'No token found. Please login first.' });
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/verify', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const result = await response.json();
+                showResult('verify-result', result);
+            } catch (error) {
+                showResult('verify-result', { error: error.message });
+            }
+        }
+
+        async function testChangePassword() {
+            const token = getToken();
+            if (!token) {
+                showResult('change-pwd-result', { error: 'No token found. Please login first.' });
+                return;
+            }
+
+            const currentPassword = document.getElementById('current-pwd').value;
+            const newPassword = document.getElementById('new-pwd').value;
+
+            try {
+                const response = await fetch('/api/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ currentPassword, newPassword })
+                });
+
+                const result = await response.json();
+                showResult('change-pwd-result', result);
+            } catch (error) {
+                showResult('change-pwd-result', { error: error.message });
+            }
+        }
+
+        async function testAddUser() {
+            const token = getToken();
+            if (!token) {
+                showResult('add-user-result', { error: 'No token found. Please login first.' });
+                return;
+            }
+
+            const username = document.getElementById('new-user').value;
+            const password = document.getElementById('new-user-pwd').value;
+            const role = document.getElementById('new-user-role').value;
+
+            try {
+                const response = await fetch('/api/add-user', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ username, password, role })
+                });
+
+                const result = await response.json();
+                showResult('add-user-result', result);
+            } catch (error) {
+                showResult('add-user-result', { error: error.message });
+            }
+        }
+
+        async function testLogout() {
+            const token = getToken();
+            if (!token) {
+                showResult('logout-result', { error: 'No token found.' });
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const result = await response.json();
+                showResult('logout-result', result);
+
+                if (result.success) {
+                    clearToken();
+                }
+            } catch (error) {
+                showResult('logout-result', { error: error.message });
+            }
+        }
+
+        function showToken() {
+            const token = getToken();
+            const username = localStorage.getItem('username');
+            const role = localStorage.getItem('userRole');
+            showResult('token-display', {
+                token: token || 'No token',
+                username: username || 'No username',
+                role: role || 'No role'
+            });
+        }
+
+        function clearToken() {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('username');
+            localStorage.removeItem('userRole');
+            showToken();
+        }
+
+        // Show token on load
+        showToken();
+    </script>
+</body>
+</html>

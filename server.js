@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { TVA_STATION_COORDINATES } = require('./tva-coordinates');
 const { MQTT_STATION_COORDINATES } = require('./mqtt-coordinates');
 const { connectMQTT, getConnectionStatus } = require('./mqtt_client');
@@ -21,6 +22,46 @@ const PORT = 3000;
 // Middleware để serve static files
 app.use(express.static('public'));
 app.use(express.json());
+
+// Simple authentication (in production, use proper database and hashing)
+const USERS = {
+    'admin': {
+        password: 'admin123', // In production, use bcrypt hashed passwords
+        name: 'Administrator',
+        role: 'admin'
+    },
+    'user': {
+        password: 'user123',
+        name: 'User',
+        role: 'user'
+    }
+};
+
+// Token storage (in production, use Redis or database)
+const tokens = new Map();
+
+// Generate token
+function generateToken() {
+    return crypto.randomBytes(32).toString('hex');
+}
+
+// Verify token middleware
+function verifyToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (!token) {
+        return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+    
+    const user = tokens.get(token);
+    if (!user) {
+        return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
+    
+    req.user = user;
+    next();
+}
 
 /**
  * Cập nhật dữ liệu TVA từ getKeyTVA.js
@@ -78,6 +119,174 @@ async function saveMQTTDataToDB() {
         console.error('❌ Lỗi lưu dữ liệu MQTT vào database:', error.message);
     }
 }
+
+/**
+ * Authentication APIs
+ */
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+        return res.json({ success: false, message: 'Thiếu thông tin đăng nhập' });
+    }
+    
+    const user = USERS[username];
+    if (!user || user.password !== password) {
+        return res.json({ success: false, message: 'Tên đăng nhập hoặc mật khẩu không đúng' });
+    }
+    
+    // Generate token
+    const token = generateToken();
+    tokens.set(token, { 
+        username, 
+        name: user.name, 
+        role: user.role 
+    });
+    
+    res.json({
+        success: true,
+        token,
+        username: user.name,
+        role: user.role
+    });
+});
+
+app.post('/api/logout', verifyToken, (req, res) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (token) {
+        tokens.delete(token);
+    }
+    
+    res.json({ success: true });
+});
+
+app.get('/api/verify', verifyToken, (req, res) => {
+    res.json({
+        success: true,
+        user: req.user
+    });
+});
+
+// Change password endpoint
+app.post('/api/change-password', verifyToken, (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    const username = req.user.username;
+    
+    if (!currentPassword || !newPassword) {
+        return res.json({ success: false, message: 'Thiếu thông tin' });
+    }
+    
+    const user = USERS[username];
+    if (!user) {
+        return res.json({ success: false, message: 'Người dùng không tồn tại' });
+    }
+    
+    if (user.password !== currentPassword) {
+        return res.json({ success: false, message: 'Mật khẩu hiện tại không đúng' });
+    }
+    
+    if (newPassword.length < 6) {
+        return res.json({ success: false, message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+    }
+    
+    // Update password
+    USERS[username].password = newPassword;
+    
+    res.json({ success: true, message: 'Đổi mật khẩu thành công' });
+});
+
+// Add user endpoint (admin only)
+app.post('/api/add-user', verifyToken, (req, res) => {
+    const { username, password, role } = req.body;
+    
+    // Check if requester is admin
+    if (req.user.role !== 'admin') {
+        return res.json({ success: false, message: 'Không có quyền thực hiện thao tác này' });
+    }
+    
+    if (!username || !password || !role) {
+        return res.json({ success: false, message: 'Thiếu thông tin' });
+    }
+    
+    if (USERS[username]) {
+        return res.json({ success: false, message: 'Tên đăng nhập đã tồn tại' });
+    }
+    
+    if (username.length < 3) {
+        return res.json({ success: false, message: 'Tên đăng nhập phải có ít nhất 3 ký tự' });
+    }
+    
+    if (password.length < 6) {
+        return res.json({ success: false, message: 'Mật khẩu phải có ít nhất 6 ký tự' });
+    }
+    
+    if (role !== 'admin' && role !== 'user') {
+        return res.json({ success: false, message: 'Vai trò không hợp lệ' });
+    }
+    
+    // Add new user
+    USERS[username] = {
+        password,
+        name: username.charAt(0).toUpperCase() + username.slice(1),
+        role
+    };
+    
+    res.json({ success: true, message: 'Thêm người dùng thành công' });
+});
+
+// Get all users endpoint (admin only)
+app.get('/api/users', verifyToken, (req, res) => {
+    // Check if requester is admin
+    if (req.user.role !== 'admin') {
+        return res.json({ success: false, message: 'Không có quyền thực hiện thao tác này' });
+    }
+    
+    // Return list of users (without passwords)
+    const userList = Object.keys(USERS).map(username => ({
+        username,
+        name: USERS[username].name,
+        role: USERS[username].role
+    }));
+    
+    res.json({ success: true, users: userList });
+});
+
+// Delete user endpoint (admin only)
+app.post('/api/delete-user', verifyToken, (req, res) => {
+    const { username } = req.body;
+    
+    // Check if requester is admin
+    if (req.user.role !== 'admin') {
+        return res.json({ success: false, message: 'Không có quyền thực hiện thao tác này' });
+    }
+    
+    if (!username) {
+        return res.json({ success: false, message: 'Thiếu thông tin' });
+    }
+    
+    // Prevent deleting own account
+    if (username === req.user.username) {
+        return res.json({ success: false, message: 'Không thể xóa tài khoản của chính mình' });
+    }
+    
+    if (!USERS[username]) {
+        return res.json({ success: false, message: 'Người dùng không tồn tại' });
+    }
+    
+    // Delete user
+    delete USERS[username];
+    
+    // Invalidate all tokens for this user
+    for (const [token, userData] of tokens.entries()) {
+        if (userData.username === username) {
+            tokens.delete(token);
+        }
+    }
+    
+    res.json({ success: true, message: 'Đã xóa người dùng thành công' });
+});
 
 /**
  * API: Lấy dữ liệu tất cả các trạm (TVA + MQTT)
