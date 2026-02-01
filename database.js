@@ -421,6 +421,191 @@ function closeDatabase() {
     });
 }
 
+/**
+ * Kiểm tra xem trạm có online hay không (có thay đổi giá trị trong khoảng thời gian)
+ * Trả về object: { station_name: { hasChange: true/false, lastUpdate: timestamp } }
+ */
+function checkStationsValueChanges(timeoutMinutes = 60) {
+    return new Promise((resolve, reject) => {
+        const results = {};
+        const cutoffTime = new Date(Date.now() - timeoutMinutes * 60 * 1000).toISOString();
+        
+        console.log(`🔍 Checking value changes for stations (timeout: ${timeoutMinutes} min, cutoff: ${cutoffTime})`);
+        
+        // Query đơn giản hơn: đếm distinct values cho mỗi trạm/parameter
+        const tvaQuery = `
+            SELECT 
+                station_name,
+                parameter_name,
+                COUNT(DISTINCT value) as distinct_values,
+                MAX(timestamp) as last_update,
+                COUNT(*) as total_records
+            FROM tva_data
+            WHERE timestamp >= ?
+            GROUP BY station_name, parameter_name
+        `;
+        
+        db.all(tvaQuery, [cutoffTime], (err, tvaRows) => {
+            if (err) {
+                console.error('❌ Error checking TVA value changes:', err);
+                reject(err);
+                return;
+            }
+            
+            console.log(`📊 TVA query returned ${tvaRows.length} parameter groups`);
+            
+            // Phân tích kết quả TVA
+            tvaRows.forEach(row => {
+                if (!results[row.station_name]) {
+                    results[row.station_name] = {
+                        hasChange: false,
+                        lastUpdate: row.last_update,
+                        parameters: []
+                    };
+                }
+                
+                // Kiểm tra xem parameter này có thay đổi không
+                const paramHasChange = row.distinct_values > 1;
+                
+                results[row.station_name].parameters.push({
+                    name: row.parameter_name,
+                    distinctValues: row.distinct_values,
+                    totalRecords: row.total_records,
+                    hasChange: paramHasChange
+                });
+                
+                // Nếu có ít nhất 1 parameter thay đổi -> station có thay đổi
+                if (paramHasChange) {
+                    results[row.station_name].hasChange = true;
+                }
+                
+                // Update last_update nếu mới hơn
+                if (new Date(row.last_update) > new Date(results[row.station_name].lastUpdate)) {
+                    results[row.station_name].lastUpdate = row.last_update;
+                }
+            });
+            
+            // Kiểm tra MQTT data
+            const mqttQuery = `
+                SELECT 
+                    station_name,
+                    parameter_name,
+                    COUNT(DISTINCT value) as distinct_values,
+                    MAX(timestamp) as last_update,
+                    COUNT(*) as total_records
+                FROM mqtt_data
+                WHERE timestamp >= ?
+                GROUP BY station_name, parameter_name
+            `;
+            
+            db.all(mqttQuery, [cutoffTime], (err, mqttRows) => {
+                if (err) {
+                    console.error('❌ Error checking MQTT value changes:', err);
+                    reject(err);
+                    return;
+                }
+                
+                console.log(`📊 MQTT query returned ${mqttRows.length} parameter groups`);
+                
+                // Phân tích kết quả MQTT
+                mqttRows.forEach(row => {
+                    if (!results[row.station_name]) {
+                        results[row.station_name] = {
+                            hasChange: false,
+                            lastUpdate: row.last_update,
+                            parameters: []
+                        };
+                    }
+                    
+                    // Kiểm tra xem parameter này có thay đổi không
+                    const paramHasChange = row.distinct_values > 1;
+                    
+                    results[row.station_name].parameters.push({
+                        name: row.parameter_name,
+                        distinctValues: row.distinct_values,
+                        totalRecords: row.total_records,
+                        hasChange: paramHasChange
+                    });
+                    
+                    // Nếu có ít nhất 1 parameter thay đổi -> station có thay đổi
+                    if (paramHasChange) {
+                        results[row.station_name].hasChange = true;
+                    }
+                    
+                    // Update last_update nếu mới hơn
+                    if (new Date(row.last_update) > new Date(results[row.station_name].lastUpdate)) {
+                        results[row.station_name].lastUpdate = row.last_update;
+                    }
+                });
+                
+                // Log kết quả để debug
+                console.log(`📈 Station status summary:`);
+                Object.keys(results).forEach(stationName => {
+                    const station = results[stationName];
+                    const changedParams = station.parameters.filter(p => p.hasChange);
+                    console.log(`   ${stationName}: ${station.hasChange ? '✅ ONLINE' : '❌ OFFLINE'} (${changedParams.length}/${station.parameters.length} params changed)`);
+                });
+                
+                resolve(results);
+            });
+        });
+    });
+}
+
+/**
+ * Get last update time for each station from database
+ */
+function getStationLastUpdates() {
+    return new Promise((resolve, reject) => {
+        const lastUpdates = {};
+        
+        // Get last update from TVA data
+        const tvaQuery = `
+            SELECT station_name, MAX(timestamp) as last_update
+            FROM tva_data
+            GROUP BY station_name
+        `;
+        
+        db.all(tvaQuery, [], (err, tvaRows) => {
+            if (err) {
+                console.error('Error getting TVA last updates:', err);
+                reject(err);
+                return;
+            }
+            
+            // Store TVA updates
+            tvaRows.forEach(row => {
+                lastUpdates[row.station_name] = row.last_update;
+            });
+            
+            // Get last update from MQTT data
+            const mqttQuery = `
+                SELECT station_name, MAX(timestamp) as last_update
+                FROM mqtt_data
+                GROUP BY station_name
+            `;
+            
+            db.all(mqttQuery, [], (err, mqttRows) => {
+                if (err) {
+                    console.error('Error getting MQTT last updates:', err);
+                    reject(err);
+                    return;
+                }
+                
+                // Store MQTT updates (merge with TVA)
+                mqttRows.forEach(row => {
+                    if (!lastUpdates[row.station_name] || 
+                        new Date(row.last_update) > new Date(lastUpdates[row.station_name])) {
+                        lastUpdates[row.station_name] = row.last_update;
+                    }
+                });
+                
+                resolve(lastUpdates);
+            });
+        });
+    });
+}
+
 module.exports = {
     db,
     initDatabase,
@@ -431,5 +616,6 @@ module.exports = {
     getStations,
     saveStationInfo,
     cleanOldData,
-    closeDatabase
+    closeDatabase,
+    checkStationsValueChanges
 };

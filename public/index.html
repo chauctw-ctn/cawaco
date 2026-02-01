@@ -88,21 +88,21 @@
 
             <!-- Filter Section (Visible only when Dashboard is active) -->
             <div class="filter-section" id="filter-section">
-                <h4>Bộ lọc loại trạm</h4>
+                <h4>Bộ lọc trạng thái trạm</h4>
                 <div class="checkbox-list">
                     <label class="checkbox-item">
                         <input type="checkbox" id="filter-all" value="all" checked>
                         <span>Tất cả (<span id="total-count">0</span>)</span>
                     </label>
                     <label class="checkbox-item">
-                        <input type="checkbox" id="filter-tva" value="tva" checked>
-                        <span class="filter-dot tva"></span>
-                        <span>TVA (<span id="tva-count">0</span>)</span>
+                        <input type="checkbox" id="filter-online" value="online" checked>
+                        <span class="filter-dot online"></span>
+                        <span>Trạm Online (<span id="online-count">0</span>)</span>
                     </label>
                     <label class="checkbox-item">
-                        <input type="checkbox" id="filter-mqtt" value="mqtt" checked>
-                        <span class="filter-dot mqtt"></span>
-                        <span>MQTT (<span id="mqtt-count">0</span>)</span>
+                        <input type="checkbox" id="filter-offline" value="offline" checked>
+                        <span class="filter-dot offline"></span>
+                        <span>Trạm Offline (<span id="offline-count">0</span>)</span>
                     </label>
                 </div>
             </div>
@@ -125,6 +125,16 @@
                             <!-- Will be populated dynamically -->
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Offline Timeout Settings -->
+            <div class="filter-section" id="offline-settings-section">
+                <h4>Cài đặt Offline</h4>
+                <div class="setting-item">
+                    <label for="offline-timeout">Thời gian offline (phút):</label>
+                    <input type="number" id="offline-timeout" min="1" max="1440" value="60" class="setting-input">
+                    <small class="setting-help">Trạm offline nếu không có dữ liệu mới</small>
                 </div>
             </div>
 

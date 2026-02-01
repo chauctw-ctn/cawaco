@@ -3,6 +3,94 @@ let map;
 let markers = [];
 let allStations = [];
 let currentFilter = 'all';
+let offlineTimeoutMinutes = 60; // Default 60 minutes
+
+/**
+ * Format date to dd/mm/yyyy HH:mm:ss
+ */
+function formatDateTime(date) {
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+}
+
+/**
+ * Load offline timeout from localStorage
+ */
+function loadOfflineTimeout() {
+    const saved = localStorage.getItem('offlineTimeoutMinutes');
+    if (saved) {
+        offlineTimeoutMinutes = parseInt(saved);
+        const input = document.getElementById('offline-timeout');
+        if (input) {
+            input.value = offlineTimeoutMinutes;
+        }
+    }
+}
+
+/**
+ * Save offline timeout to localStorage
+ */
+function saveOfflineTimeout(minutes) {
+    offlineTimeoutMinutes = minutes;
+    localStorage.setItem('offlineTimeoutMinutes', minutes);
+    console.log(`Offline timeout updated to ${minutes} minutes`);
+    
+    // Refresh markers to apply new timeout
+    if (allStations.length > 0) {
+        displayMarkers(allStations);
+    }
+}
+
+/**
+ * Check if station is offline (no value changes within configured time period)
+ * Uses hasValueChange flag from server (based on SQL analysis)
+ */
+function isStationOffline(station) {
+    // Debug: log station data
+    console.log(`🔍 Checking station: ${station.name}, hasValueChange=${station.hasValueChange}, lastUpdateInDB=${station.lastUpdateInDB}`);
+    
+    // Check if station has value changes within the timeout period
+    // hasValueChange is calculated by server based on distinct values in timeframe
+    if (station.hasValueChange === false) {
+        console.log(`   ❌ OFFLINE - No value changes in last ${offlineTimeoutMinutes}min`);
+        return true;
+    }
+    
+    if (station.hasValueChange === true) {
+        console.log(`   ✅ ONLINE - Has value changes`);
+        return false;
+    }
+    
+    // Fallback: check if lastUpdateInDB exists
+    const checkTime = station.lastUpdateInDB || station.updateTime;
+    
+    if (!checkTime) {
+        console.log(`   ❌ OFFLINE - No update time`);
+        return true;
+    }
+    
+    const updateTime = new Date(checkTime);
+    const now = new Date();
+    
+    // Check if date is valid
+    if (isNaN(updateTime.getTime())) {
+        console.log(`   ❌ OFFLINE - Invalid updateTime (${checkTime})`);
+        return true;
+    }
+    
+    const diffMinutes = (now - updateTime) / (1000 * 60);
+    
+    const status = diffMinutes > offlineTimeoutMinutes ? 'OFFLINE' : 'ONLINE';
+    console.log(`   ${status === 'OFFLINE' ? '❌' : '✅'} ${status} - Fallback check - diffMinutes=${diffMinutes.toFixed(2)}`);
+    
+    return diffMinutes > offlineTimeoutMinutes;
+}
 
 /**
  * Khởi tạo Leaflet Map
@@ -15,7 +103,7 @@ function initMap() {
     map = L.map('map', {
         scrollWheelZoom: true,
         wheelPxPerZoomLevel: 120
-    }).setView(center, 14);
+    }).setView(center, 16);
     
     // Thêm tile layer OpenStreetMap
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -37,7 +125,8 @@ async function loadStations() {
     showLoading(true);
     
     try {
-        const response = await fetch('/api/stations');
+        // Include timeout parameter in request
+        const response = await fetch(`/api/stations?timeout=${offlineTimeoutMinutes}`);
         const data = await response.json();
         
         if (data.success) {
@@ -46,7 +135,7 @@ async function loadStations() {
             displayMarkers(data.stations);
             
             // Hiển thị thời gian cập nhật
-            console.log(`✅ Đã tải ${data.totalStations} trạm - Cập nhật lúc: ${new Date(data.timestamp).toLocaleString('vi-VN')}`);
+            console.log(`✅ Đã tải ${data.totalStations} trạm - Cập nhật lúc: ${formatDateTime(data.timestamp)}`);
         } else {
             console.error('Lỗi tải dữ liệu:', data.error);
             alert('Không thể tải dữ liệu trạm: ' + data.error);
@@ -64,7 +153,8 @@ async function loadStations() {
  */
 async function refreshStations() {
     try {
-        const response = await fetch('/api/stations');
+        // Include timeout parameter in request
+        const response = await fetch(`/api/stations?timeout=${offlineTimeoutMinutes}`);
         const data = await response.json();
         
         if (data.success) {
@@ -103,7 +193,7 @@ async function refreshStations() {
                 }
             });
             
-            console.log(`🔄 Làm mới dữ liệu: ${data.totalStations} trạm - ${new Date(data.timestamp).toLocaleString('vi-VN')}`);
+            console.log(`🔄 Làm mới dữ liệu: ${data.totalStations} trạm - ${formatDateTime(data.timestamp)}`);
         }
     } catch (error) {
         console.error('Lỗi làm mới dữ liệu:', error);
@@ -129,11 +219,15 @@ function displayMarkers(stations) {
         // Thêm vào bounds
         bounds.push(position);
         
+        // Check if station is offline
+        const offline = isStationOffline(station);
+        
         // Tạo custom icon
-        const iconColor = station.type === 'TVA' ? '#10b981' : '#fbbf24';
+        const iconColor = offline ? '#dc2626' : (station.type === 'TVA' ? '#10b981' : '#fbbf24');
+        const blinkClass = offline ? 'blink' : '';
         const customIcon = L.divIcon({
-            className: 'custom-marker',
-            html: `<div style="background-color: ${iconColor}; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
+            className: `custom-marker ${blinkClass}`,
+            html: `<div class="marker-dot ${blinkClass}" style="background-color: ${iconColor}; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
             iconSize: [16, 16],
             iconAnchor: [8, 8]
         });
@@ -147,11 +241,12 @@ function displayMarkers(stations) {
         marker.stationData = station; // Lưu toàn bộ data để cập nhật sau
         
         // Tạo label (tooltip) hiển thị luôn
+        const labelClass = offline ? 'station-label offline' : 'station-label';
         const tooltip = marker.bindTooltip(station.name, {
             permanent: true,
             direction: 'top',
             offset: [0, -8],
-            className: 'station-label'
+            className: labelClass
         });
         
         // Tạo popup content (có tên trạm)
@@ -204,8 +299,8 @@ function displayMarkers(stations) {
     // Auto zoom vừa khít tất cả trạm
     if (bounds.length > 0) {
         map.fitBounds(bounds, {
-            padding: [50, 50],
-            maxZoom: 14
+            padding: [10, 10],
+            maxZoom: 16
         });
     }
 }
@@ -217,10 +312,29 @@ function createPopupContent(station) {
     const stationType = station.type.toLowerCase();
     const stationClass = stationType;
     
+    // Check if station is offline
+    const offline = isStationOffline(station);
+    
+    // Format update time to dd/mm/yyyy HH:mm:ss
+    let formattedUpdateTime = station.updateTime;
+    if (station.updateTime) {
+        // Try to parse the date
+        const updateDate = new Date(station.updateTime);
+        if (!isNaN(updateDate.getTime())) {
+            formattedUpdateTime = formatDateTime(updateDate);
+        }
+    }
+    
+    // Add offline status
+    const statusHtml = offline 
+        ? '<div class="popup-status offline">⚠️ OFFLINE</div>' 
+        : '<div class="popup-status online">✓ ONLINE</div>';
+    
     let html = `
         <div class="station-popup ${stationClass}">
             <div class="popup-header">${station.name}</div>
-            <div class="popup-time">${station.updateTime}</div>
+            ${statusHtml}
+            <div class="popup-time">${formattedUpdateTime}</div>
             <div class="popup-data">
     `;
     
@@ -267,11 +381,11 @@ function clearMarkers() {
  * Cập nhật thống kê
  */
 function updateStats(stations) {
-    const tvaStations = stations.filter(s => s.type === 'TVA');
-    const mqttStations = stations.filter(s => s.type === 'MQTT');
+    const onlineStations = stations.filter(s => !isStationOffline(s));
+    const offlineStations = stations.filter(s => isStationOffline(s));
     
-    document.getElementById('tva-count').textContent = tvaStations.length;
-    document.getElementById('mqtt-count').textContent = mqttStations.length;
+    document.getElementById('online-count').textContent = onlineStations.length;
+    document.getElementById('offline-count').textContent = offlineStations.length;
     document.getElementById('total-count').textContent = stations.length;
     
     // Populate station checkbox list
@@ -406,12 +520,12 @@ function updateStationCheckbox(stationId, isChecked) {
 }
 
 /**
- * Lọc trạm theo checkboxes
+ * Lọc trạm theo checkboxes (online/offline)
  */
 function filterStations() {
     const filterAll = document.getElementById('filter-all');
-    const filterTva = document.getElementById('filter-tva');
-    const filterMqtt = document.getElementById('filter-mqtt');
+    const filterOnline = document.getElementById('filter-online');
+    const filterOffline = document.getElementById('filter-offline');
     
     let filteredStations = [];
     
@@ -420,11 +534,11 @@ function filterStations() {
         filteredStations = allStations;
     } else {
         // Filter based on individual checkboxes
-        if (filterTva && filterTva.checked) {
-            filteredStations = filteredStations.concat(allStations.filter(s => s.type === 'TVA'));
+        if (filterOnline && filterOnline.checked) {
+            filteredStations = filteredStations.concat(allStations.filter(s => !isStationOffline(s)));
         }
-        if (filterMqtt && filterMqtt.checked) {
-            filteredStations = filteredStations.concat(allStations.filter(s => s.type === 'MQTT'));
+        if (filterOffline && filterOffline.checked) {
+            filteredStations = filteredStations.concat(allStations.filter(s => isStationOffline(s)));
         }
     }
     
@@ -508,47 +622,67 @@ function setupEventListeners() {
     
     // Checkbox event listeners
     const filterAll = document.getElementById('filter-all');
-    const filterTva = document.getElementById('filter-tva');
-    const filterMqtt = document.getElementById('filter-mqtt');
+    const filterOnline = document.getElementById('filter-online');
+    const filterOffline = document.getElementById('filter-offline');
     
     // "Tất cả" checkbox handler
     if (filterAll) {
         filterAll.addEventListener('change', (e) => {
             if (e.target.checked) {
                 // Check all other checkboxes
-                if (filterTva) filterTva.checked = true;
-                if (filterMqtt) filterMqtt.checked = true;
+                if (filterOnline) filterOnline.checked = true;
+                if (filterOffline) filterOffline.checked = true;
             }
             filterStations();
         });
     }
     
     // Individual checkbox handlers
-    if (filterTva) {
-        filterTva.addEventListener('change', () => {
+    if (filterOnline) {
+        filterOnline.addEventListener('change', () => {
             // Uncheck "Tất cả" if individual is unchecked
-            if (!filterTva.checked && filterAll) {
+            if (!filterOnline.checked && filterAll) {
                 filterAll.checked = false;
             }
             // Check "Tất cả" if both are checked
-            if (filterTva.checked && filterMqtt && filterMqtt.checked && filterAll) {
+            if (filterOnline.checked && filterOffline && filterOffline.checked && filterAll) {
                 filterAll.checked = true;
             }
             filterStations();
         });
     }
     
-    if (filterMqtt) {
-        filterMqtt.addEventListener('change', () => {
+    if (filterOffline) {
+        filterOffline.addEventListener('change', () => {
             // Uncheck "Tất cả" if individual is unchecked
-            if (!filterMqtt.checked && filterAll) {
+            if (!filterOffline.checked && filterAll) {
                 filterAll.checked = false;
             }
             // Check "Tất cả" if both are checked
-            if (filterMqtt.checked && filterTva && filterTva.checked && filterAll) {
+            if (filterOffline.checked && filterOnline && filterOnline.checked && filterAll) {
                 filterAll.checked = true;
             }
             filterStations();
+        });
+    }
+    
+    // Offline timeout input handler
+    const offlineTimeoutInput = document.getElementById('offline-timeout');
+    if (offlineTimeoutInput) {
+        // Load saved timeout
+        loadOfflineTimeout();
+        
+        // Handle changes
+        offlineTimeoutInput.addEventListener('change', (e) => {
+            let value = parseInt(e.target.value);
+            if (isNaN(value) || value < 1) {
+                value = 1;
+                e.target.value = 1;
+            } else if (value > 1440) {
+                value = 1440;
+                e.target.value = 1440;
+            }
+            saveOfflineTimeout(value);
         });
     }
     

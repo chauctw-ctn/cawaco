@@ -13,7 +13,8 @@ const {
     getStatsData,
     getAvailableParameters,
     getStations: getStationsFromDB,
-    cleanOldData
+    cleanOldData,
+    checkStationsValueChanges
 } = require('./database');
 
 const app = express();
@@ -291,9 +292,15 @@ app.post('/api/delete-user', verifyToken, (req, res) => {
 /**
  * API: Lấy dữ liệu tất cả các trạm (TVA + MQTT)
  */
-app.get('/api/stations', (req, res) => {
+app.get('/api/stations', async (req, res) => {
     try {
         const allStations = [];
+        
+        // Get timeout from query parameter (default 60 minutes)
+        const timeoutMinutes = parseInt(req.query.timeout) || 60;
+        
+        // Check which stations have value changes within timeout period
+        const stationStatus = await checkStationsValueChanges(timeoutMinutes);
         
         // Đọc dữ liệu TVA
         if (fs.existsSync('data_quantrac.json')) {
@@ -301,6 +308,7 @@ app.get('/api/stations', (req, res) => {
             
             tvaData.stations.forEach(station => {
                 const coords = TVA_STATION_COORDINATES[station.station];
+                const status = stationStatus[station.station] || { hasChange: false, lastUpdate: null };
                 
                 if (coords) {
                     allStations.push({
@@ -310,6 +318,8 @@ app.get('/api/stations', (req, res) => {
                         lat: coords.lat,
                         lng: coords.lng,
                         updateTime: station.updateTime,
+                        lastUpdateInDB: status.lastUpdate,
+                        hasValueChange: status.hasChange,
                         data: station.data,
                         timestamp: tvaData.timestamp
                     });
@@ -322,6 +332,8 @@ app.get('/api/stations', (req, res) => {
             const mqttData = JSON.parse(fs.readFileSync('data_mqtt.json', 'utf8'));
             
             mqttData.stations.forEach(station => {
+                const status = stationStatus[station.station] || { hasChange: false, lastUpdate: null };
+                
                 if (station.lat && station.lng) {
                     allStations.push({
                         id: `mqtt_${station.station.replace(/\s+/g, '_')}`,
@@ -330,6 +342,8 @@ app.get('/api/stations', (req, res) => {
                         lat: station.lat,
                         lng: station.lng,
                         updateTime: station.updateTime,
+                        lastUpdateInDB: status.lastUpdate,
+                        hasValueChange: status.hasChange,
                         data: station.data,
                         timestamp: mqttData.timestamp
                     });
