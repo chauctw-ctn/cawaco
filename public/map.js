@@ -333,12 +333,20 @@ function createPopupContent(station) {
     const offline = isStationOffline(station);
     
     // Format update time to dd/mm/yyyy HH:mm:ss
-    let formattedUpdateTime = station.updateTime;
+    let formattedUpdateTime = 'N/A';
     if (station.updateTime) {
-        // Try to parse the date
-        const updateDate = new Date(station.updateTime);
-        if (!isNaN(updateDate.getTime())) {
-            formattedUpdateTime = formatDateTime(updateDate);
+        try {
+            // Try to parse the date (handles both ISO and other formats)
+            const updateDate = new Date(station.updateTime);
+            if (!isNaN(updateDate.getTime())) {
+                formattedUpdateTime = formatDateTime(updateDate);
+            } else {
+                // If parsing fails, try to use the string as is
+                formattedUpdateTime = station.updateTime;
+            }
+        } catch (e) {
+            // If any error, use the string as is
+            formattedUpdateTime = station.updateTime || 'N/A';
         }
     }
     

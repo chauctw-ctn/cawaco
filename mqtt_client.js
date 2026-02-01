@@ -167,7 +167,7 @@ function updateStationsFormat() {
             
             stations.push({
                 station: stationName,
-                updateTime: device.lastUpdate ? new Date(device.lastUpdate).toLocaleString('vi-VN') : 'N/A',
+                updateTime: device.lastUpdate || new Date().toISOString(), // Lưu dạng ISO để dễ parse
                 lat: coords?.lat,
                 lng: coords?.lng,
                 data: parameters.map((param, index) => ({
