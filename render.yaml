@@ -2,7 +2,7 @@ services:
   - type: web
     name: camau-water-monitoring
     runtime: node
-    buildCommand: bash build.sh
+    buildCommand: npm install --production=false && npx node-pre-gyp install --fallback-to-build --directory=./node_modules/sqlite3
     startCommand: node server.js
     healthCheckPath: /api/stations
     disk:
@@ -12,5 +12,3 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: NODE_VERSION
-        value: 18.19.0
