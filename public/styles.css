@@ -4,10 +4,18 @@
     box-sizing: border-box;
 }
 
+html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
+}
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background-color: #f5f7fa;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 /* Header */
@@ -38,11 +46,20 @@ body {
     font-size: 24px;
     cursor: pointer;
     padding: 5px 10px;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .menu-btn:hover {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 4px;
+}
+
+.menu-btn:active {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .logo-section {
@@ -221,10 +238,28 @@ body {
     z-index: 100;
     transition: transform 0.3s ease;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .sidebar.hidden {
     transform: translateX(-100%);
+}
+
+/* Sidebar Overlay for Mobile */
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;
+    display: none;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-overlay.show {
+    display: block;
 }
 
 .sidebar-content {
@@ -1120,18 +1155,32 @@ body {
 }
 
 /* Responsive */
+/* Tablet & Mobile Responsive */
 @media (max-width: 768px) {
     .header-content {
         flex-direction: row;
+        padding: 0;
     }
     
     .company-info h1 {
-        font-size: 14px;
+        font-size: 13px;
+        line-height: 1.3;
+    }
+    
+    .menu-btn {
+        padding: 5px 8px;
+        font-size: 20px;
     }
     
     .sidebar {
         width: 100%;
         max-width: 280px;
+        left: -100%;
+    }
+    
+    .sidebar:not(.hidden) {
+        left: 0;
+        box-shadow: 2px 0 20px rgba(0, 0, 0, 0.3);
     }
     
     #map {
@@ -1143,6 +1192,111 @@ body {
     .station-popup {
         min-width: 180px;
         padding: 10px 12px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+    
+    .stat-card {
+        padding: 8px;
+    }
+    
+    .user-menu-btn {
+        padding: 6px 10px;
+    }
+    
+    .auth-section {
+        gap: 8px;
+    }
+    
+    #username-display {
+        display: none !important;
+    }
+}
+
+/* Mobile Specific */
+@media (max-width: 480px) {
+    .header {
+        padding: 8px 12px;
+        height: 52px;
+    }
+    
+    .company-info h1 {
+        font-size: 11px;
+    }
+    
+    .menu-btn {
+        padding: 4px 6px;
+        font-size: 18px;
+    }
+    
+    .sidebar {
+        max-width: 100%;
+        width: 100%;
+    }
+    
+    .sidebar-content {
+        padding: 12px;
+        gap: 12px;
+    }
+    
+    .section-header {
+        padding: 10px 12px;
+        font-size: 10px;
+    }
+    
+    .filter-content {
+        padding: 12px;
+    }
+    
+    .checkbox-item {
+        padding: 6px;
+    }
+    
+    .checkbox-item span {
+        font-size: 13px;
+    }
+    
+    #map {
+        height: calc(100vh - 52px);
+    }
+    
+    .modal-content {
+        width: 95%;
+        max-width: none;
+    }
+    
+    .modal-header {
+        padding: 16px;
+    }
+    
+    .modal-header h2 {
+        font-size: 16px;
+    }
+    
+    .modal form {
+        padding: 16px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    
+    .user-menu-btn {
+        padding: 6px 8px;
+    }
+    
+    .user-menu-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+    
+    .user-dropdown {
+        right: -10px;
+        min-width: 200px;
     }
 }
 
@@ -1371,4 +1525,28 @@ body {
 .btn-icon.danger:hover {
     background: #fee2e2;
     color: #dc2626;
+}
+
+/* Mobile Touch Improvements */
+button, a, input, select, textarea {
+    -webkit-tap-highlight-color: rgba(0, 102, 204, 0.2);
+}
+
+/* Ensure minimum touch target size on all interactive elements */
+button:not(.btn-icon) {
+    min-height: 44px;
+}
+
+/* Prevent text selection on buttons */
+button {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+}
+
+/* Smooth scrolling for all scrollable containers */
+.sidebar,
+.table-container,
+.modal-content {
+    scroll-behavior: smooth;
 }

@@ -594,6 +594,7 @@ function setupEventListeners() {
     // Menu button toggle sidebar
     const menuBtn = document.getElementById('menu-btn');
     const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
     const mapElement = document.getElementById('map');
     
     if (menuBtn && sidebar && mapElement) {
@@ -602,11 +603,32 @@ function setupEventListeners() {
             
             if (isHidden) {
                 mapElement.classList.remove('with-sidebar');
+                if (sidebarOverlay) sidebarOverlay.classList.remove('show');
             } else {
                 mapElement.classList.add('with-sidebar');
+                // Show overlay on mobile
+                if (window.innerWidth <= 768 && sidebarOverlay) {
+                    sidebarOverlay.classList.add('show');
+                }
             }
             
             // Resize map sau khi toggle
+            setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 350);
+        });
+    }
+    
+    // Close sidebar when clicking overlay (mobile)
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', () => {
+            sidebar.classList.add('hidden');
+            sidebarOverlay.classList.remove('show');
+            if (mapElement) {
+                mapElement.classList.remove('with-sidebar');
+            }
             setTimeout(() => {
                 if (map) {
                     map.invalidateSize();
@@ -677,6 +699,15 @@ function setupEventListeners() {
             saveOfflineTimeout(value);
         });
     }
+    
+    // Handle window resize for overlay visibility
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768 && sidebarOverlay) {
+            sidebarOverlay.classList.remove('show');
+        } else if (window.innerWidth <= 768 && sidebarOverlay && !sidebar.classList.contains('hidden')) {
+            sidebarOverlay.classList.add('show');
+        }
+    });
     
     // Auto refresh dữ liệu mỗi 30 giây (MQTT realtime) và mỗi 2 phút (TVA)
     setInterval(() => {
