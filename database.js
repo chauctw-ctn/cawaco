@@ -442,7 +442,8 @@ function checkStationsValueChanges(timeoutMinutes = 60) {
         
         console.log(`🔍 Checking value changes for stations (timeout: ${timeoutMinutes} min, cutoff: ${cutoffTime})`);
         
-        // Query đơn giản hơn: đếm distinct values cho mỗi trạm/parameter
+        // Query để lấy danh sách tất cả các trạm có dữ liệu trong khoảng thời gian
+        // Kiểm tra xem có thay đổi giá trị hay không (excluding "Tổng Lưu Lượng" vì luôn tăng)
         const tvaQuery = `
             SELECT 
                 station_name,
@@ -452,6 +453,7 @@ function checkStationsValueChanges(timeoutMinutes = 60) {
                 COUNT(*) as total_records
             FROM tva_data
             WHERE timestamp >= ?
+                AND parameter_name NOT IN ('Tổng Lưu Lượng')
             GROUP BY station_name, parameter_name
         `;
         

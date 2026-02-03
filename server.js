@@ -319,6 +319,30 @@ app.get('/api/stations', async (req, res) => {
                 const coords = TVA_STATION_COORDINATES[station.station];
                 const status = stationStatus[station.station] || { hasChange: false, lastUpdate: null };
                 
+                // Parse updateTime từ JSON (format: "HH:mm - dd/mm/yyyy")
+                let parsedUpdateTime = null;
+                if (station.updateTime) {
+                    const match = station.updateTime.match(/(\d{2}):(\d{2})\s*-\s*(\d{2})\/(\d{2})\/(\d{4})/);
+                    if (match) {
+                        const [_, hours, minutes, day, month, year] = match;
+                        parsedUpdateTime = new Date(year, month - 1, day, hours, minutes);
+                    }
+                }
+                
+                // Nếu không có dữ liệu trong DB, dùng updateTime từ JSON để kiểm tra
+                let hasValueChange = status.hasChange;
+                let lastUpdate = status.lastUpdate;
+                
+                // Nếu không có dữ liệu trong DB nhưng có updateTime từ JSON
+                if (!status.lastUpdate && parsedUpdateTime) {
+                    lastUpdate = parsedUpdateTime.toISOString();
+                    // Kiểm tra xem updateTime có trong khoảng timeout không
+                    const now = new Date();
+                    const diffMinutes = (now - parsedUpdateTime) / (1000 * 60);
+                    hasValueChange = diffMinutes <= timeoutMinutes;
+                    console.log(`📝 TVA ${station.station}: Sử dụng updateTime từ JSON (${station.updateTime}), diffMinutes=${diffMinutes.toFixed(1)}, hasChange=${hasValueChange}`);
+                }
+                
                 if (coords) {
                     allStations.push({
                         id: `tva_${station.station.replace(/\s+/g, '_')}`,
@@ -327,8 +351,8 @@ app.get('/api/stations', async (req, res) => {
                         lat: coords.lat,
                         lng: coords.lng,
                         updateTime: station.updateTime,
-                        lastUpdateInDB: status.lastUpdate,
-                        hasValueChange: status.hasChange,
+                        lastUpdateInDB: lastUpdate,
+                        hasValueChange: hasValueChange,
                         data: station.data,
                         timestamp: tvaData.timestamp
                     });
