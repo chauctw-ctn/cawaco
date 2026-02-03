@@ -6,6 +6,7 @@ const { TVA_STATION_COORDINATES } = require('./tva-coordinates');
 const { MQTT_STATION_COORDINATES } = require('./mqtt-coordinates');
 const { connectMQTT, getConnectionStatus } = require('./mqtt_client');
 const { crawl: crawlTVAData } = require('./getKeyTVA');
+const { crawlScadaTVA, getStationDetail } = require('./scada-tva-crawler');
 const { 
     initDatabase, 
     saveTVAData, 
@@ -660,6 +661,110 @@ app.post('/api/tva/update', verifyToken, async (req, res) => {
     }
 });
 
+// ==================== SCADA TVA API ====================
+
+// API: Lấy dữ liệu từ hệ thống SCADA TVA
+app.get('/api/scada/stations', async (req, res) => {
+    try {
+        console.log("📡 [API] Yêu cầu lấy dữ liệu từ SCADA TVA");
+        const stations = await crawlScadaTVA();
+        
+        res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            count: stations.length,
+            data: stations
+        });
+    } catch (error) {
+        console.error("❌ [API] Lỗi lấy dữ liệu SCADA:", error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi khi lấy dữ liệu từ hệ thống SCADA',
+            error: error.message
+        });
+    }
+});
+
+// API: Lấy chi tiết một trạm từ SCADA
+app.get('/api/scada/station/:id', async (req, res) => {
+    try {
+        const stationId = req.params.id;
+        console.log(`📡 [API] Lấy chi tiết trạm SCADA: ${stationId}`);
+        
+        const stationDetail = await getStationDetail(stationId);
+        
+        res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            data: stationDetail
+        });
+    } catch (error) {
+        console.error(`❌ [API] Lỗi lấy chi tiết trạm ${req.params.id}:`, error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi khi lấy chi tiết trạm',
+            error: error.message
+        });
+    }
+});
+
+// API: Cập nhật dữ liệu SCADA (chỉ admin)
+app.post('/api/scada/update', verifyToken, async (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ 
+            success: false, 
+            message: 'Không có quyền thực hiện thao tác này' 
+        });
+    }
+    
+    try {
+        console.log(`🔄 Manual SCADA update triggered by ${req.user.username}`);
+        const stations = await crawlScadaTVA();
+        
+        res.json({
+            success: true,
+            message: 'Đã cập nhật dữ liệu SCADA thành công',
+            count: stations.length
+        });
+    } catch (error) {
+        console.error("❌ [API] Lỗi cập nhật SCADA:", error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi cập nhật dữ liệu SCADA',
+            error: error.message
+        });
+    }
+});
+
+// API: Lấy dữ liệu SCADA đã cache (từ file JSON)
+app.get('/api/scada/cached', (req, res) => {
+    try {
+        const dataPath = path.join(__dirname, 'data_scada_tva.json');
+        
+        if (!fs.existsSync(dataPath)) {
+            return res.status(404).json({
+                success: false,
+                message: 'Chưa có dữ liệu cache. Vui lòng gọi /api/scada/stations để lấy dữ liệu mới.'
+            });
+        }
+        
+        const cachedData = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
+        
+        res.json({
+            success: true,
+            ...cachedData
+        });
+    } catch (error) {
+        console.error("❌ [API] Lỗi đọc cache SCADA:", error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi đọc dữ liệu cache',
+            error: error.message
+        });
+    }
+});
+
+
 // Khởi động server
 app.listen(PORT, async () => {
     console.log('╔═══════════════════════════════════════════════════════════════════════════╗');
@@ -672,9 +777,16 @@ app.listen(PORT, async () => {
     console.log(`   • GET /api/stations/tva      - Lấy chỉ trạm TVA`);
     console.log(`   • GET /api/stations/mqtt     - Lấy chỉ trạm MQTT`);
     console.log(`   • GET /api/station/:id       - Lấy chi tiết một trạm`);
+    console.log(`\n📊 API Thống kê:`);
     console.log(`   • GET /api/stats             - Lấy dữ liệu thống kê từ SQL`);
     console.log(`   • GET /api/stats/parameters  - Lấy danh sách thông số`);
     console.log(`   • GET /api/stats/stations    - Lấy danh sách trạm từ SQL`);
+    console.log(`\n🏭 API SCADA TVA (Mới):`);
+    console.log(`   • GET  /api/scada/stations   - Lấy dữ liệu realtime từ SCADA`);
+    console.log(`   • GET  /api/scada/station/:id- Chi tiết trạm SCADA`);
+    console.log(`   • GET  /api/scada/cached     - Lấy dữ liệu SCADA đã cache`);
+    console.log(`   • POST /api/scada/update     - Cập nhật dữ liệu SCADA (admin)`);
+    console.log(`\n🔌 API Khác:`);
     console.log(`   • GET /api/mqtt/status       - Trạng thái kết nối MQTT`);
     console.log(`\n💡 Mở trình duyệt và truy cập http://localhost:${PORT} để xem bản đồ`);
     console.log(`\nPress Ctrl+C để dừng server.\n`);

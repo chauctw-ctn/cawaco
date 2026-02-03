@@ -1,0 +1,3 @@
+http://14.161.36.253:86/Scada/Login.aspx
+user: cncamau
+pass: cm123456

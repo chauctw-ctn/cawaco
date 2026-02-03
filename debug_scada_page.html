@@ -1,0 +1,138 @@
+
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><meta charset="utf-8" /><meta http-equiv="X-UA-Compatible" content="IE=edge" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- The above 3 meta tags are required by Bootstrap -->
+    <title>
+	View - Rapid SCADA
+</title><link href="images/favicon.ico" rel="shortcut icon" type="image/x-icon" /><link href="lib/bootstrap/css/bootstrap.min.css" rel="stylesheet" type="text/css" /><link href="lib/font-awesome/css/font-awesome.min.css" rel="stylesheet" type="text/css" /><link href="lib/open-sans/css/open-sans.css" rel="stylesheet" type="text/css" /><link href="css/controls/popup.min.css" rel="stylesheet" type="text/css" /><link href="css/controls/treeview.min.css" rel="stylesheet" type="text/css" /><link href="css/mastermain.min.css" rel="stylesheet" type="text/css" />
+    <script type="text/javascript" src="lib/jquery/jquery.min.js"></script>
+    <script type="text/javascript" src="lib/bootstrap/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="js/api/utils.js"></script>
+    <script type="text/javascript" src="js/api/clientapi.js"></script>
+    <script type="text/javascript" src="js/api/eventtypes.js"></script>
+    <script type="text/javascript" src="js/controls/popup.js"></script>
+    <script type="text/javascript" src="js/controls/treeview.js"></script>
+    <script type="text/javascript" src="js/dialogs/dialogs.js"></script>
+    <script type="text/javascript">
+        var scada = scada || {};
+        scada.env = {
+            rootPath: "/Scada/"
+        };
+        scada.modalButtonCaptions = {
+ok: "OK",
+yes: "Yes",
+no: "No",
+execute: "Execute",
+cancel: "Cancel",
+close: "Close",
+};
+    </script>
+    <script type='text/javascript' src='/Scada/plugins/Chart/js/chartdialog.js'></script>
+<script type='text/javascript' src='/Scada/plugins/Table/js/cmddialog.js'></script>
+<script type='text/javascript' src='/Scada/plugins/Table/js/eventackdialog.js'></script>
+
+    <script type="text/javascript" src="js/mastermain.js"></script>
+    
+    <link href="css/view.min.css" rel="stylesheet" type="text/css" />
+    <link href="css/controls/splitter.min.css" rel="stylesheet" type="text/css" />
+    <script type="text/javascript" src="js/api/viewhub.js"></script>
+    <script type="text/javascript" src="js/controls/splitter.js"></script>
+    <script type="text/javascript">
+        var initialViewID = 16;
+        var initialViewUrl = "/Scada/plugins/Scheme/Scheme.aspx?viewID=16";
+        var phrases = {
+ExternalLinkTitle: "External Link - Rapid SCADA",
+};
+    </script>
+    <script type="text/javascript" src="js/view.js"></script>
+</head>
+<body>
+    <form method="post" action="./View.aspx" id="ctl01">
+<div class="aspNetHidden">
+<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="" />
+<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="/wEPDwULLTE2NzcyMTM5ODYPZBYCZg9kFgICAw9kFg5mDw8WBB4LTmF2aWdhdGVVcmwFFX4vVXNlci5hc3B4P3VzZXJJRD0xNh4EVGV4dAUHY25jYW1hdWRkAgEPDxYCHwEFBkxvZ291dGRkAgIPDxYCHgdUb29sVGlwBQtGdWxsIFNjcmVlbmRkAgMPDxYCHwEFCU1haW4gTWVudWRkAgQPDxYCHwEFBVZpZXdzZGQCBQ8PFgIfAQUNQ29sbGFwc2UgbWVudWRkAgcPDxYCHwIFC05vcm1hbCBWaWV3ZGRkpIME92U7cg5gQ9f7lvoo60IpQAKscPRwYDEvy5Zf9fI=" />
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['ctl01'];
+if (!theForm) {
+    theForm = document.ctl01;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+<div class="aspNetHidden">
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="9CBDE2DE" />
+	<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="/wEdAAJSmWnQ87ABG96lR5V2JqOv1CevqDuSh+wTSunsQtYNeo0FOgAD7fKhTtn6qXxYifJsJkUdvECqcOrrbwaGku3o" />
+</div>
+        <div id="divMainHeader" class="main-shell">
+            <span 
+                id="spanMainShowMenuBtn" class="hdr-btn img-btn"><span class="glyphicon glyphicon-menu-hamburger"></span></span><span 
+                id="spanMainAppName">Rapid SCADA</span>
+            <div id="divMainUserMenu">
+                <a id="hlMainUser" class="hdr-btn txt-btn" href="User.aspx?userID=16">cncamau</a><a id="lbtnMainLogout" class="hdr-btn txt-btn" href="javascript:__doPostBack(&#39;ctl00$lbtnMainLogout&#39;,&#39;&#39;)">Logout</a><span id="lblMainFullscreenBtn" title="Full Screen" class="hdr-btn img-btn"><span class="glyphicon glyphicon-fullscreen"></span></span>
+            </div>
+        </div>
+        <div id="divMainLeftPane" class="main-shell">
+            <div id="divMainTabs">
+                <div id="divMainMenuTab" class="tab selected"><span id="lblMainMenuTab">Main Menu</span></div>
+                <div id="divMainExplorerTab" class="tab"><span id="lblMainExplorerTab">Views</span></div>
+            </div>
+            <div id="divMainMenu" class="tool-window">
+                <div class='tree-view'>
+<a class='node' href='/Scada/Reports.aspx'  data-script='' data-level='0'><div class='node-items'><div class='indent'></div><div class='expander left empty'></div><div class='stateIcon'></div><div class='icon'></div><div class='text'>Reports</div><div class='expander right empty'></div></div></a>
+<a class='node' href=''  data-script='' data-level='0'><div class='node-items'><div class='indent'></div><div class='expander left'></div><div class='stateIcon'></div><div class='icon'></div><div class='text'>Plugins</div><div class='expander right'></div></div></a>
+<div class='child-nodes'>
+<a class='node' href='/Scada/plugins/Config/Plugins.aspx'  data-script='' data-level='1'><div class='node-items'><div class='indent'></div><div class='expander left empty'></div><div class='stateIcon'></div><div class='icon'></div><div class='text'>Installed</div><div class='expander right empty'></div></div></a>
+<a class='node' href='/Scada/plugins/Store/Store.aspx'  data-script='' data-level='1'><div class='node-items'><div class='indent'></div><div class='expander left empty'></div><div class='stateIcon'></div><div class='icon'></div><div class='text'>Download</div><div class='expander right empty'></div></div></a>
+</div>
+<a class='node' href='/Scada/About.aspx'  data-script='' data-level='0'><div class='node-items'><div class='indent'></div><div class='expander left empty'></div><div class='stateIcon'></div><div class='icon'></div><div class='text'>About</div><div class='expander right empty'></div></div></a>
+</div>
+
+            </div>
+            <div id="divMainExplorer" class="tool-window">
+                <div class='tree-view'>
+<a class='node' href=''  data-script='' data-level='0' data-cnl='0'><div class='node-items'><div class='indent'></div><div class='expander left'></div><div class='stateIcon'></div><div class='icon'><img src='/Scada/images/treeview/folder.png' alt='' /></div><div class='text'>QUAN TRẮC</div><div class='expander right'></div></div></a>
+<div class='child-nodes'>
+<a class='node selected' href='/Scada/View.aspx?viewID=16'  data-script='scada.masterMain.loadView(16, "/Scada/plugins/Scheme/Scheme.aspx?viewID=16");' data-level='1' data-cnl='0'><div class='node-items'><div class='indent'></div><div class='expander left empty'></div><div class='stateIcon'></div><div class='icon'><img src='/Scada/plugins/Scheme/images/schemeicon.png' alt='' /></div><div class='text'>TRANG CHỦ</div><div class='expander right empty'></div></div></a>
+<a class='node' href='/Scada/View.aspx?viewID=17'  data-script='scada.masterMain.loadView(17, "/Scada/plugins/Table/Table.aspx?viewID=17");' data-level='1' data-cnl='0'><div class='node-items'><div class='indent'></div><div class='expander left empty'></div><div class='stateIcon'></div><div class='icon'><img src='/Scada/plugins/Table/images/tableicon.png' alt='' /></div><div class='text'>B&#193;O C&#193;O</div><div class='expander right empty'></div></div></a>
+<a class='node' href='/Scada/View.aspx?viewID=18'  data-script='scada.masterMain.loadView(18, "/Scada/plugins/Table/Table.aspx?viewID=18");' data-level='1' data-cnl='0'><div class='node-items'><div class='indent'></div><div class='expander left empty'></div><div class='stateIcon'></div><div class='icon'><img src='/Scada/plugins/Table/images/tableicon.png' alt='' /></div><div class='text'>B&#193;O C&#193;O CLN QT24</div><div class='expander right empty'></div></div></a>
+</div>
+</div>
+
+            </div>
+            <div id="divMainCollapseLeftPaneBtn">
+                <i class="fa fa-chevron-circle-left"></i><span id="lblMainCollapseMenu">Collapse menu</span>
+            </div>
+        </div>
+        <div id="divMainContent" class="main-content">
+            
+    <div id="divViewContent">
+        <div id="divView"><iframe id="frameView"></iframe></div>
+        <div id="divViewSplitter" class="splitter hor"></div>
+        <div id="divDataWindow"><iframe id="frameDataWindow"></iframe></div>
+        <div id="divBottomTabs">
+            <div id="divBottomTabsContainer"><div class='tab' data-code='EventsWnd' data-url='/Scada/plugins/Table/Events.aspx' data-depends='true'>Events</div></div><div id="divCollapseDataWindowBtn"><i class="fa fa-chevron-circle-down"></i></div>
+        </div>
+    </div>
+
+        </div>
+        <span id="lblMainNormalViewBtn" title="Normal View"><span class="glyphicon glyphicon-fullscreen"></span></span>
+        <iframe id='frameStats' src='http://stats.rapidscada.net?serverID=07e8011d-4c57-07e4-a907-38f5b180c744#'></iframe>
+    </form>
+</body>
+</html>
