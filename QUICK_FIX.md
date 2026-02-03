@@ -123,3 +123,4 @@ node server.js
 ---
 **Last Updated:** 2026-02-02
 **Build Method:** node-pre-gyp with pre-built binaries
+Tuyệt đối không tạo và cập nhật file .md

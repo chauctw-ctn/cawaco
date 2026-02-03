@@ -222,27 +222,32 @@ async function crawl() {
     console.log(`✅ Tổng số thông số: ${allStations.reduce((sum, s) => sum + s.data.length, 0)}`);
     console.log("═".repeat(80));
 
-    // Xuất ra file JSON
-    const outputData = {
-      timestamp: new Date().toISOString(),
-      totalStations: allStations.length,
-      stations: allStations
-    };
+    // Xuất ra file JSON (optional - không bắt buộc cho production)
+    try {
+      const outputData = {
+        timestamp: new Date().toISOString(),
+        totalStations: allStations.length,
+        stations: allStations
+      };
 
-    fs.writeFileSync("data_quantrac.json", JSON.stringify(outputData, null, 2), "utf8");
-    console.log("\n💾 Đã lưu dữ liệu vào file: data_quantrac.json");
+      fs.writeFileSync("data_quantrac.json", JSON.stringify(outputData, null, 2), "utf8");
+      console.log("\n💾 Đã lưu dữ liệu vào file: data_quantrac.json");
 
-    // Xuất ra file CSV
-    let csvContent = "STT,Trạm,Thời điểm,Chỉ tiêu,Thời gian,Giá trị,Đơn vị,Giới hạn\n";
-    
-    allStations.forEach((station, idx) => {
-      station.data.forEach(item => {
-        csvContent += `${idx + 1},"${station.station}","${station.updateTime}","${item.name}","${item.time}","${item.value}","${item.unit}","${item.limit}"\n`;
+      // Xuất ra file CSV
+      let csvContent = "STT,Trạm,Thời điểm,Chỉ tiêu,Thời gian,Giá trị,Đơn vị,Giới hạn\n";
+      
+      allStations.forEach((station, idx) => {
+        station.data.forEach(item => {
+          csvContent += `${idx + 1},"${station.station}","${station.updateTime}","${item.name}","${item.time}","${item.value}","${item.unit}","${item.limit}"\n`;
+        });
       });
-    });
 
-    fs.writeFileSync("data_quantrac.csv", csvContent, "utf8");
-    console.log("💾 Đã lưu dữ liệu vào file: data_quantrac.csv");
+      fs.writeFileSync("data_quantrac.csv", csvContent, "utf8");
+      console.log("💾 Đã lưu dữ liệu vào file: data_quantrac.csv");
+    } catch (fileError) {
+      console.warn("⚠️ Không thể lưu file (có thể do quyền ghi):", fileError.message);
+      console.log("💡 Dữ liệu vẫn được trả về để lưu vào database");
+    }
 
     return allStations;
 
@@ -251,7 +256,14 @@ async function crawl() {
     if (err.response) {
       console.error("Status:", err.response.status);
     }
+    throw err; // Throw error để caller xử lý
   }
 }
 
-crawl();
+// Export hàm để server.js có thể import
+module.exports = { crawl };
+
+// Chỉ chạy nếu được gọi trực tiếp
+if (require.main === module) {
+  crawl();
+}

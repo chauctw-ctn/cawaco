@@ -237,7 +237,11 @@ function setupEventListeners() {
     const returnMapBtn = document.getElementById('return-map-btn');
     if (returnMapBtn) {
         returnMapBtn.addEventListener('click', () => {
-            window.location.href = '/';
+            if (window.smoothNavigate) {
+                window.smoothNavigate('/');
+            } else {
+                window.location.href = '/';
+            }
         });
     }
     

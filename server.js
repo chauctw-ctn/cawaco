@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const { TVA_STATION_COORDINATES } = require('./tva-coordinates');
 const { MQTT_STATION_COORDINATES } = require('./mqtt-coordinates');
 const { connectMQTT, getConnectionStatus } = require('./mqtt_client');
-const { exec } = require('child_process');
+const { crawl: crawlTVAData } = require('./getKeyTVA');
 const { 
     initDatabase, 
     saveTVAData, 
@@ -67,49 +67,45 @@ function verifyToken(req, res, next) {
 /**
  * Cập nhật dữ liệu TVA từ getKeyTVA.js
  */
-function updateTVAData() {
+async function updateTVAData() {
     console.log('🔄 Đang cập nhật dữ liệu TVA...');
     
-    return new Promise((resolve, reject) => {
-        exec('node getKeyTVA.js', async (error, stdout, stderr) => {
-            if (error) {
-                console.error(`❌ Lỗi cập nhật TVA: ${error.message}`);
-                reject(error);
+    const maxRetries = 3;
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            // Gọi hàm crawl trực tiếp thay vì exec
+            const allStations = await crawlTVAData();
+            
+            if (!allStations || allStations.length === 0) {
+                console.warn('⚠️ Không có dữ liệu TVA');
                 return;
             }
-            if (stderr) {
-                console.error(`⚠️ Warning TVA: ${stderr}`);
-            }
-            console.log('✅ Đã cập nhật dữ liệu TVA');
+            
+            console.log(`✅ Đã lấy ${allStations.length} trạm TVA`);
             
             // Lưu dữ liệu TVA vào database
-            try {
-                await saveTVADataToDB();
-                resolve();
-            } catch (err) {
-                console.error('❌ Lỗi lưu dữ liệu TVA:', err.message);
-                reject(err);
+            const count = await saveTVAData(allStations);
+            console.log(`💾 Đã lưu ${count} bản ghi TVA vào database`);
+            
+            return; // Thành công, thoát hàm
+            
+        } catch (error) {
+            lastError = error;
+            console.error(`❌ Lỗi cập nhật TVA (lần thử ${attempt}/${maxRetries}): ${error.message}`);
+            
+            if (attempt < maxRetries) {
+                const waitTime = attempt * 2000; // 2s, 4s, 6s
+                console.log(`⏳ Đợi ${waitTime/1000}s trước khi thử lại...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
             }
-        });
-    });
-}
-
-/**
- * Lưu dữ liệu TVA từ file JSON vào database
- */
-async function saveTVADataToDB() {
-    try {
-        if (!fs.existsSync('data_quantrac.json')) {
-            console.warn('⚠️ Không tìm thấy file data_quantrac.json');
-            return;
         }
-        
-        const tvaData = JSON.parse(fs.readFileSync('data_quantrac.json', 'utf8'));
-        const count = await saveTVAData(tvaData.stations);
-        console.log(`💾 Đã lưu ${count} bản ghi TVA vào database`);
-    } catch (error) {
-        console.error('❌ Lỗi lưu dữ liệu TVA vào database:', error.message);
     }
+    
+    // Nếu tất cả các lần thử đều thất bại
+    console.error(`❌ Không thể cập nhật TVA sau ${maxRetries} lần thử`);
+    throw lastError;
 }
 
 /**
@@ -637,6 +633,31 @@ app.get('/api/mqtt/status', (req, res) => {
         success: true,
         ...status
     });
+});
+
+// API: Trigger manual TVA update (admin only)
+app.post('/api/tva/update', verifyToken, async (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ 
+            success: false, 
+            message: 'Không có quyền thực hiện thao tác này' 
+        });
+    }
+    
+    try {
+        console.log(`🔄 Manual TVA update triggered by ${req.user.username}`);
+        await updateTVAData();
+        res.json({
+            success: true,
+            message: 'Đã cập nhật dữ liệu TVA thành công'
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi cập nhật TVA',
+            error: error.message
+        });
+    }
 });
 
 // Khởi động server

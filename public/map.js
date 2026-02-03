@@ -661,7 +661,11 @@ function setupEventListeners() {
     const statsToggleBtn = document.getElementById('stats-toggle-btn');
     if (statsToggleBtn) {
         statsToggleBtn.addEventListener('click', () => {
-            window.location.href = '/stats.html';
+            if (window.smoothNavigate) {
+                window.smoothNavigate('/stats.html');
+            } else {
+                window.location.href = '/stats.html';
+            }
         });
     }
     
