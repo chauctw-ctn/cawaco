@@ -1,17 +1,17 @@
 {
-  "timestamp": "2026-02-05T04:41:31.204Z",
+  "timestamp": "2026-02-05T04:41:36.695Z",
   "totalStations": 9,
   "stations": [
     {
       "station": "QT2-NM2 (Quan trắc NM2)",
-      "updateTime": "2026-02-05T04:39:41+0000",
+      "updateTime": "2026-02-05T04:40:11+0000",
       "lat": 9.203337,
       "lng": 105.129712,
       "data": [
         {
           "stt": "1",
           "name": "Nhiệt độ nước",
-          "time": "11:39:41 5/2/2026",
+          "time": "11:40:11 5/2/2026",
           "value": "27.52",
           "unit": "°C",
           "limit": ""
@@ -19,7 +19,7 @@
         {
           "stt": "2",
           "name": "Mực nước",
-          "time": "11:39:41 5/2/2026",
+          "time": "11:40:11 5/2/2026",
           "value": "25.99",
           "unit": "m",
           "limit": ""
@@ -270,23 +270,23 @@
   "deviceGroups": {
     "QT2_NM2": {
       "deviceCode": "QT2_NM2",
-      "lastUpdate": "2026-02-05T04:39:41+0000",
+      "lastUpdate": "2026-02-05T04:40:11+0000",
       "parameters": {
         "NHIETDO": {
           "name": "Nhiệt độ nước",
-          "time": "11:39:41 5/2/2026",
+          "time": "11:40:11 5/2/2026",
           "value": 27.52,
           "unit": "°C",
           "rawType": "NHIETDO",
-          "timestamp": "2026-02-05T04:39:41+0000"
+          "timestamp": "2026-02-05T04:40:11+0000"
         },
         "MUCNUOC": {
           "name": "Mực nước",
-          "time": "11:39:41 5/2/2026",
+          "time": "11:40:11 5/2/2026",
           "value": 25.99,
           "unit": "m",
           "rawType": "MUCNUOC",
-          "timestamp": "2026-02-05T04:39:41+0000"
+          "timestamp": "2026-02-05T04:40:11+0000"
         }
       }
     },
