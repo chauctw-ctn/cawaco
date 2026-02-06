@@ -1001,5 +1001,15 @@ body {
         padding: 14px;
         min-height: 75px;
     }
-}
+    
+    /* Sidebar time section */
+    .sidebar-time-section {
+        padding: 12px 14px;
+        margin-top: 12px;
     }
+    
+    .sidebar-time-section #current-time {
+        font-size: 14px;
+    }
+}
+

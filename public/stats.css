@@ -892,10 +892,6 @@ main:not(.with-sidebar) {
     .user-menu-btn {
         padding: 6px 10px;
     }
-    
-    #current-time {
-        display: none;
-    }
 }
 
 /* Mobile Specific */
@@ -980,6 +976,18 @@ main:not(.with-sidebar) {
     
     .data-table {
         font-size: 11px;
+    }
+    
+    /* Sidebar time section */
+    .sidebar-time-section {
+        padding: 10px 12px;
+        margin-top: 12px;
+    }
+    
+    .sidebar-time-section #current-time {
+        font-size: 13px;
+    }
+}
     }
     
     .data-table th,

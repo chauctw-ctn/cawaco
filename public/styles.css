@@ -384,6 +384,30 @@ body.page-transitioning {
     gap: 16px;
 }
 
+/* Sidebar Time Section */
+.sidebar-time-section {
+    margin-top: auto;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0, 102, 204, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-time-section #current-time {
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    display: block;
+}
+
+/* Hide old header time section (moved to sidebar) */
+.current-time-section {
+    display: none;
+}
+
 /* Sidebar Sections */
 .sidebar-section {
     background: white;
@@ -2267,6 +2291,16 @@ button {
         border-bottom: 1px solid rgba(0, 0, 0, 0.05);
         padding-bottom: 15px;
         margin-bottom: 10px;
+    }
+    
+    /* Sidebar time section for mobile */
+    .sidebar-time-section {
+        padding: 12px 14px;
+        margin-top: 12px;
+    }
+    
+    .sidebar-time-section #current-time {
+        font-size: 14px;
     }
     
     /* Improve menu item touch targets */
