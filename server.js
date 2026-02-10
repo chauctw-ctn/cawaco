@@ -298,6 +298,109 @@ app.post('/api/delete-user', verifyToken, (req, res) => {
     res.json({ success: true, message: 'Đã xóa người dùng thành công' });
 });
 
+// ============================================
+// VISITOR TRACKING API
+// ============================================
+// In-memory visitor tracking (in production, use database)
+const visitorStats = {
+    currentVisitors: new Map(), // sessionId -> { timestamp, page }
+    todayVisitors: new Set(),   // Set of session IDs for today
+    totalVisitors: 20102347,    // Starting count from provided value
+    lastResetDate: new Date().toDateString()
+};
+
+// Clean up stale visitor sessions (older than 5 minutes)
+function cleanupStaleVisitors() {
+    const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+    for (const [sessionId, data] of visitorStats.currentVisitors.entries()) {
+        if (data.timestamp < fiveMinutesAgo) {
+            visitorStats.currentVisitors.delete(sessionId);
+        }
+    }
+}
+
+// Reset daily stats at midnight
+function checkDailyReset() {
+    const today = new Date().toDateString();
+    if (visitorStats.lastResetDate !== today) {
+        visitorStats.todayVisitors.clear();
+        visitorStats.lastResetDate = today;
+    }
+}
+
+// Run cleanup every minute
+setInterval(() => {
+    cleanupStaleVisitors();
+    checkDailyReset();
+}, 60000);
+
+// Register a new visit
+app.post('/api/visitors/register', (req, res) => {
+    try {
+        const { page, timestamp } = req.body;
+        
+        // Generate or get session ID from header
+        let sessionId = req.headers['x-session-id'] || crypto.randomBytes(16).toString('hex');
+        
+        // Update current visitors
+        visitorStats.currentVisitors.set(sessionId, {
+            timestamp: Date.now(),
+            page: page || '/'
+        });
+        
+        // Check if this is a new visitor today
+        if (!visitorStats.todayVisitors.has(sessionId)) {
+            visitorStats.todayVisitors.add(sessionId);
+            visitorStats.totalVisitors++;
+        }
+        
+        res.json({
+            success: true,
+            sessionId: sessionId,
+            stats: {
+                currentVisitors: visitorStats.currentVisitors.size,
+                todayVisitors: visitorStats.todayVisitors.size,
+                totalVisitors: visitorStats.totalVisitors
+            }
+        });
+    } catch (error) {
+        console.error('Error registering visit:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Get current visitor statistics
+app.get('/api/visitors/stats', (req, res) => {
+    try {
+        cleanupStaleVisitors();
+        checkDailyReset();
+        
+        res.json({
+            success: true,
+            currentVisitors: visitorStats.currentVisitors.size,
+            todayVisitors: visitorStats.todayVisitors.size,
+            totalVisitors: visitorStats.totalVisitors
+        });
+    } catch (error) {
+        console.error('Error getting visitor stats:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Handle page unload (visitor leaving)
+app.post('/api/visitors/unload', (req, res) => {
+    try {
+        const sessionId = req.headers['x-session-id'];
+        if (sessionId && visitorStats.currentVisitors.has(sessionId)) {
+            visitorStats.currentVisitors.delete(sessionId);
+        }
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error handling unload:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 /**
  * API: Lấy dữ liệu tất cả các trạm (TVA + MQTT)
  */
