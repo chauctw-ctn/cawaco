@@ -6,8 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "mqtt": "node mqtt_client.js",
-    "print": "node print_data.js",
-    "build": "npm rebuild --build-from-source sqlite3"
+    "print": "node print_data.js"
   },
   "keywords": [
     "mqtt",
@@ -26,6 +25,6 @@
     "cheerio": "^1.0.0-rc.12",
     "express": "^4.18.2",
     "mqtt": "^4.3.7",
-    "sqlite3": "^5.1.7"
+    "pg": "^8.18.0"
   }
 }
