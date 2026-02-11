@@ -7,6 +7,16 @@ const MAX_RECORDS = {
     SCADA: 100000   // Giới hạn 100k records cho SCADA
 };
 
+/**
+ * Lấy timestamp hiện tại theo múi giờ GMT+7 (Hồ Chí Minh)
+ * Trả về thời gian hiện tại của server
+ */
+function getVietnamTimestamp() {
+    // Lấy thời gian hiện tại
+    // PostgreSQL TIMESTAMPTZ sẽ tự động xử lý timezone khi lưu
+    return new Date().toISOString();
+}
+
 // Kết nối tới PostgreSQL database
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres.llehbswibzhtsqgdulux:CR0kEeWlb8vemvuz@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres';
 
@@ -17,7 +27,9 @@ try {
         connectionString: DATABASE_URL,
         ssl: {
             rejectUnauthorized: false // Cho phép kết nối SSL với Supabase
-        }
+        },
+        // Set timezone mặc định cho tất cả connections
+        options: '-c TimeZone=Asia/Ho_Chi_Minh'
     });
 
     // Test connection
@@ -27,7 +39,7 @@ try {
             process.exit(1);
         } else {
             console.log('✅ Đã kết nối tới PostgreSQL database');
-            console.log('🕒 Server time:', res.rows[0].now);
+            console.log('🇻🇳 Server time (GMT+7):', res.rows[0].now);
         }
     });
 } catch (error) {
@@ -175,13 +187,15 @@ async function saveTVAData(stations) {
         return 0;
     }
 
-    const timestamp = new Date().toISOString();
     let savedCount = 0;
     let errors = [];
 
     const client = await pool.connect();
     
     try {
+        // Set timezone cho connection này - Múi giờ Việt Nam (GMT+7)
+        await client.query("SET TIMEZONE='Asia/Ho_Chi_Minh'");
+        
         for (const station of stations) {
             const stationId = `tva_${station.station.replace(/\s+/g, '_')}`;
             
@@ -192,10 +206,11 @@ async function saveTVAData(stations) {
             if (station.data && Array.isArray(station.data)) {
                 for (const param of station.data) {
                     try {
+                        // Sử dụng CURRENT_TIMESTAMP của PostgreSQL để lấy thời gian hiện tại
                         await client.query(
                             `INSERT INTO tva_data (station_name, station_id, parameter_name, value, unit, timestamp, update_time)
-                             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                            [station.station, stationId, param.name, param.value, param.unit, timestamp, station.updateTime || timestamp]
+                             VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+                            [station.station, stationId, param.name, param.value, param.unit]
                         );
                         savedCount++;
                     } catch (err) {
@@ -231,7 +246,6 @@ async function saveMQTTData(stations) {
         return 0;
     }
 
-    const timestamp = new Date().toISOString();
     let savedCount = 0;
     let errors = [];
 
@@ -240,6 +254,9 @@ async function saveMQTTData(stations) {
     const client = await pool.connect();
     
     try {
+        // Set timezone cho connection này - Múi giờ Việt Nam (GMT+7)
+        await client.query("SET TIMEZONE='Asia/Ho_Chi_Minh'");
+        
         for (const station of stations) {
             const stationId = `mqtt_${station.station.replace(/\s+/g, '_')}`;
             
@@ -252,10 +269,11 @@ async function saveMQTTData(stations) {
             if (station.data && Array.isArray(station.data)) {
                 for (const param of station.data) {
                     try {
+                        // Sử dụng CURRENT_TIMESTAMP của PostgreSQL để lấy thời gian hiện tại
                         await client.query(
                             `INSERT INTO mqtt_data (station_name, station_id, device_name, parameter_name, value, unit, timestamp, update_time)
-                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                            [station.station, stationId, station.deviceName || '', param.name, param.value, param.unit, timestamp, station.updateTime || timestamp]
+                             VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+                            [station.station, stationId, station.deviceName || '', param.name, param.value, param.unit]
                         );
                         savedCount++;
                     } catch (err) {
@@ -292,13 +310,15 @@ async function saveSCADAData(stationsGrouped) {
         return 0;
     }
 
-    const timestamp = new Date().toISOString();
     let savedCount = 0;
     let errors = [];
 
     const client = await pool.connect();
     
     try {
+        // Set timezone cho connection này
+        await client.query("SET TIMEZONE='Asia/Ho_Chi_Minh'");
+        
         for (const station of Object.values(stationsGrouped)) {
             const stationId = `scada_${station.station}`;
             
@@ -319,11 +339,12 @@ async function saveSCADAData(stationsGrouped) {
                     }
 
                     try {
+                        // Sử dụng CURRENT_TIMESTAMP của PostgreSQL để lấy thời gian hiện tại
                         await client.query(
                             `INSERT INTO scada_data (station_name, station_id, parameter_name, value, unit, timestamp, update_time)
-                             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                             VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
                             [station.stationName || station.station, stationId, param.parameterName || param.parameter, 
-                             isNaN(numericValue) ? null : numericValue, param.unit || '', timestamp, timestamp]
+                             isNaN(numericValue) ? null : numericValue, param.unit || '']
                         );
                         savedCount++;
                     } catch (err) {
