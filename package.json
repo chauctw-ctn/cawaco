@@ -5,8 +5,13 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "mqtt": "node mqtt_client.js",
-    "print": "node print_data.js"
+    "test:mqtt": "node test-mqtt.js",
+    "test:tva": "node test-tva.js",
+    "test:scada": "node test-scada.js",
+    "test:database": "node test-database.js",
+    "test:all": "node test-all.js",
+    "test:api": "node test-api.js",
+    "test:coords": "node test-coordinates.js"
   },
   "keywords": [
     "mqtt",
@@ -22,9 +27,11 @@
   },
   "dependencies": {
     "axios": "^1.13.5",
+    "axios-cookiejar-support": "^6.0.5",
     "cheerio": "^1.0.0-rc.12",
     "express": "^4.18.2",
     "mqtt": "^4.3.7",
-    "pg": "^8.18.0"
+    "pg": "^8.18.0",
+    "tough-cookie": "^6.0.0"
   }
 }

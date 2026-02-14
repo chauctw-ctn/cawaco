@@ -8,13 +8,14 @@ let serverTimestamp = null; // Server timestamp for consistent offline calculati
 
 function createStationIcon(station) {
     const offline = isStationOffline(station);
-    const iconColor = offline ? '#dc2626' : (station.type === 'TVA' ? '#10b981' : '#fbbf24');
-    const blinkClass = offline ? 'blink' : '';
-    return L.divIcon({
-        className: `custom-marker ${blinkClass}`,
-        html: `<div class="marker-dot ${blinkClass}" style="background-color: ${iconColor}; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-        iconSize: [16, 16],
-        iconAnchor: [8, 8]
+    // Sử dụng PS_GR.gif cho trạm online, DIS.gif cho trạm offline
+    const iconUrl = offline ? 'DIS.gif' : 'PS_GR.gif';
+    
+    return L.icon({
+        iconUrl: iconUrl,
+        iconSize: [32, 32],      // Kích thước icon
+        iconAnchor: [16, 32],    // Điểm neo (giữa đáy icon)
+        popupAnchor: [0, -32]    // Vị trí popup xuất hiện (phía trên icon)
     });
 }
 
@@ -458,9 +459,11 @@ function createPopupContent(station) {
     // Hiển thị các thông số
     if (station.data && station.data.length > 0) {
         station.data.forEach(param => {
-            // Làm ngắn tên thông số
+            // Làm ngắn tên thông số và xác định thông số chất lượng nước
             let shortName = param.name;
             const paramNameLower = param.name.toLowerCase();
+            let isWaterQuality = false;
+            let qualityClass = '';
             
             // Kiểm tra "tổng" trước để tránh trùng với "lưu lượng"
             if (paramNameLower.includes('tổng')) {
@@ -483,11 +486,54 @@ function createPopupContent(station) {
             else if (paramNameLower.includes('nhiệt độ') || paramNameLower.includes('nhiet do')) {
                 shortName = 'Nhiệt độ';
             }
+            // Thông số chất lượng nước
+            else if (paramNameLower.includes('ph')) {
+                shortName = 'pH';
+                isWaterQuality = true;
+                const value = parseFloat(param.value);
+                if (!isNaN(value)) {
+                    if (value >= 6.5 && value <= 8.5) qualityClass = 'good';
+                    else qualityClass = 'warning';
+                }
+            }
+            else if (paramNameLower.includes('tds')) {
+                shortName = 'TDS';
+                isWaterQuality = true;
+                const value = parseFloat(param.value);
+                if (!isNaN(value)) {
+                    if (value <= 1000) qualityClass = 'good';
+                    else if (value <= 1500) qualityClass = 'warning';
+                    else qualityClass = 'danger';
+                }
+            }
+            else if (paramNameLower.includes('amoni')) {
+                shortName = 'Amoni';
+                isWaterQuality = true;
+                const value = parseFloat(param.value);
+                if (!isNaN(value)) {
+                    if (value <= 3) qualityClass = 'good';
+                    else qualityClass = 'warning';
+                }
+            }
+            else if (paramNameLower.includes('nitrat')) {
+                shortName = 'Nitrat';
+                isWaterQuality = true;
+                const value = parseFloat(param.value);
+                if (!isNaN(value)) {
+                    if (value <= 15) qualityClass = 'good';
+                    else qualityClass = 'warning';
+                }
+            }
+            
+            const valueClass = isWaterQuality ? `water-quality ${qualityClass}` : stationClass;
+            const qualityIcon = isWaterQuality && qualityClass === 'good' ? '✓' : 
+                               isWaterQuality && qualityClass === 'warning' ? '⚠' : 
+                               isWaterQuality && qualityClass === 'danger' ? '✕' : '';
             
             html += `
                 <div class="data-row">
                     <span class="data-label">${shortName}</span>
-                    <span class="data-value ${stationClass}">${param.value} ${param.unit}</span>
+                    <span class="data-value ${valueClass}">${qualityIcon} ${param.value} ${param.unit}</span>
                 </div>
             `;
         });

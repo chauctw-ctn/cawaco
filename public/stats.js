@@ -411,6 +411,7 @@ async function loadStatsData() {
             parameter: selectedParameter,
             startDate: startDate,
             endDate: endDate,
+            interval: interval,
             limit: 50000
         });
         

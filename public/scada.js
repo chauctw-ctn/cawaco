@@ -38,9 +38,17 @@ async function loadScadaData(options = {}) {
 
     try {
         const response = await fetch('/api/scada/cached');
-        if (!response.ok) throw new Error('Không thể tải dữ liệu');
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `HTTP ${response.status}: Không thể tải dữ liệu`);
+        }
         
         scadaData = await response.json();
+        
+        if (!scadaData.success && scadaData.success !== undefined) {
+            throw new Error(scadaData.message || 'Không có dữ liệu');
+        }
         
         renderStations();
         updateLastUpdate();
@@ -48,7 +56,17 @@ async function loadScadaData(options = {}) {
     } catch (error) {
         console.error('Error loading SCADA data:', error);
         const container = document.getElementById('stationsContainer');
-        container.innerHTML = `<div class="error">Lỗi: ${error.message}</div>`;
+        container.innerHTML = `
+            <div class="error" style="padding: 40px; text-align: center;">
+                <h3 style="color: #d32f2f; margin-bottom: 10px;">❌ ${error.message}</h3>
+                <p style="color: #666; margin-top: 10px;">
+                    Hệ thống sẽ tự động cập nhật dữ liệu chất lượng nước mỗi 5 phút.
+                </p>
+                <button onclick="loadScadaData()" style="margin-top: 20px; padding: 10px 20px; background: #0066cc; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                    Thử lại
+                </button>
+            </div>
+        `;
 
     } finally {
         scadaLoading = false;
@@ -67,6 +85,17 @@ function renderStations() {
 
     const stations = scadaData.stationsGrouped;
     const stationEntries = Object.entries(stations);
+    
+    // Debug: Log parameter names from database
+    console.log('🔍 Debug - SCADA Data from database:');
+    stationEntries.forEach(([id, st]) => {
+        console.log(`Station: ${st.stationName}`);
+        if (st.parameters) {
+            st.parameters.forEach(p => {
+                console.log(`  - Parameter: "${p.parameter}" (${p.parameterName}) = ${p.displayText} ${p.unit}`);
+            });
+        }
+    });
 
     // SCADA/HMI style overview (no table)
     const metrics = [
@@ -152,10 +181,53 @@ function renderGroupColumn(groupName, stations, metrics) {
 function buildParamMap(station) {
     const params = {};
     if (!station || !Array.isArray(station.parameters)) return params;
+    
     station.parameters.forEach(p => {
-        if (p && p.parameter) params[p.parameter] = p;
+        if (!p || !p.parameter) return;
+        
+        // Normalize parameter name for matching
+        const normalizedKey = normalizeParameterName(p.parameter);
+        
+        // Store both original and normalized keys
+        params[p.parameter] = p; // Original key
+        params[normalizedKey] = p; // Normalized key
     });
+    
     return params;
+}
+
+/**
+ * Normalize parameter name for flexible matching
+ * Examples:
+ * - "pH" or "PH" -> "PH"
+ * - "TDS (mg/l)" or "TDS" -> "TDS"
+ * - "Amoni (NH4+)" or "Amoni" -> "AMONI"
+ * - "Nitrat (NO3-)" or "Nitrat" -> "NITRAT"
+ * - "Lưu lượng" -> "LƯU_LƯỢNG"
+ * - "Mực nước" -> "MỰC_NƯỚC"
+ */
+function normalizeParameterName(paramName) {
+    if (!paramName) return '';
+    
+    const name = String(paramName).trim().toLowerCase();
+    
+    // Water quality parameters
+    if (name.includes('ph')) return 'PH';
+    if (name.includes('tds')) return 'TDS';
+    if (name.includes('amoni') || name.includes('nh4')) return 'AMONI';
+    if (name.includes('nitrat') || name.includes('no3')) return 'NITRAT';
+    
+    // Flow and level parameters
+    if (name.includes('lưu lượng') || name.includes('luu luong')) {
+        if (name.includes('tổng') || name.includes('tong')) {
+            return 'TỔNG_LƯU_LƯỢNG';
+        }
+        return 'LƯU_LƯỢNG';
+    }
+    if (name.includes('mực nước') || name.includes('muc nuoc')) return 'MỰC_NƯỚC';
+    
+    // Return uppercase version with underscores
+    return paramName.toUpperCase().replace(/\s+/g, '_').replace(/[()]/g, '');
 }
 
 function formatCell(param, fallbackUnit) {
@@ -245,7 +317,10 @@ function getQualityStatus(paramName, value) {
     const numValue = parseFloat(value);
     if (isNaN(numValue)) return null;
     
-    switch(paramName) {
+    // Normalize parameter name for comparison
+    const normalized = normalizeParameterName(paramName);
+    
+    switch(normalized) {
         case 'PH':
             if (numValue >= 6.5 && numValue <= 8.5) return {class: 'quality-good', text: 'Đạt chuẩn'};
             if (numValue >= 6.0 && numValue < 6.5 || numValue > 8.5 && numValue <= 9.0) return {class: 'quality-warning', text: 'Cảnh báo'};

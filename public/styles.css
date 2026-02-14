@@ -1354,6 +1354,29 @@ body.page-transitioning {
     color: white;
 }
 
+/* Water Quality Indicators */
+.data-value.water-quality {
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.data-value.water-quality.good {
+    background: #10b981;
+    color: white;
+}
+
+.data-value.water-quality.warning {
+    background: #fbbf24;
+    color: #000;
+}
+
+.data-value.water-quality.danger {
+    background: #ef4444;
+    color: white;
+}
+
 .no-data {
     color: #9ca3af;
     font-size: 12px;

@@ -2,49 +2,30 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+
+// Import configuration
+const config = require('./config');
+
+// Import coordinates
 const { TVA_STATION_COORDINATES } = require('./tva-coordinates');
 const { MQTT_STATION_COORDINATES } = require('./mqtt-coordinates');
 const { SCADA_STATION_COORDINATES } = require('./scada-coordinates');
-const { connectMQTT, getConnectionStatus } = require('./mqtt_client');
-const { crawl: crawlTVAData } = require('./getKeyTVA');
-const { crawlScadaTVA, getStationDetail } = require('./scada-tva-crawler');
-const { 
-    initDatabase, 
-    saveTVAData, 
-    saveMQTTData,
-    saveSCADAData,
-    getStatsData,
-    getAvailableParameters,
-    getStations: getStationsFromDB,
-    cleanOldData,
-    checkStationsValueChanges,
-    getStationLastUpdates,
-    getLatestStationsData,
-    getVisitorStats,
-    incrementVisitorCount,
-    setVisitorCount
-} = require('./database');
+
+// Import modules
+const mqttModule = require('./modules/mqtt');
+const tvaModule = require('./modules/tva');
+const scadaModule = require('./modules/scada');
+const dbModule = require('./modules/database');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = config.server.port;
 
 // Middleware để serve static files
 app.use(express.static('public'));
 app.use(express.json());
 
-// Simple authentication (in production, use proper database and hashing)
-const USERS = {
-    'admin': {
-        password: 'admin123', // In production, use bcrypt hashed passwords
-        name: 'Administrator',
-        role: 'admin'
-    },
-    'user': {
-        password: 'user123',
-        name: 'User',
-        role: 'user'
-    }
-};
+// Simple authentication (from config)
+const USERS = config.auth.users;
 
 // Token storage (in production, use Redis or database)
 const tokens = new Map();
@@ -73,65 +54,93 @@ function verifyToken(req, res, next) {
 }
 
 /**
- * Cập nhật dữ liệu TVA từ getKeyTVA.js
+ * Cập nhật dữ liệu TVA từ module TVA
  */
 async function updateTVAData() {
     console.log('🔄 Đang cập nhật dữ liệu TVA...');
     
-    const maxRetries = 3;
-    let lastError = null;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            // Gọi hàm crawl trực tiếp thay vì exec
-            const allStations = await crawlTVAData();
-            
-            if (!allStations || allStations.length === 0) {
-                console.warn('⚠️ Không có dữ liệu TVA');
-                return;
-            }
-            
-            console.log(`✅ Đã lấy ${allStations.length} trạm TVA`);
-            
-            // Lưu dữ liệu TVA vào database
-            const count = await saveTVAData(allStations);
-            console.log(`💾 Đã lưu ${count} bản ghi TVA vào database`);
-            
-            return; // Thành công, thoát hàm
-            
-        } catch (error) {
-            lastError = error;
-            console.error(`❌ Lỗi cập nhật TVA (lần thử ${attempt}/${maxRetries}): ${error.message}`);
-            
-            if (attempt < maxRetries) {
-                const waitTime = attempt * 2000; // 2s, 4s, 6s
-                console.log(`⏳ Đợi ${waitTime/1000}s trước khi thử lại...`);
-                await new Promise(resolve => setTimeout(resolve, waitTime));
-            }
-        }
-    }
-    
-    // Nếu tất cả các lần thử đều thất bại
-    console.error(`❌ Không thể cập nhật TVA sau ${maxRetries} lần thử`);
-    throw lastError;
-}
-
-/**
- * Lưu dữ liệu MQTT từ file JSON vào database
- */
-async function saveMQTTDataToDB() {
     try {
-        if (!fs.existsSync('data_mqtt.json')) {
-            console.warn('⚠️ Không tìm thấy file data_mqtt.json');
+        const allStations = await tvaModule.getTVADataWithRetry();
+        
+        if (!allStations || allStations.length === 0) {
+            console.warn('⚠️ Không có dữ liệu TVA');
             return;
         }
         
-        const mqttData = JSON.parse(fs.readFileSync('data_mqtt.json', 'utf8'));
-        const count = await saveMQTTData(mqttData.stations);
+        console.log(`✅ Đã lấy ${allStations.length} trạm TVA`);
+        
+        // Lưu dữ liệu TVA vào database
+        const count = await dbModule.saveTVAData(allStations);
+        console.log(`💾 Đã lưu ${count} bản ghi TVA vào database`);
+        
+    } catch (error) {
+        console.error(`❌ Lỗi cập nhật TVA:`, error.message);
+        throw error;
+    }
+}
+
+/**
+ * Lưu dữ liệu MQTT từ module MQTT vào database
+ */
+async function saveMQTTDataToDB() {
+    try {
+        const mqttData = mqttModule.getStationsData();
+        
+        if (!mqttData || !mqttData.stations || mqttData.stations.length === 0) {
+            console.warn('⚠️ Không có dữ liệu MQTT để lưu');
+            return;
+        }
+        
+        const count = await dbModule.saveMQTTData(mqttData.stations);
         console.log(`💾 Đã lưu ${count} bản ghi MQTT vào database`);
     } catch (error) {
         console.error('❌ Lỗi lưu dữ liệu MQTT vào database:', error.message);
     }
+}
+
+/**
+ * Helper function: Tìm coordinates thông minh
+ * Thử tìm theo nhiều cách: exact match, station ID, normalize name
+ */
+function findCoordinates(stationName, coordinatesMap) {
+    // 1. Tìm trực tiếp
+    if (coordinatesMap[stationName]) {
+        return coordinatesMap[stationName];
+    }
+    
+    // 2. Tìm theo station ID (từ station name)
+    // Ví dụ: "GIẾNG 4 NHÀ MÁY 2" => tìm "G4_NM2"
+    const stationIdPatterns = [
+        // Extract station ID from full name
+        { regex: /GIẾNG (\d+) NHÀ MÁY (\d+)/i, format: (m) => `G${m[1]}_NM${m[2]}` },
+        { regex: /TRẠM BƠM SỐ (\d+)/i, format: (m) => `TRAM_${m[1]}` },
+        { regex: /TRẠM (\d+)/i, format: (m) => `TRAM_${m[1]}` },
+        // Handle station IDs directly
+        { regex: /^(G\d+[AB]?)$/i, format: (m) => m[1].toUpperCase() },
+        { regex: /^(QT\d+[A-Z]?)(_NM\d+)?$/i, format: (m) => (m[1] + (m[2] || '')).toUpperCase() },
+        { regex: /^(GS\d+)_NM(\d+)$/i, format: (m) => `${m[1]}_NM${m[2]}`.toUpperCase() }
+    ];
+    
+    for (const pattern of stationIdPatterns) {
+        const match = stationName.match(pattern.regex);
+        if (match) {
+            const stationId = pattern.format(match);
+            if (coordinatesMap[stationId]) {
+                return coordinatesMap[stationId];
+            }
+        }
+    }
+    
+    // 3. Tìm case-insensitive
+    const lowerName = stationName.toLowerCase();
+    for (const key in coordinatesMap) {
+        if (key.toLowerCase() === lowerName) {
+            return coordinatesMap[key];
+        }
+    }
+    
+    // 4. Không tìm thấy
+    return null;
 }
 
 /**
@@ -358,10 +367,10 @@ app.post('/api/visitors/register', async (req, res) => {
         if (!visitorStats.todayVisitors.has(sessionId)) {
             visitorStats.todayVisitors.add(sessionId);
             // Increment in database
-            dbStats = await incrementVisitorCount();
+            dbStats = await dbModule.incrementVisitorCount();
         } else {
             // Just get current stats from database
-            dbStats = await getVisitorStats();
+            dbStats = await dbModule.getVisitorStats();
         }
         
         res.json({
@@ -386,7 +395,7 @@ app.get('/api/visitors/stats', async (req, res) => {
         checkDailyReset();
         
         // Get total visitors from database
-        const dbStats = await getVisitorStats();
+        const dbStats = await dbModule.getVisitorStats();
         
         res.json({
             success: true,
@@ -415,20 +424,26 @@ app.post('/api/visitors/unload', (req, res) => {
 });
 
 /**
- * API: Lấy dữ liệu tất cả các trạm (TVA + MQTT)
+ * API: Lấy dữ liệu tất cả các trạm (TVA + MQTT + SCADA)
  */
 app.get('/api/stations', async (req, res) => {
     try {
         const allStations = [];
         
-        // Get timeout from query parameter (default 60 minutes)
-        const timeoutMinutes = parseInt(req.query.timeout) || 60;
+        // Get timeout from query parameter or use config default
+        const timeoutMinutes = parseInt(req.query.timeout) || config.station.timeoutMinutes;
+        
+        console.log(`🔍 Checking station status with timeout: ${timeoutMinutes} minutes`);
         
         // Check which stations have value changes within timeout period
-        const stationStatus = await checkStationsValueChanges(timeoutMinutes);
+        const stationStatus = await dbModule.checkStationsValueChanges(timeoutMinutes);
         
         // Get latest data from database (ưu tiên)
-        const dbStationsData = await getLatestStationsData();
+        const dbStationsData = await dbModule.getLatestStationsData();
+        
+        // Count online/offline
+        let onlineCount = 0;
+        let offlineCount = 0;
         
         // Đọc dữ liệu TVA từ database trước, fallback sang file JSON nếu không có
         const tvaStationsInDB = Object.keys(dbStationsData).filter(name => 
@@ -440,7 +455,12 @@ app.get('/api/stations', async (req, res) => {
             tvaStationsInDB.forEach(stationName => {
                 const dbStation = dbStationsData[stationName];
                 const coords = TVA_STATION_COORDINATES[stationName];
-                const status = stationStatus[stationName] || { hasChange: false, lastUpdate: null };
+                const status = stationStatus[stationName] || { 
+                    status: 'offline', 
+                    hasChange: false, 
+                    lastUpdate: null,
+                    timeSinceUpdate: null
+                };
                 
                 if (coords) {
                     allStations.push({
@@ -449,12 +469,17 @@ app.get('/api/stations', async (req, res) => {
                         type: 'TVA',
                         lat: coords.lat,
                         lng: coords.lng,
+                        status: status.status,              // 'online' hoặc 'offline'
                         updateTime: dbStation.updateTime,
                         lastUpdateInDB: dbStation.timestamp,
-                        hasValueChange: status.hasChange,
+                        timeSinceUpdate: status.timeSinceUpdate, // Số phút kể từ lần cập nhật cuối
+                        hasValueChange: status.hasChange,    // Giữ lại để tương thích ngược
                         data: dbStation.data,
                         timestamp: dbStation.timestamp
                     });
+                    
+                    if (status.status === 'online') onlineCount++;
+                    else offlineCount++;
                 }
             });
         } else if (fs.existsSync('data_quantrac.json')) {
@@ -464,7 +489,12 @@ app.get('/api/stations', async (req, res) => {
             
             tvaData.stations.forEach(station => {
                 const coords = TVA_STATION_COORDINATES[station.station];
-                const status = stationStatus[station.station] || { hasChange: false, lastUpdate: null };
+                const status = stationStatus[station.station] || { 
+                    status: 'offline', 
+                    hasChange: false, 
+                    lastUpdate: null,
+                    timeSinceUpdate: null 
+                };
                 
                 // Parse updateTime từ JSON (format: "HH:mm - dd/mm/yyyy")
                 let parsedUpdateTime = null;
@@ -476,14 +506,16 @@ app.get('/api/stations', async (req, res) => {
                     }
                 }
                 
-                let hasValueChange = status.hasChange;
+                let stationStatusValue = status.status;
                 let lastUpdate = status.lastUpdate;
+                let timeSinceUpdate = status.timeSinceUpdate;
                 
                 if (!status.lastUpdate && parsedUpdateTime) {
                     lastUpdate = parsedUpdateTime.toISOString();
                     const now = new Date();
-                    const diffMinutes = (now - parsedUpdateTime) / (1000 * 60);
-                    hasValueChange = diffMinutes <= timeoutMinutes;
+                    const diffMinutes = Math.floor((now - parsedUpdateTime) / (1000 * 60));
+                    timeSinceUpdate = diffMinutes;
+                    stationStatusValue = diffMinutes <= timeoutMinutes ? 'online' : 'offline';
                 }
                 
                 if (coords) {
@@ -493,12 +525,17 @@ app.get('/api/stations', async (req, res) => {
                         type: 'TVA',
                         lat: coords.lat,
                         lng: coords.lng,
+                        status: stationStatusValue,
                         updateTime: station.updateTime,
                         lastUpdateInDB: lastUpdate,
-                        hasValueChange: hasValueChange,
+                        timeSinceUpdate: timeSinceUpdate,
+                        hasValueChange: stationStatusValue === 'online',
                         data: station.data,
                         timestamp: tvaData.timestamp
                     });
+                    
+                    if (stationStatusValue === 'online') onlineCount++;
+                    else offlineCount++;
                 }
             });
         }
@@ -512,10 +549,15 @@ app.get('/api/stations', async (req, res) => {
             console.log(`📊 Loading ${mqttStationsInDB.length} MQTT stations from database`);
             mqttStationsInDB.forEach(stationName => {
                 const dbStation = dbStationsData[stationName];
-                const status = stationStatus[stationName] || { hasChange: false, lastUpdate: null };
+                const status = stationStatus[stationName] || { 
+                    status: 'offline', 
+                    hasChange: false, 
+                    lastUpdate: null,
+                    timeSinceUpdate: null
+                };
                 
-                // Get coordinates from MQTT_STATION_COORDINATES
-                const coords = MQTT_STATION_COORDINATES[stationName];
+                // Get coordinates using smart lookup
+                const coords = findCoordinates(stationName, MQTT_STATION_COORDINATES);
                 
                 if (coords) {
                     allStations.push({
@@ -524,13 +566,18 @@ app.get('/api/stations', async (req, res) => {
                         type: 'MQTT',
                         lat: coords.lat,
                         lng: coords.lng,
+                        status: status.status,
                         updateTime: dbStation.updateTime,
                         lastUpdateInDB: dbStation.timestamp,
+                        timeSinceUpdate: status.timeSinceUpdate,
                         hasValueChange: status.hasChange,
                         data: dbStation.data,
                         timestamp: dbStation.timestamp
                     });
-                    console.log(`   ✅ MQTT station added: ${stationName} (${coords.lat}, ${coords.lng})`);
+                    console.log(`   ✅ MQTT station added: ${stationName} (${coords.lat}, ${coords.lng}) - ${status.status}`);
+                    
+                    if (status.status === 'online') onlineCount++;
+                    else offlineCount++;
                 } else {
                     console.warn(`   ⚠️ No coordinates found for MQTT station: ${stationName}`);
                 }
@@ -541,7 +588,12 @@ app.get('/api/stations', async (req, res) => {
             const mqttData = JSON.parse(fs.readFileSync('data_mqtt.json', 'utf8'));
             
             mqttData.stations.forEach(station => {
-                const status = stationStatus[station.station] || { hasChange: false, lastUpdate: null };
+                const status = stationStatus[station.station] || { 
+                    status: 'offline', 
+                    hasChange: false, 
+                    lastUpdate: null,
+                    timeSinceUpdate: null
+                };
                 
                 if (station.lat && station.lng) {
                     allStations.push({
@@ -550,12 +602,17 @@ app.get('/api/stations', async (req, res) => {
                         type: 'MQTT',
                         lat: station.lat,
                         lng: station.lng,
+                        status: status.status,
                         updateTime: station.updateTime,
                         lastUpdateInDB: status.lastUpdate,
+                        timeSinceUpdate: status.timeSinceUpdate,
                         hasValueChange: status.hasChange,
                         data: station.data,
                         timestamp: mqttData.timestamp
                     });
+                    
+                    if (status.status === 'online') onlineCount++;
+                    else offlineCount++;
                 }
             });
         }
@@ -569,10 +626,15 @@ app.get('/api/stations', async (req, res) => {
             console.log(`📊 Loading ${scadaStationsInDB.length} SCADA stations from database`);
             scadaStationsInDB.forEach(stationName => {
                 const dbStation = dbStationsData[stationName];
-                const status = stationStatus[stationName] || { hasChange: false, lastUpdate: null };
+                const status = stationStatus[stationName] || { 
+                    status: 'offline', 
+                    hasChange: false, 
+                    lastUpdate: null,
+                    timeSinceUpdate: null
+                };
                 
-                // Get coordinates from SCADA_STATION_COORDINATES
-                const coords = SCADA_STATION_COORDINATES[stationName];
+                // Get coordinates using smart lookup
+                const coords = findCoordinates(stationName, SCADA_STATION_COORDINATES);
                 
                 if (coords) {
                     allStations.push({
@@ -581,13 +643,18 @@ app.get('/api/stations', async (req, res) => {
                         type: 'SCADA',
                         lat: coords.lat,
                         lng: coords.lng,
+                        status: status.status,
                         updateTime: dbStation.updateTime,
                         lastUpdateInDB: dbStation.timestamp,
+                        timeSinceUpdate: status.timeSinceUpdate,
                         hasValueChange: status.hasChange,
                         data: dbStation.data,
                         timestamp: dbStation.timestamp
                     });
-                    console.log(`   ✅ SCADA station added: ${stationName} (${coords.lat}, ${coords.lng})`);
+                    console.log(`   ✅ SCADA station added: ${stationName} (${coords.lat}, ${coords.lng}) - ${status.status}`);
+                    
+                    if (status.status === 'online') onlineCount++;
+                    else offlineCount++;
                 } else {
                     console.warn(`   ⚠️ No coordinates found for SCADA station: ${stationName}`);
                 }
@@ -601,7 +668,12 @@ app.get('/api/stations', async (req, res) => {
                 Object.keys(scadaData.stationsGrouped).forEach(stationName => {
                     const station = scadaData.stationsGrouped[stationName];
                     const coords = SCADA_STATION_COORDINATES[stationName];
-                    const status = stationStatus[stationName] || { hasChange: false, lastUpdate: null };
+                    const status = stationStatus[stationName] || { 
+                        status: 'offline', 
+                        hasChange: false, 
+                        lastUpdate: null,
+                        timeSinceUpdate: null
+                    };
                     
                     if (coords) {
                         allStations.push({
@@ -610,21 +682,79 @@ app.get('/api/stations', async (req, res) => {
                             type: 'SCADA',
                             lat: coords.lat,
                             lng: coords.lng,
+                            status: status.status,
                             updateTime: station.updateTime,
                             lastUpdateInDB: status.lastUpdate,
+                            timeSinceUpdate: status.timeSinceUpdate,
                             hasValueChange: status.hasChange,
                             data: station.data,
                             timestamp: scadaData.timestamp
                         });
+                        
+                        if (status.status === 'online') onlineCount++;
+                        else offlineCount++;
                     }
                 });
             }
         }
         
+        // Deduplication: Loại bỏ các trạm trùng lặp dựa trên tọa độ giống nhau
+        // Ưu tiên: TVA > MQTT > SCADA (nếu cùng tọa độ)
+        const deduplicatedStations = [];
+        const seenCoordinates = new Map(); // key: "lat,lng", value: station
+        
+        allStations.forEach(station => {
+            const coordKey = `${station.lat.toFixed(6)},${station.lng.toFixed(6)}`;
+            
+            if (!seenCoordinates.has(coordKey)) {
+                // Chưa có trạm nào ở tọa độ này
+                seenCoordinates.set(coordKey, station);
+                deduplicatedStations.push(station);
+            } else {
+                // Đã có trạm ở tọa độ này - kiểm tra ưu tiên
+                const existing = seenCoordinates.get(coordKey);
+                const typePriority = { 'TVA': 3, 'MQTT': 2, 'SCADA': 1 };
+                
+                // Nếu trạm mới có priority cao hơn, thay thế
+                if (typePriority[station.type] > typePriority[existing.type]) {
+                    console.log(`   🔄 Duplicate detected: Replacing ${existing.name} (${existing.type}) with ${station.name} (${station.type}) at ${coordKey}`);
+                    const index = deduplicatedStations.findIndex(s => s.id === existing.id);
+                    if (index !== -1) {
+                        deduplicatedStations[index] = station;
+                        seenCoordinates.set(coordKey, station);
+                        
+                        // Cập nhật count
+                        if (existing.status === 'online') onlineCount--;
+                        else offlineCount--;
+                        if (station.status === 'online') onlineCount++;
+                        else offlineCount++;
+                    }
+                } else {
+                    console.log(`   ⚠️  Duplicate ignored: ${station.name} (${station.type}) at same location as ${existing.name} (${existing.type}) - ${coordKey}`);
+                }
+            }
+        });
+        
+        const duplicatesRemoved = allStations.length - deduplicatedStations.length;
+        
+        console.log(`📊 ===== STATION STATUS SUMMARY =====`);
+        console.log(`   🟢 Online:  ${onlineCount} stations`);
+        console.log(`   🔴 Offline: ${offlineCount} stations`);
+        console.log(`   📍 Total:   ${deduplicatedStations.length} stations`);
+        if (duplicatesRemoved > 0) {
+            console.log(`   🗑️  Removed: ${duplicatesRemoved} duplicates`);
+        }
+        console.log(`   ⏱️  Timeout: ${timeoutMinutes} minutes`);
+        console.log(`===================================`);
+        
         res.json({
             success: true,
-            totalStations: allStations.length,
-            stations: allStations,
+            totalStations: deduplicatedStations.length,
+            onlineStations: onlineCount,
+            offlineStations: offlineCount,
+            duplicatesRemoved: duplicatesRemoved,
+            timeoutMinutes: timeoutMinutes,
+            stations: deduplicatedStations,
             timestamp: new Date().toISOString()
         });
         
@@ -793,10 +923,11 @@ app.get('/api/stats', async (req, res) => {
     try {
         const {
             stations,      // Danh sách ID trạm, phân cách bởi dấu phẩy
-            type,          // 'all', 'TVA', 'MQTT'
+            type,          // 'all', 'TVA', 'MQTT', 'SCADA'
             parameter,     // Tên thông số hoặc 'all'
             startDate,     // Ngày bắt đầu (YYYY-MM-DD)
             endDate,       // Ngày kết thúc (YYYY-MM-DD)
+            interval,      // Khoảng lấy mẫu (phút)
             limit          // Giới hạn số bản ghi
         } = req.query;
 
@@ -806,10 +937,15 @@ app.get('/api/stats', async (req, res) => {
             parameterName: parameter || 'all',
             startDate: startDate,
             endDate: endDate,
+            interval: interval ? parseInt(interval) : 60,
             limit: limit ? parseInt(limit) : 10000
         };
 
-        const data = await getStatsData(options);
+        console.log('📊 Stats API called with options:', options);
+        
+        const data = await dbModule.getStatsData(options);
+        
+        console.log(`📊 Stats API returning ${data.length} records`);
         
         res.json({
             success: true,
@@ -818,6 +954,7 @@ app.get('/api/stats', async (req, res) => {
             query: options
         });
     } catch (error) {
+        console.error('❌ Stats API error:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -830,7 +967,7 @@ app.get('/api/stats', async (req, res) => {
  */
 app.get('/api/stats/parameters', async (req, res) => {
     try {
-        const parameters = await getAvailableParameters();
+        const parameters = await dbModule.getAvailableParameters();
         res.json({
             success: true,
             parameters: parameters
@@ -848,7 +985,7 @@ app.get('/api/stats/parameters', async (req, res) => {
  */
 app.get('/api/stats/stations', async (req, res) => {
     try {
-        const stations = await getStationsFromDB();
+        const stations = await dbModule.getStations();
         res.json({
             success: true,
             totalStations: stations.length,
@@ -1006,15 +1143,69 @@ app.post('/api/scada/update', verifyToken, async (req, res) => {
     }
 });
 
-// API: Lấy dữ liệu SCADA đã cache (từ file JSON)
-app.get('/api/scada/cached', (req, res) => {
+// API: Lấy dữ liệu SCADA đã cache (từ database SQL)
+app.get('/api/scada/cached', async (req, res) => {
     try {
+        // Query dữ liệu SCADA mới nhất từ database
+        const result = await dbModule.pool.query(`
+            SELECT DISTINCT ON (station_name, parameter_name)
+                station_name,
+                station_id,
+                parameter_name,
+                value,
+                unit,
+                timestamp,
+                update_time
+            FROM scada_data
+            ORDER BY station_name, parameter_name, timestamp DESC
+        `);
+        
+        // Group data by station
+        const stationsGrouped = {};
+        
+        for (const row of result.rows) {
+            const stationId = row.station_id.replace('scada_', '');
+            
+            if (!stationsGrouped[stationId]) {
+                stationsGrouped[stationId] = {
+                    station: stationId,
+                    stationName: row.station_name,
+                    group: row.station_name,
+                    parameters: []
+                };
+            }
+            
+            stationsGrouped[stationId].parameters.push({
+                parameter: row.parameter_name,
+                parameterName: row.parameter_name,
+                value: parseFloat(row.value) || 0,
+                displayText: row.value !== null ? String(row.value) : '--',
+                unit: row.unit || '',
+                timestamp: row.timestamp
+            });
+        }
+        
+        // If we have data from database, return it
+        if (Object.keys(stationsGrouped).length > 0) {
+            console.log(`✅ [API] Trả về ${Object.keys(stationsGrouped).length} trạm SCADA từ database`);
+            return res.json({
+                success: true,
+                timestamp: new Date().toISOString(),
+                source: 'PostgreSQL Database',
+                method: 'SQL Query - Latest Data',
+                stationsGrouped: stationsGrouped,
+                totalStations: Object.keys(stationsGrouped).length
+            });
+        }
+        
+        // Fallback: try to read from file cache
+        console.log('⚠️ [API] Không có dữ liệu SCADA trong database, thử đọc từ file cache');
         const dataPath = path.join(__dirname, 'data_scada_tva.json');
         
         if (!fs.existsSync(dataPath)) {
             return res.status(404).json({
                 success: false,
-                message: 'Chưa có dữ liệu cache. Vui lòng gọi /api/scada/stations để lấy dữ liệu mới.'
+                message: 'Chưa có dữ liệu. Hệ thống sẽ cập nhật dữ liệu trong 5 phút tới.'
             });
         }
         
@@ -1022,13 +1213,15 @@ app.get('/api/scada/cached', (req, res) => {
         
         res.json({
             success: true,
-            ...cachedData
+            ...cachedData,
+            source: cachedData.source || 'File Cache',
+            method: cachedData.method || 'Cached'
         });
     } catch (error) {
-        console.error("❌ [API] Lỗi đọc cache SCADA:", error.message);
+        console.error("❌ [API] Lỗi đọc dữ liệu SCADA:", error.message);
         res.status(500).json({
             success: false,
-            message: 'Lỗi đọc dữ liệu cache',
+            message: 'Lỗi đọc dữ liệu SCADA',
             error: error.message
         });
     }
@@ -1064,7 +1257,7 @@ app.listen(PORT, async () => {
     // Khởi tạo database
     console.log('💾 Đang khởi tạo database...');
     try {
-        await initDatabase();
+        await dbModule.initDatabase();
         console.log('✅ Database đã sẵn sàng\n');
     } catch (error) {
         console.error('❌ Lỗi khởi tạo database:', error.message);
@@ -1073,7 +1266,7 @@ app.listen(PORT, async () => {
     // Khởi động MQTT client
     console.log('🔌 Đang khởi động MQTT client...');
     try {
-        await connectMQTT();
+        await mqttModule.connectMQTT();
         console.log('✅ MQTT client đã kết nối\n');
     } catch (error) {
         console.error('❌ Lỗi kết nối MQTT:', error.message);
@@ -1092,6 +1285,25 @@ app.listen(PORT, async () => {
     console.log('📊 Đang lưu dữ liệu MQTT hiện tại...');
     await saveMQTTDataToDB();
     
+    // Cập nhật dữ liệu SCADA TVA lần đầu
+    console.log('📊 Đang tải dữ liệu SCADA lần đầu...');
+    try {
+        const stations = await scadaModule.crawlScadaTVA();
+        console.log(`✅ Đã lấy dữ liệu SCADA: ${stations.length} trạm`);
+        
+        // Lưu vào database
+        const scadaPath = path.join(__dirname, 'data_scada_tva.json');
+        if (fs.existsSync(scadaPath)) {
+            const scadaData = JSON.parse(fs.readFileSync(scadaPath, 'utf-8'));
+            if (scadaData.stationsGrouped) {
+                const savedCount = await dbModule.saveSCADAData(scadaData.stationsGrouped);
+                console.log(`✅ Đã lưu ${savedCount} bản ghi SCADA vào database\n`);
+            }
+        }
+    } catch (error) {
+        console.error('❌ Lỗi tải dữ liệu SCADA lần đầu:', error.message);
+    }
+    
     // Cập nhật dữ liệu TVA mỗi 5 phút
     setInterval(async () => {
         try {
@@ -1099,57 +1311,42 @@ app.listen(PORT, async () => {
         } catch (error) {
             console.error('❌ Lỗi cập nhật TVA định kỳ:', error.message);
         }
-    }, 5 * 60 * 1000); // 5 phút
+    }, config.intervals.tva);
     
-    // Lưu dữ liệu MQTT mỗi 5 phút
+    // Lưu dữ liệu MQTT mỗi 1 phút
     setInterval(async () => {
         await saveMQTTDataToDB();
-    }, 5 * 60 * 1000); // 5 phút
-    
-    // Cập nhật dữ liệu SCADA TVA lần đầu và định kỳ
-    console.log('📊 Đang lưu dữ liệu SCADA vào database...');
-    try {
-        const scadaPath = path.join(__dirname, 'data_scada_tva.json');
-        if (fs.existsSync(scadaPath)) {
-            const scadaData = JSON.parse(fs.readFileSync(scadaPath, 'utf-8'));
-            if (scadaData.stationsGrouped) {
-                const savedCount = await saveSCADAData(scadaData.stationsGrouped);
-                console.log(`✅ Đã lưu ${savedCount} bản ghi SCADA vào database\n`);
-            }
-        }
-    } catch (error) {
-        console.error('❌ Lỗi lưu dữ liệu SCADA:', error.message);
-    }
+    }, config.intervals.mqtt);
     
     // Cập nhật SCADA mỗi 5 phút
     setInterval(async () => {
         try {
             console.log('🔄 Đang crawl dữ liệu SCADA TVA...');
-            const stations = await crawlScadaTVA();
+            const stations = await scadaModule.crawlScadaTVA();
             
             const scadaPath = path.join(__dirname, 'data_scada_tva.json');
             if (fs.existsSync(scadaPath)) {
                 const scadaData = JSON.parse(fs.readFileSync(scadaPath, 'utf-8'));
                 if (scadaData.stationsGrouped) {
-                    const savedCount = await saveSCADAData(scadaData.stationsGrouped);
+                    const savedCount = await dbModule.saveSCADAData(scadaData.stationsGrouped);
                     console.log(`✅ [SCADA] Đã lưu ${savedCount} bản ghi vào database`);
                 }
             }
         } catch (error) {
             console.error('❌ Lỗi cập nhật SCADA định kỳ:', error.message);
         }
-    }, 5 * 60 * 1000); // 5 phút
+    }, config.intervals.scada);
     
     // Dọn dẹp dữ liệu cũ mỗi ngày (giữ lại 90 ngày)
     setInterval(async () => {
         console.log('🧹 Đang dọn dẹp dữ liệu cũ...');
         try {
-            await cleanOldData(90);
+            await dbModule.cleanOldData(90);
             console.log('✅ Đã dọn dẹp dữ liệu cũ hơn 90 ngày');
         } catch (error) {
             console.error('❌ Lỗi dọn dẹp dữ liệu:', error.message);
         }
-    }, 24 * 60 * 60 * 1000); // 24 giờ
+    }, config.intervals.cleanup);
     
     console.log('🔄 Tự động lưu dữ liệu vào SQL mỗi 5 phút\n');
 });
