@@ -157,38 +157,21 @@ function convertToAPIDateFormat(ddmmyyyy) {
 }
 
 /**
- * Setup date input with dd/mm/yyyy format
+ * Setup date input with Flatpickr date picker
  */
 function setupDateInput(inputId) {
     const input = document.getElementById(inputId);
     if (!input) return;
     
-    // Format input as user types
-    input.addEventListener('input', (e) => {
-        let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
-        
-        if (value.length >= 2) {
-            value = value.substring(0, 2) + '/' + value.substring(2);
-        }
-        if (value.length >= 5) {
-            value = value.substring(0, 5) + '/' + value.substring(5);
-        }
-        if (value.length > 10) {
-            value = value.substring(0, 10);
-        }
-        
-        e.target.value = value;
-    });
-    
-    // Validate on blur
-    input.addEventListener('blur', (e) => {
-        const value = e.target.value;
-        if (!value) return;
-        
-        const date = parseDateDDMMYYYY(value);
-        if (!date || isNaN(date.getTime())) {
-            alert('Ngày không hợp lệ. Vui lòng nhập theo định dạng dd/mm/yyyy');
-            e.target.value = '';
+    // Initialize Flatpickr with Vietnamese locale
+    flatpickr(input, {
+        dateFormat: "d/m/Y",
+        locale: "vn",
+        allowInput: true,
+        disableMobile: false,
+        maxDate: "today",
+        onChange: function(selectedDates, dateStr, instance) {
+            // Optional: Add any custom logic when date changes
         }
     });
 }
@@ -243,7 +226,7 @@ function setDefaultDates() {
     document.getElementById('start-date').value = dateStr;
     document.getElementById('end-date').value = dateStr;
     
-    // Setup date input formatting
+    // Setup date input with Flatpickr
     setupDateInput('start-date');
     setupDateInput('end-date');
     
