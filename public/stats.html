@@ -176,24 +176,56 @@
 
                 <div class="filter-group">
                     <label>Chọn chỉ tiêu</label>
-                    <select id="parameter-select">
-                        <option value="all">TẤT CẢ</option>
-                        <option value="Mực nước">MỰC NƯỚC</option>
-                        <option value="Lưu lượng">LƯU LƯỢNG</option>
-                        <option value="Tổng lưu lượng">TỔNG LƯU LƯỢNG</option>
-                        <option value="pH">PH</option>
-                        <option value="TDS">TDS</option>
-                        <option value="Amoni">AMONI</option>
-                        <option value="Nitrat">NITRAT</option>
-                    </select>
+                    <div class="multi-select-wrapper">
+                        <div class="multi-select-display" id="parameter-display">
+                            <span class="selected-text">TẤT CẢ</span>
+                            <span class="arrow">▼</span>
+                        </div>
+                        <div class="multi-select-dropdown" id="parameter-dropdown">
+                            <label class="checkbox-item">
+                                <input type="checkbox" value="all" id="parameter-all" checked>
+                                <span>TẤT CẢ</span>
+                            </label>
+                            <div id="parameter-list">
+                                <label class="checkbox-item">
+                                    <input type="checkbox" value="Mực nước" class="parameter-checkbox" checked>
+                                    <span>MỰC NƯỚC</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" value="Lưu lượng" class="parameter-checkbox" checked>
+                                    <span>LƯU LƯỢNG</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" value="Tổng lưu lượng" class="parameter-checkbox" checked>
+                                    <span>TỔNG LƯU LƯỢNG</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" value="pH" class="parameter-checkbox" checked>
+                                    <span>PH</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" value="TDS" class="parameter-checkbox" checked>
+                                    <span>TDS</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" value="Amoni" class="parameter-checkbox" checked>
+                                    <span>AMONI</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" value="Nitrat" class="parameter-checkbox" checked>
+                                    <span>NITRAT</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="filter-group">
                     <label>Chọn khoảng thời gian</label>
                     <div class="date-inputs">
-                        <input type="date" id="start-date" />
+                        <input type="text" id="start-date" placeholder="dd/mm/yyyy" pattern="\d{2}/\d{2}/\d{4}" />
                         <span>-</span>
-                        <input type="date" id="end-date" />
+                        <input type="text" id="end-date" placeholder="dd/mm/yyyy" pattern="\d{2}/\d{2}/\d{4}" />
                     </div>
                 </div>
 

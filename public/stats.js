@@ -66,9 +66,8 @@ async function init() {
     setupEventListeners();
     setDefaultDates();
     
-    // Check "TẤT CẢ" by default
+    // Check "TẤT CẢ" by default for stations
     const stationAllCheckbox = document.getElementById('station-all');
-    const parameterSelect = document.getElementById('parameter-select');
     
     if (stationAllCheckbox) {
         stationAllCheckbox.checked = true;
@@ -78,14 +77,120 @@ async function init() {
         updateStationDisplay();
     }
     
-    if (parameterSelect) {
-        parameterSelect.value = 'all';
+    // Check "TẤT CẢ" by default for parameters
+    const parameterAllCheckbox = document.getElementById('parameter-all');
+    
+    if (parameterAllCheckbox) {
+        parameterAllCheckbox.checked = true;
+        // Check all parameter checkboxes
+        const paramCheckboxes = document.querySelectorAll('.parameter-checkbox');
+        paramCheckboxes.forEach(cb => cb.checked = true);
+        updateParameterDisplay();
     }
     
     // Auto-load data after initialization
     setTimeout(() => {
         loadStatsData();
     }, 500);
+}
+
+/**
+ * Update parameter display text
+ */
+function updateParameterDisplay() {
+    const allCheckbox = document.getElementById('parameter-all');
+    const checkboxes = document.querySelectorAll('.parameter-checkbox');
+    const displayText = document.querySelector('#parameter-display .selected-text');
+    
+    if (!displayText) return;
+    
+    if (allCheckbox && allCheckbox.checked) {
+        displayText.textContent = 'TẤT CẢ';
+    } else {
+        const checked = Array.from(checkboxes).filter(cb => cb.checked);
+        if (checked.length === 0) {
+            displayText.textContent = 'Chọn chỉ tiêu...';
+        } else if (checked.length === 1) {
+            displayText.textContent = checked[0].nextElementSibling.textContent;
+        } else {
+            displayText.textContent = `Đã chọn ${checked.length} chỉ tiêu`;
+        }
+    }
+}
+
+/**
+ * Parse date string from dd/mm/yyyy format to Date object
+ */
+function parseDateDDMMYYYY(dateStr) {
+    if (!dateStr) return null;
+    const parts = dateStr.split('/');
+    if (parts.length !== 3) return null;
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+    const year = parseInt(parts[2], 10);
+    return new Date(year, month, day);
+}
+
+/**
+ * Format Date object to dd/mm/yyyy string
+ */
+function formatDateDDMMYYYY(date) {
+    if (!date) return '';
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+}
+
+/**
+ * Convert dd/mm/yyyy to yyyy-mm-dd for API
+ */
+function convertToAPIDateFormat(ddmmyyyy) {
+    if (!ddmmyyyy) return '';
+    const date = parseDateDDMMYYYY(ddmmyyyy);
+    if (!date) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+/**
+ * Setup date input with dd/mm/yyyy format
+ */
+function setupDateInput(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    
+    // Format input as user types
+    input.addEventListener('input', (e) => {
+        let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+        
+        if (value.length >= 2) {
+            value = value.substring(0, 2) + '/' + value.substring(2);
+        }
+        if (value.length >= 5) {
+            value = value.substring(0, 5) + '/' + value.substring(5);
+        }
+        if (value.length > 10) {
+            value = value.substring(0, 10);
+        }
+        
+        e.target.value = value;
+    });
+    
+    // Validate on blur
+    input.addEventListener('blur', (e) => {
+        const value = e.target.value;
+        if (!value) return;
+        
+        const date = parseDateDDMMYYYY(value);
+        if (!date || isNaN(date.getTime())) {
+            alert('Ngày không hợp lệ. Vui lòng nhập theo định dạng dd/mm/yyyy');
+            e.target.value = '';
+        }
+    });
 }
 
 /**
@@ -133,10 +238,14 @@ function updateCurrentTime() {
  */
 function setDefaultDates() {
     const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
+    const dateStr = formatDateDDMMYYYY(now);
     
     document.getElementById('start-date').value = dateStr;
     document.getElementById('end-date').value = dateStr;
+    
+    // Setup date input formatting
+    setupDateInput('start-date');
+    setupDateInput('end-date');
     
     // Log để xác nhận thời gian mặc định
     console.log('⏰ Thời gian mặc định:', `${dateStr} 00:00:00 đến ${dateStr} 23:59:59 (GMT+7)`);
@@ -282,7 +391,7 @@ function setupEventListeners() {
         });
     }
     
-    // Multi-select dropdown
+    // Multi-select dropdown for stations
     const stationDisplay = document.getElementById('station-display');
     const stationDropdown = document.getElementById('station-dropdown');
     
@@ -290,11 +399,9 @@ function setupEventListeners() {
         stationDisplay.addEventListener('click', (e) => {
             e.stopPropagation();
             stationDropdown.classList.toggle('open');
-        });
-        
-        // Close dropdown when clicking outside
-        document.addEventListener('click', () => {
-            stationDropdown.classList.remove('open');
+            // Close parameter dropdown if open
+            const parameterDropdown = document.getElementById('parameter-dropdown');
+            if (parameterDropdown) parameterDropdown.classList.remove('open');
         });
         
         stationDropdown.addEventListener('click', (e) => {
@@ -302,7 +409,30 @@ function setupEventListeners() {
         });
     }
     
-    // "TẤT CẢ" checkbox handler
+    // Multi-select dropdown for parameters
+    const parameterDisplay = document.getElementById('parameter-display');
+    const parameterDropdown = document.getElementById('parameter-dropdown');
+    
+    if (parameterDisplay && parameterDropdown) {
+        parameterDisplay.addEventListener('click', (e) => {
+            e.stopPropagation();
+            parameterDropdown.classList.toggle('open');
+            // Close station dropdown if open
+            if (stationDropdown) stationDropdown.classList.remove('open');
+        });
+        
+        parameterDropdown.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', () => {
+        if (stationDropdown) stationDropdown.classList.remove('open');
+        if (parameterDropdown) parameterDropdown.classList.remove('open');
+    });
+    
+    // "TẤT CẢ" checkbox handler for stations
     const stationAllCheckbox = document.getElementById('station-all');
     if (stationAllCheckbox) {
         stationAllCheckbox.addEventListener('change', (e) => {
@@ -311,6 +441,18 @@ function setupEventListeners() {
                 cb.checked = e.target.checked;
             });
             updateStationDisplay();
+        });
+    }
+    
+    // "TẤT CẢ" checkbox handler for parameters
+    const parameterAllCheckbox = document.getElementById('parameter-all');
+    if (parameterAllCheckbox) {
+        parameterAllCheckbox.addEventListener('change', (e) => {
+            const checkboxes = document.querySelectorAll('.parameter-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = e.target.checked;
+            });
+            updateParameterDisplay();
         });
     }
     
@@ -331,6 +473,24 @@ function setupEventListeners() {
             }
             
             updateStationDisplay();
+        }
+        
+        // Individual parameter checkboxes
+        if (e.target.classList.contains('parameter-checkbox')) {
+            const allCheckbox = document.getElementById('parameter-all');
+            const checkboxes = document.querySelectorAll('.parameter-checkbox');
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            const noneChecked = Array.from(checkboxes).every(cb => !cb.checked);
+            
+            if (allChecked) {
+                allCheckbox.checked = true;
+            } else if (noneChecked) {
+                allCheckbox.checked = false;
+            } else {
+                allCheckbox.checked = false;
+            }
+            
+            updateParameterDisplay();
         }
     });
     
@@ -372,9 +532,10 @@ function setupEventListeners() {
 async function loadStatsData() {
     const allCheckbox = document.getElementById('station-all');
     const stationCheckboxes = document.querySelectorAll('.station-checkbox');
-    const parameterSelect = document.getElementById('parameter-select');
-    const startDate = document.getElementById('start-date').value;
-    const endDate = document.getElementById('end-date').value;
+    const parameterAllCheckbox = document.getElementById('parameter-all');
+    const parameterCheckboxes = document.querySelectorAll('.parameter-checkbox');
+    const startDateInput = document.getElementById('start-date').value;
+    const endDateInput = document.getElementById('end-date').value;
     const interval = document.getElementById('interval-select').value;
     
     // Get selected stations
@@ -387,16 +548,32 @@ async function loadStatsData() {
             .map(cb => cb.value);
     }
     
-    // Get selected parameter
-    const selectedParameter = parameterSelect.value;
+    // Get selected parameters
+    let selectedParameters = [];
+    if (parameterAllCheckbox && parameterAllCheckbox.checked) {
+        selectedParameters = ['all'];
+    } else {
+        selectedParameters = Array.from(parameterCheckboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
+    }
+    
+    // Convert dates from dd/mm/yyyy to yyyy-mm-dd for API
+    const startDate = convertToAPIDateFormat(startDateInput);
+    const endDate = convertToAPIDateFormat(endDateInput);
     
     if (selectedStations.length === 0) {
         alert('Vui lòng chọn ít nhất một trạm');
         return;
     }
     
+    if (selectedParameters.length === 0) {
+        alert('Vui lòng chọn ít nhất một chỉ tiêu');
+        return;
+    }
+    
     if (!startDate || !endDate) {
-        alert('Vui lòng chọn khoảng thời gian');
+        alert('Vui lòng chọn khoảng thời gian hợp lệ (dd/mm/yyyy)');
         return;
     }
     
@@ -408,18 +585,24 @@ async function loadStatsData() {
     tableBody.innerHTML = '<tr><td colspan="100" class="loading">Đang tải dữ liệu từ SQL...</td></tr>';
     
     try {
+        // For API, if multiple parameters selected, use 'all' and filter client-side
+        const parameterForAPI = selectedParameters.length === 1 && selectedParameters[0] !== 'all' 
+            ? selectedParameters[0] 
+            : 'all';
+        
         // Fetch data from SQL API (now includes SCADA data)
         const queryParams = new URLSearchParams({
             stations: selectedStations.join(','),
             type: 'all',
-            parameter: selectedParameter,
+            parameter: parameterForAPI,
             startDate: startDate,
             endDate: endDate,
             interval: interval,
             limit: 50000
         });
         
-        console.log('⏰ Đang tải dữ liệu từ:', `${startDate} 00:00:00 đến ${endDate} 23:59:59 (GMT+7)`);
+        console.log('⏰ Đang tải dữ liệu từ:', `${startDateInput} 00:00:00 đến ${endDateInput} 23:59:59 (GMT+7)`);
+        console.log('📊 Selected parameters:', selectedParameters);
         console.log('Fetching from API:', `/api/stats?${queryParams}`);
         const response = await fetch(`/api/stats?${queryParams}`);
         
@@ -455,15 +638,15 @@ async function loadStatsData() {
                 </tr>
             `;
             // Build empty table header
-            buildTableHeaderFromData(selectedStations, selectedParameter);
+            buildTableHeaderFromData(selectedStations, selectedParameters);
             return;
         }
         
         // Process and format the data
-        filteredData = processStatsData(result.data, selectedStations, selectedParameter, interval);
+        filteredData = processStatsData(result.data, selectedStations, selectedParameters, interval);
         
         // Build table header
-        buildTableHeaderFromData(selectedStations, selectedParameter);
+        buildTableHeaderFromData(selectedStations, selectedParameters);
         
         // Reset to first page
         currentPage = 1;
@@ -511,7 +694,7 @@ async function loadStatsData() {
 /**
  * Process raw SQL data into table format
  */
-function processStatsData(rawData, selectedStations, selectedParameter, interval) {
+function processStatsData(rawData, selectedStations, selectedParameters, interval) {
     if (!rawData || rawData.length === 0) {
         console.log('⚠️ processStatsData: No raw data to process');
         return [];
@@ -534,16 +717,16 @@ function processStatsData(rawData, selectedStations, selectedParameter, interval
         .filter(name => !name.toLowerCase().includes('nhiệt độ') && !name.toLowerCase().includes('nhiet do')); // Remove temperature
     
     console.log('📋 All parameters found:', parameterNames);
-    console.log('🔍 Selected parameter:', selectedParameter);
+    console.log('🔍 Selected parameters:', selectedParameters);
     
-    // If a specific parameter is selected (not 'all'), filter to only that parameter
-    if (selectedParameter !== 'all') {
-        const normalizedSelectedParam = normalizeParameterName(selectedParameter);
-        console.log('🔍 Normalized selected param:', normalizedSelectedParam);
+    // If specific parameters are selected (not 'all'), filter to only those parameters
+    if (!selectedParameters.includes('all')) {
+        const normalizedSelectedParams = selectedParameters.map(p => normalizeParameterName(p));
+        console.log('🔍 Normalized selected params:', normalizedSelectedParams);
         console.log('🔍 Parameter names before filter:', parameterNames);
         
-        // Filter to only matching parameter (after normalization, all should match)
-        parameterNames = parameterNames.filter(name => name === normalizedSelectedParam);
+        // Filter to only matching parameters
+        parameterNames = parameterNames.filter(name => normalizedSelectedParams.includes(name));
         
         console.log('📋 Filtered parameters:', parameterNames);
     }
@@ -791,7 +974,7 @@ function applySamplingInterval(rawData, intervalMinutes) {
 /**
  * Build table header from actual data
  */
-function buildTableHeaderFromData(selectedStations, selectedParameter) {
+function buildTableHeaderFromData(selectedStations, selectedParameters) {
     const headerStations = document.getElementById('table-header-stations');
     const headerParameters = document.getElementById('table-header-parameters');
     
