@@ -49,6 +49,15 @@ function initPool() {
             options: config.database.options
         });
 
+        // Set timezone for all connections in the pool
+        pool.on('connect', (client) => {
+            client.query('SET timezone = \'Asia/Ho_Chi_Minh\'', (err) => {
+                if (err) {
+                    console.error('❌ Lỗi thiết lập timezone:', err.message);
+                }
+            });
+        });
+
         // Test connection
         pool.query('SELECT NOW()', (err, res) => {
             if (err) {
@@ -453,6 +462,7 @@ async function getStatsData(options) {
 
         // Query with interval sampling to reduce data points
         // Use FLOOR(EXTRACT(EPOCH FROM timestamp) / (interval * 60)) to group by time intervals
+        // Return timestamp in Vietnam timezone for consistent display
         const query = `
             WITH sampled_data AS (
                 SELECT 
@@ -461,7 +471,7 @@ async function getStatsData(options) {
                     parameter_name,
                     value,
                     unit,
-                    timestamp,
+                    timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh' as timestamp,
                     update_time,
                     ROW_NUMBER() OVER (
                         PARTITION BY 
@@ -493,20 +503,31 @@ async function getStatsData(options) {
             
             // Add table type to each row
             const type = table.replace('_data', '').toUpperCase();
-            allData.push(...result.rows.map(row => ({
-                ...row,
-                type: type,
-                timestamp: row.timestamp,
-                time: row.timestamp ? new Date(row.timestamp).toLocaleString('vi-VN', {
-                    timeZone: 'Asia/Ho_Chi_Minh',
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                }) : ''
-            })));
+            allData.push(...result.rows.map(row => {
+                // Ensure timestamp is properly formatted for Vietnam timezone
+                let formattedTime = '';
+                if (row.timestamp) {
+                    const date = new Date(row.timestamp);
+                    // Format: dd/mm/yyyy HH:mm:ss in Vietnam timezone
+                    formattedTime = date.toLocaleString('vi-VN', {
+                        timeZone: 'Asia/Ho_Chi_Minh',
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: false
+                    });
+                }
+                
+                return {
+                    ...row,
+                    type: type,
+                    timestamp: row.timestamp,
+                    time: formattedTime
+                };
+            }));
         } catch (err) {
             console.error(`❌ Lỗi query ${table}:`, err.message);
         }
@@ -732,17 +753,17 @@ async function getVisitorStats() {
 
     if (result.rows.length === 0) {
         return {
-            totalVisitors: 20102347,
-            todayDate: new Date().toISOString().split('T')[0],
-            todayVisitors: 0
+            total_visitors: 20102347,
+            today_date: new Date().toISOString().split('T')[0],
+            today_visitors: 0
         };
     }
 
     return {
-        totalVisitors: parseInt(result.rows[0].total_visitors),
-        todayDate: result.rows[0].today_date,
-        todayVisitors: parseInt(result.rows[0].today_visitors),
-        updatedAt: result.rows[0].updated_at
+        total_visitors: parseInt(result.rows[0].total_visitors),
+        today_date: result.rows[0].today_date,
+        today_visitors: parseInt(result.rows[0].today_visitors),
+        updated_at: result.rows[0].updated_at
     };
 }
 
@@ -754,6 +775,20 @@ async function incrementVisitorCount() {
     
     try {
         await client.query('BEGIN');
+
+        // Check if visitor_stats table has any records
+        const checkResult = await client.query('SELECT COUNT(*) as count FROM visitor_stats');
+        
+        if (parseInt(checkResult.rows[0].count) === 0) {
+            // Insert initial record if table is empty
+            const insertResult = await client.query(`
+                INSERT INTO visitor_stats (total_visitors, today_date, today_visitors)
+                VALUES (20102348, CURRENT_DATE, 1)
+                RETURNING total_visitors, today_visitors
+            `);
+            await client.query('COMMIT');
+            return insertResult.rows[0];
+        }
 
         const result = await client.query(`
             UPDATE visitor_stats
@@ -772,6 +807,7 @@ async function incrementVisitorCount() {
         return result.rows[0];
     } catch (err) {
         await client.query('ROLLBACK');
+        console.error('❌ Error incrementing visitor count:', err.message);
         throw err;
     } finally {
         client.release();
