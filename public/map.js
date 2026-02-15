@@ -458,6 +458,7 @@ function createPopupContent(station) {
     // Kiểm tra xem có thông số mực nước và lưu lượng không
     let hasWaterLevel = false;
     let hasFlowRate = false;
+    const displayedParams = new Set(); // Tránh hiển thị trùng lặp
     
     // Hiển thị các thông số
     if (station.data && station.data.length > 0) {
@@ -467,17 +468,24 @@ function createPopupContent(station) {
             const paramNameLower = param.name.toLowerCase();
             let isWaterQuality = false;
             let qualityClass = '';
+            const paramValue = parseFloat(param.value);
             
-            // Kiểm tra "tổng" trước để tránh trùng với "lưu lượng"
-            if (paramNameLower.includes('tổng')) {
+            // Phân loại parameter dựa trên TÊN và GIÁ TRỊ
+            // Kiểm tra "tổng lưu lượng" trước để tránh trùng với "lưu lượng"
+            if (paramNameLower.includes('tổng') && paramNameLower.includes('lưu lượng')) {
                 shortName = 'Tổng LL';
+                // Hiển thị Tổng LL trong popup
             }
-            else if (paramNameLower.includes('áp lực') || paramNameLower.includes('ap luc')) {
-                shortName = 'Áp lực';
+            else if (paramNameLower.includes('tổng ll') || (paramNameLower.includes('tổng') && !isNaN(paramValue) && paramValue > 1000)) {
+                // Tổng LL - hiển thị
+                shortName = 'Tổng LL';
             }
             else if (paramNameLower.includes('lưu lượng')) {
                 shortName = 'Lưu lượng';
                 hasFlowRate = true;
+            }
+            else if (paramNameLower.includes('áp lực') || paramNameLower.includes('ap luc')) {
+                shortName = 'Áp lực';
             }
             else if (paramNameLower.includes('chỉ số')) {
                 shortName = 'Chỉ số đh';
@@ -527,6 +535,13 @@ function createPopupContent(station) {
                     else qualityClass = 'warning';
                 }
             }
+            
+            // Kiểm tra duplicate trước khi hiển thị
+            const displayKey = `${shortName}_${param.value}`;
+            if (displayedParams.has(displayKey)) {
+                return; // Skip duplicate
+            }
+            displayedParams.add(displayKey);
             
             const valueClass = isWaterQuality ? `water-quality ${qualityClass}` : stationClass;
             const qualityIcon = isWaterQuality && qualityClass === 'good' ? '✓' : 
@@ -1213,11 +1228,39 @@ async function loadChartData() {
             }
             
             if (result.data && result.data.length > 0) {
-                allData.push({
-                    parameter: param.name,
-                    unit: param.unit,
-                    data: result.data
-                });
+                // Lọc dữ liệu: Nếu parameter là "Lưu lượng", chỉ lấy giá trị <= 1000
+                // để tránh lấy nhầm data của "Tổng lưu lượng"
+                let filteredData = result.data;
+                if (param.name === 'Lưu lượng') {
+                    filteredData = result.data.filter(record => {
+                        const value = parseFloat(record.value);
+                        const paramName = (record.parameter_name || '').toLowerCase();
+                        
+                        // Loại bỏ nếu:
+                        // 1. Giá trị > 1000 (gần như chắc chắn là Tổng LL)
+                        // 2. Parameter name có chứa "tổng"
+                        if (!isNaN(value) && value > 1000) {
+                            console.log(`Filtering out large flow value: ${value} from ${record.station_name}`);
+                            return false;
+                        }
+                        if (paramName.includes('tổng')) {
+                            console.log(`Filtering out "Tổng" parameter: ${record.parameter_name}`);
+                            return false;
+                        }
+                        
+                        return true;
+                    });
+                    
+                    console.log(`Lưu lượng data: ${result.data.length} records -> ${filteredData.length} after filtering`);
+                }
+                
+                if (filteredData.length > 0) {
+                    allData.push({
+                        parameter: param.name,
+                        unit: param.unit,
+                        data: filteredData
+                    });
+                }
             }
         }
         

@@ -687,11 +687,33 @@ function processStatsData(rawData, selectedStations, selectedParameters, interva
     console.log('Sample record:', rawData[0]);
     
     // Normalize parameter names first (to handle case variations)
-    const normalizedData = rawData.map(record => ({
-        ...record,
-        parameter_name_original: record.parameter_name,
-        parameter_name: normalizeParameterName(record.parameter_name)
-    }));
+    // Also fix parameter names based on value (e.g., "Lưu lượng" with value > 1000 => "Tổng lưu lượng")
+    const normalizedData = rawData.map(record => {
+        let paramName = normalizeParameterName(record.parameter_name);
+        
+        // Additional validation: Check value to correct parameter name
+        const value = parseFloat(record.value);
+        const unit = (record.unit || '').toLowerCase();
+        const lowerParamName = paramName.toLowerCase();
+        
+        // If parameter is "Lưu lượng" but value > 1000, it's likely "Tổng lưu lượng"
+        if (lowerParamName === 'lưu lượng' && !isNaN(value) && value > 1000) {
+            console.log(`🔄 Correcting: "${record.parameter_name}" (${value}) -> "Tổng lưu lượng"`);
+            paramName = 'Tổng lưu lượng';
+        }
+        
+        // If parameter is "Tổng lưu lượng" but value < 1000 and unit has /h, it's likely "Lưu lượng"
+        if (lowerParamName === 'tổng lưu lượng' && !isNaN(value) && value < 1000 && (unit.includes('/h') || unit.includes('h'))) {
+            console.log(`🔄 Correcting: "${record.parameter_name}" (${value}) -> "Lưu lượng"`);
+            paramName = 'Lưu lượng';
+        }
+        
+        return {
+            ...record,
+            parameter_name_original: record.parameter_name,
+            parameter_name: paramName
+        };
+    });
     
     // Get unique parameter names from rawData ONCE (not per row)
     // Filter out temperature and empty names
@@ -838,11 +860,22 @@ function normalizeParameterName(name) {
     if (lower.includes('mực nước') || lower.includes('muc nuoc')) {
         return 'Mực nước';
     }
-    if (lower.includes('lưu lượng') && !lower.includes('tổng')) {
-        return 'Lưu lượng';
-    }
-    if (lower.includes('tổng lưu lượng') || lower.includes('tong luu luong')) {
+    
+    // Check for "Tổng lưu lượng" FIRST (before "Lưu lượng")
+    // Handle variations: "Tổng lưu lượng", "Tổng LL", "Tong luu luong"
+    if (lower.includes('tổng lưu lượng') || 
+        lower.includes('tong luu luong') || 
+        lower.includes('tổng ll') || 
+        lower.includes('tong ll') ||
+        (lower.includes('tổng') && lower.includes('ll')) ||
+        lower === 'tongluuluong') {
         return 'Tổng lưu lượng';
+    }
+    
+    // Then check for "Lưu lượng" (flow rate) - must NOT contain "tổng"
+    if ((lower.includes('lưu lượng') || lower.includes('luu luong') || lower === 'luuluong') && 
+        !lower.includes('tổng') && !lower.includes('tong')) {
+        return 'Lưu lượng';
     }
     
     // Water quality parameters - check exact matches and variations

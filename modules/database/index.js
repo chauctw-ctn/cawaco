@@ -37,6 +37,59 @@ function parseNumericValue(value) {
 }
 
 /**
+ * Chuẩn hóa tên parameter dựa trên giá trị và đơn vị
+ * Tự động phát hiện và sửa tên parameter sai (ví dụ: "Lưu lượng" nhưng giá trị > 1000 => "Tổng lưu lượng")
+ */
+function normalizeParameterNameByValue(paramName, value, unit) {
+    if (!paramName) return paramName;
+    
+    const name = paramName.trim();
+    const lowerName = name.toLowerCase();
+    const numValue = parseNumericValue(value);
+    const lowerUnit = (unit || '').toLowerCase();
+    
+    // Nếu không có giá trị số, trả về tên gốc
+    if (numValue === null || numValue === undefined || isNaN(numValue)) {
+        return name;
+    }
+    
+    // Phát hiện "Lưu lượng" nhầm với "Tổng lưu lượng"
+    // Nếu tên có chứa "lưu lượng" NHƯNG KHÔNG có "tổng"
+    if ((lowerName.includes('lưu lượng') || lowerName.includes('luu luong') || lowerName.includes('ll')) && 
+        !lowerName.includes('tổng') && !lowerName.includes('tong')) {
+        
+        // Nếu giá trị > 1000 => gần như chắc chắn là Tổng lưu lượng (index)
+        // Hoặc nếu đơn vị là m³ (không có /h) => là Tổng lưu lượng
+        if (numValue > 1000 || (lowerUnit === 'm³' || lowerUnit === 'm3')) {
+            console.log(`🔄 Sửa parameter: "${name}" (${numValue} ${unit}) -> "Tổng lưu lượng"`);
+            return 'Tổng lưu lượng';
+        }
+        // Nếu giá trị <= 1000 và đơn vị là m³/h => là Lưu lượng thực
+        else if (lowerUnit.includes('/h') || lowerUnit.includes('h')) {
+            return 'Lưu lượng';
+        }
+    }
+    
+    // Phát hiện "Tổng lưu lượng" nhầm với "Lưu lượng"  
+    // Nếu tên có chứa "tổng" và "lưu lượng"
+    if ((lowerName.includes('tổng lưu lượng') || lowerName.includes('tong luu luong') || lowerName.includes('tổng ll'))) {
+        
+        // Nếu giá trị < 1000 và đơn vị có /h => có thể là Lưu lượng (tức thời)
+        if (numValue < 1000 && (lowerUnit.includes('/h') || lowerUnit.includes('h'))) {
+            console.log(`🔄 Sửa parameter: "${name}" (${numValue} ${unit}) -> "Lưu lượng"`);
+            return 'Lưu lượng';
+        }
+        // Nếu giá trị >= 1000 hoặc đơn vị là m³ => giữ là Tổng lưu lượng
+        else {
+            return 'Tổng lưu lượng';
+        }
+    }
+    
+    // Các trường hợp khác, giữ nguyên tên
+    return name;
+}
+
+/**
  * Khởi tạo connection pool
  */
 function initPool() {
@@ -285,10 +338,11 @@ async function saveTVAData(stations) {
                 for (const param of station.data) {
                     try {
                         const cleanValue = parseNumericValue(param.value);
+                        const normalizedParamName = normalizeParameterNameByValue(param.name, cleanValue, param.unit);
                         await client.query(
                             `INSERT INTO tva_data (station_name, station_id, parameter_name, value, unit, timestamp, update_time)
                              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                            [station.station, stationId, param.name, cleanValue, param.unit, stationTimestamp, updateTime]
+                            [station.station, stationId, normalizedParamName, cleanValue, param.unit, stationTimestamp, updateTime]
                         );
                         savedCount++;
                     } catch (err) {
@@ -330,10 +384,11 @@ async function saveMQTTData(stations) {
                 for (const param of station.data) {
                     try {
                         const cleanValue = parseNumericValue(param.value);
+                        const normalizedParamName = normalizeParameterNameByValue(param.name, cleanValue, param.unit);
                         await client.query(
                             `INSERT INTO mqtt_data (station_name, station_id, device_name, parameter_name, value, unit, timestamp, update_time)
                              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                            [station.station, stationId, station.deviceName || '', param.name, cleanValue, param.unit, stationTimestamp, updateTime]
+                            [station.station, stationId, station.deviceName || '', normalizedParamName, cleanValue, param.unit, stationTimestamp, updateTime]
                         );
                         savedCount++;
                     } catch (err) {
@@ -382,10 +437,12 @@ async function saveSCADAData(stationsGrouped) {
                     }
 
                     try {
+                        const paramName = param.parameterName || param.parameter;
+                        const normalizedParamName = normalizeParameterNameByValue(paramName, numericValue, param.unit);
                         await client.query(
                             `INSERT INTO scada_data (station_name, station_id, parameter_name, value, unit, timestamp, update_time)
                              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                            [station.stationName || station.station, stationId, param.parameterName || param.parameter, 
+                            [station.stationName || station.station, stationId, normalizedParamName, 
                              isNaN(numericValue) ? null : numericValue, param.unit || '', stationTimestamp, updateTime]
                         );
                         savedCount++;
