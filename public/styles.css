@@ -117,12 +117,21 @@ body.page-transitioning {
     margin: 2px 0 0 0;
     opacity: 0.95;
     line-height: 1.4;
-    color: inherit;  /* Ensure color inheritance */
+    color: white;  /* Force white color */
+}
+
+.company-contact a,
+.company-contact a:link,
+.company-contact a:visited,
+.company-contact a:hover,
+.company-contact a:active {
+    color: white !important;  /* Force white color for phone number links */
+    text-decoration: none;
 }
 
 .contact-label {
     font-weight: 500;
-    color: inherit;  /* Prevent color change on mobile navigation */
+    color: white;  /* Force white color */
 }
 
 .current-time-section {

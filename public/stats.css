@@ -20,6 +20,26 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
+/* Global Scrollbar Styles */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
 /* Header styles kế thừa từ styles.css */
 /* User Menu Dropdown */
 .user-menu-container {
@@ -390,34 +410,43 @@ main:not(.with-sidebar) {
 /* Filters */
 .filters-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
+    grid-template-columns: repeat(5, minmax(180px, 1fr));
+    gap: 16px;
     margin-bottom: 25px;
     padding: 20px;
     background-color: #f8f9fa;
     border-radius: 8px;
+    overflow: hidden;
 }
 
 .filter-group {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-width: 0;
 }
 
 .filter-group label {
     font-size: 13px;
     font-weight: 500;
     color: #555;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .filter-group select,
 .filter-group input {
-    padding: 8px 12px;
+    padding: 10px 12px;
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 14px;
     font-family: inherit;
     background-color: white;
+    height: 42px;
+    box-sizing: border-box;
+    min-width: 100px;
+    width: 100%;
 }
 
 .filter-group select[multiple] {
@@ -433,15 +462,36 @@ main:not(.with-sidebar) {
 .date-inputs {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    width: 100%;
 }
 
 .date-inputs input {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+    background-color: white;
+    height: 42px;
+    box-sizing: border-box;
+}
+
+.date-inputs input:focus {
+    outline: none;
+    border-color: #0066cc;
 }
 
 .date-inputs span {
     color: #666;
+    flex-shrink: 0;
+    padding: 0 4px;
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 1;
+    user-select: none;
 }
 
 .primary-btn {
@@ -455,6 +505,8 @@ main:not(.with-sidebar) {
     cursor: pointer;
     transition: background-color 0.2s;
     margin-top: auto;
+    height: 42px;
+    box-sizing: border-box;
 }
 
 .primary-btn:hover {
@@ -468,10 +520,11 @@ main:not(.with-sidebar) {
 /* Multi-select with checkboxes */
 .multi-select-wrapper {
     position: relative;
+    width: 100%;
 }
 
 .multi-select-display {
-    padding: 8px 12px;
+    padding: 10px 12px;
     border: 1px solid #ddd;
     border-radius: 4px;
     background-color: white;
@@ -480,6 +533,10 @@ main:not(.with-sidebar) {
     justify-content: space-between;
     align-items: center;
     font-size: 14px;
+    height: 42px;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 100px;
 }
 
 .multi-select-display:hover {
@@ -805,6 +862,29 @@ main:not(.with-sidebar) {
 }
 
 /* Responsive */
+/* Extra large screens */
+@media (min-width: 1600px) {
+    .filters-container {
+        grid-template-columns: repeat(5, minmax(200px, 1fr));
+    }
+}
+
+/* Large Desktop and Laptop */
+@media (max-width: 1400px) {
+    .filters-container {
+        grid-template-columns: repeat(3, minmax(180px, 1fr));
+        gap: 16px;
+    }
+}
+
+/* Medium screens */
+@media (max-width: 1024px) {
+    .filters-container {
+        grid-template-columns: repeat(2, minmax(180px, 1fr));
+        gap: 16px;
+    }
+}
+
 /* Tablet & Mobile Responsive */
 @media (max-width: 768px) {
     header {
@@ -868,7 +948,7 @@ main:not(.with-sidebar) {
     
     .filters-container {
         grid-template-columns: 1fr;
-        gap: 12px;
+        gap: 16px;
         padding: 16px;
     }
     
@@ -963,15 +1043,21 @@ main:not(.with-sidebar) {
         min-height: 44px;
     }
     
-    .filter-row {
-        flex-direction: column;
-        gap: 10px;
+    .multi-select-display {
+        padding: 10px;
+        font-size: 14px;
+        min-height: 44px;
     }
     
-    .btn-primary {
+    .primary-btn {
         min-height: 44px;
         font-size: 14px;
         padding: 12px 20px;
+    }
+    
+    .filter-row {
+        flex-direction: column;
+        gap: 10px;
     }
     
     .data-table {
@@ -986,8 +1072,6 @@ main:not(.with-sidebar) {
     
     .sidebar-time-section #current-time {
         font-size: 13px;
-    }
-}
     }
     
     .data-table th,
@@ -1297,8 +1381,8 @@ button {
     }
     
     .filters-container {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
+        grid-template-columns: 1fr;
+        gap: 16px;
         padding: 12px;
     }
     
@@ -1328,6 +1412,7 @@ button {
 
 /* Table horizontal scroll indicator */
 .table-container::-webkit-scrollbar {
+    width: 8px;
     height: 8px;
 }
 
@@ -1404,5 +1489,3 @@ button {
         backface-visibility: hidden;
     }
 }
-
-    background: #555;
