@@ -117,10 +117,12 @@ body.page-transitioning {
     margin: 2px 0 0 0;
     opacity: 0.95;
     line-height: 1.4;
+    color: inherit;  /* Ensure color inheritance */
 }
 
 .contact-label {
     font-weight: 500;
+    color: inherit;  /* Prevent color change on mobile navigation */
 }
 
 .current-time-section {

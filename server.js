@@ -397,10 +397,17 @@ app.get('/api/visitors/stats', async (req, res) => {
         // Get total visitors from database
         const dbStats = await dbModule.getVisitorStats();
         
+        // Sync todayVisitors with database if available
+        const todayFromDB = dbStats.today_visitors || 0;
+        const todayFromRAM = visitorStats.todayVisitors.size;
+        
+        // Use the larger value to avoid inconsistency
+        const todayVisitors = Math.max(todayFromDB, todayFromRAM);
+        
         res.json({
             success: true,
             currentVisitors: visitorStats.currentVisitors.size,
-            todayVisitors: visitorStats.todayVisitors.size,
+            todayVisitors: todayVisitors,  // Sync with database
             totalVisitors: dbStats.total_visitors
         });
     } catch (error) {
