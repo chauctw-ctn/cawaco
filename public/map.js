@@ -420,42 +420,26 @@ function createPopupContent(station) {
     const offline = isStationOffline(station);
     
     // Format update time to dd/mm/yyyy HH:mm:ss
-    // Ưu tiên dùng timestamp từ database để đồng bộ với bảng thống kê dữ liệu
+    // Sử dụng timestamp từ database (created_at) để đồng bộ với bảng thống kê dữ liệu
     let formattedUpdateTime = 'N/A';
     
-    // First priority: Use pre-formatted updateTime from server (already in GMT+7)
-    if (station.updateTime && typeof station.updateTime === 'string' && station.updateTime.includes('/')) {
-        // Already formatted by server (e.g., "15/02/2026, 10:30:45")
-        formattedUpdateTime = station.updateTime;
-    } 
-    // Second priority: Format timestamp from database
-    else {
-        const dbTimestamp = station.lastUpdateInDB || station.timestamp;
-        
-        if (dbTimestamp) {
-            try {
-                const updateDate = new Date(dbTimestamp);
-                if (!isNaN(updateDate.getTime())) {
-                    formattedUpdateTime = formatDateTime(updateDate);
-                } else if (station.updateTime) {
-                    formattedUpdateTime = station.updateTime;
-                }
-            } catch (e) {
-                formattedUpdateTime = station.updateTime || 'N/A';
+    // timestamp từ server đã được convert về GMT+7 từ created_at
+    const dbTimestamp = station.timestamp;
+    
+    if (dbTimestamp) {
+        try {
+            const updateDate = new Date(dbTimestamp);
+            if (!isNaN(updateDate.getTime())) {
+                formattedUpdateTime = formatDateTime(updateDate);
+            } else if (station.updateTime) {
+                formattedUpdateTime = station.updateTime;
             }
-        } else if (station.updateTime) {
-            // Last fallback: try to parse and format updateTime
-            try {
-                const updateDate = new Date(station.updateTime);
-                if (!isNaN(updateDate.getTime())) {
-                    formattedUpdateTime = formatDateTime(updateDate);
-                } else {
-                    formattedUpdateTime = station.updateTime;
-                }
-            } catch (e) {
-                formattedUpdateTime = station.updateTime || 'N/A';
-            }
+        } catch (e) {
+            formattedUpdateTime = station.updateTime || 'N/A';
         }
+    } else if (station.updateTime) {
+        // Fallback: use pre-formatted updateTime
+        formattedUpdateTime = station.updateTime;
     }
     
     // Add offline status
