@@ -404,38 +404,41 @@ function createPopupContent(station) {
     const offline = isStationOffline(station);
     
     // Format update time to dd/mm/yyyy HH:mm:ss
-    // Ưu tiên dùng timestamp từ database (lastUpdateInDB hoặc timestamp) để đồng bộ với bảng thống kê
+    // Ưu tiên dùng timestamp từ database để đồng bộ với bảng thống kê dữ liệu
     let formattedUpdateTime = 'N/A';
-    const dbTimestamp = station.lastUpdateInDB || station.timestamp;
     
-    if (dbTimestamp) {
-        try {
-            const updateDate = new Date(dbTimestamp);
-            if (!isNaN(updateDate.getTime())) {
-                formattedUpdateTime = formatDateTime(updateDate);
-            } else if (station.updateTime) {
-                // Fallback: try updateTime from JSON
-                const fallbackDate = new Date(station.updateTime);
-                if (!isNaN(fallbackDate.getTime())) {
-                    formattedUpdateTime = formatDateTime(fallbackDate);
+    // First priority: Use pre-formatted updateTime from server (already in GMT+7)
+    if (station.updateTime && typeof station.updateTime === 'string' && station.updateTime.includes('/')) {
+        // Already formatted by server (e.g., "15/02/2026, 10:30:45")
+        formattedUpdateTime = station.updateTime;
+    } 
+    // Second priority: Format timestamp from database
+    else {
+        const dbTimestamp = station.lastUpdateInDB || station.timestamp;
+        
+        if (dbTimestamp) {
+            try {
+                const updateDate = new Date(dbTimestamp);
+                if (!isNaN(updateDate.getTime())) {
+                    formattedUpdateTime = formatDateTime(updateDate);
+                } else if (station.updateTime) {
+                    formattedUpdateTime = station.updateTime;
+                }
+            } catch (e) {
+                formattedUpdateTime = station.updateTime || 'N/A';
+            }
+        } else if (station.updateTime) {
+            // Last fallback: try to parse and format updateTime
+            try {
+                const updateDate = new Date(station.updateTime);
+                if (!isNaN(updateDate.getTime())) {
+                    formattedUpdateTime = formatDateTime(updateDate);
                 } else {
                     formattedUpdateTime = station.updateTime;
                 }
+            } catch (e) {
+                formattedUpdateTime = station.updateTime || 'N/A';
             }
-        } catch (e) {
-            formattedUpdateTime = station.updateTime || 'N/A';
-        }
-    } else if (station.updateTime) {
-        // Fallback: use updateTime if no database timestamp
-        try {
-            const updateDate = new Date(station.updateTime);
-            if (!isNaN(updateDate.getTime())) {
-                formattedUpdateTime = formatDateTime(updateDate);
-            } else {
-                formattedUpdateTime = station.updateTime;
-            }
-        } catch (e) {
-            formattedUpdateTime = station.updateTime || 'N/A';
         }
     }
     

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-02-15T06:48:04.588Z",
+  "timestamp": "2026-02-15T06:56:19.202Z",
   "totalStations": 19,
   "stations": [
     {
@@ -42,12 +42,12 @@
     },
     {
       "station": "NHÀ MÁY SỐ 2 - GIẾNG SỐ 3",
-      "updateTime": "12:00 - 15/02/2026",
+      "updateTime": "13:00 - 15/02/2026",
       "data": [
         {
           "stt": "1",
           "name": "Nhiệt Độ",
-          "time": "12:00",
+          "time": "13:00",
           "value": "27.00",
           "unit": "oC",
           "limit": "0 - 42"
@@ -55,24 +55,24 @@
         {
           "stt": "2",
           "name": "Mực Nước",
-          "time": "12:00",
-          "value": "29.11",
+          "time": "13:00",
+          "value": "29.17",
           "unit": "m",
           "limit": "0 - 34"
         },
         {
           "stt": "3",
           "name": "Lưu Lượng",
-          "time": "12:00",
-          "value": "90.08",
+          "time": "13:00",
+          "value": "89.65",
           "unit": "m3/h",
           "limit": ""
         },
         {
           "stt": "4",
           "name": "Tổng Lưu Lượng",
-          "time": "12:00",
-          "value": "3,822,270.25",
+          "time": "13:00",
+          "value": "3,822,359.75",
           "unit": "m3",
           "limit": ""
         }

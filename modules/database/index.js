@@ -698,6 +698,7 @@ async function getLatestStationsData() {
 
     for (const table of tables) {
         const type = table.replace('_data', '').toUpperCase();
+        // Return timestamp in Vietnam timezone for consistency with stats display
         const result = await pool.query(`
             SELECT DISTINCT ON (station_name, parameter_name)
                 station_name,
@@ -705,7 +706,7 @@ async function getLatestStationsData() {
                 parameter_name,
                 value,
                 unit,
-                timestamp,
+                timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh' as timestamp,
                 update_time
             FROM ${table}
             ORDER BY station_name, parameter_name, timestamp DESC
@@ -714,14 +715,30 @@ async function getLatestStationsData() {
         for (const row of result.rows) {
             const stationName = row.station_name;
             
+            // Format timestamp for consistency
+            let formattedTime = '';
+            if (row.timestamp) {
+                const date = new Date(row.timestamp);
+                formattedTime = date.toLocaleString('vi-VN', {
+                    timeZone: 'Asia/Ho_Chi_Minh',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+            }
+            
             // Khởi tạo station nếu chưa có
             if (!stationsData[stationName]) {
                 stationsData[stationName] = {
                     stationName: stationName,
                     stationId: row.station_id,
                     type: type,
-                    timestamp: row.timestamp,
-                    updateTime: row.update_time,
+                    timestamp: row.timestamp,  // ISO timestamp for client processing
+                    updateTime: formattedTime,  // Formatted time for display
                     data: []
                 };
             }
@@ -732,7 +749,7 @@ async function getLatestStationsData() {
                 name: row.parameter_name,
                 value: String(row.value || ''),
                 unit: row.unit || '',
-                time: row.timestamp ? new Date(row.timestamp).toLocaleString('vi-VN') : ''
+                time: formattedTime
             });
         }
     }
