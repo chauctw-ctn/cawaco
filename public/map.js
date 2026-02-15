@@ -161,6 +161,17 @@ function initMap() {
     window.map = map;
     window.leafletMap = map;
     
+    // Tạo custom panes với z-index phù hợp để marker nằm trên labels và tooltips
+    // Default panes: overlayPane(400), shadowPane(500), markerPane(600), tooltipPane(650), popupPane(700)
+    
+    // Custom tooltip pane với z-index thấp hơn marker
+    map.createPane('customTooltipPane');
+    map.getPane('customTooltipPane').style.zIndex = 615; // Thấp hơn marker để không che marker
+    
+    // Custom marker pane với z-index cao hơn để nằm trên labels và tooltips
+    map.createPane('markerOnTopPane');
+    map.getPane('markerOnTopPane').style.zIndex = 620; // Cao hơn tooltips để marker luôn hiển thị rõ
+    
     // Thêm tile layer OpenStreetMap
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -260,7 +271,8 @@ async function refreshStations() {
                             permanent: true,
                             direction: 'top',
                             offset: [0, -8],
-                            className: labelClass
+                            className: labelClass,
+                            pane: 'customTooltipPane'  // Sử dụng custom pane
                         });
                         if (!marker.isPopupOpen()) marker.openTooltip();
                     } catch (e) {
@@ -329,21 +341,25 @@ function displayMarkers(stations) {
         // Tạo custom icon
         const customIcon = createStationIcon(station);
         
-        // Tạo marker
-        const marker = L.marker(position, { icon: customIcon }).addTo(map);
+        // Tạo marker với custom pane để nằm trên labels
+        const marker = L.marker(position, { 
+            icon: customIcon,
+            pane: 'markerOnTopPane'  // Sử dụng custom pane với z-index cao
+        }).addTo(map);
         
         // Lưu thông tin station vào marker
         marker.stationId = station.id;
         marker.stationName = station.name;
         marker.stationData = station; // Lưu toàn bộ data để cập nhật sau
         
-        // Tạo label (tooltip) hiển thị luôn
+        // Tạo label (tooltip) hiển thị luôn với custom pane
         const labelClass = offline ? 'station-label offline' : 'station-label';
         const tooltip = marker.bindTooltip(station.name, {
             permanent: true,
             direction: 'top',
             offset: [0, -8],
-            className: labelClass
+            className: labelClass,
+            pane: 'customTooltipPane'  // Sử dụng custom pane với z-index thấp hơn marker
         });
         
         // Tạo popup content (có tên trạm)
