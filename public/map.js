@@ -536,12 +536,11 @@ function createPopupContent(station) {
                 }
             }
             
-            // Kiểm tra duplicate trước khi hiển thị
-            const displayKey = `${shortName}_${param.value}`;
-            if (displayedParams.has(displayKey)) {
+            // Kiểm tra duplicate trước khi hiển thị - chỉ dựa vào shortName để tránh trùng lặp
+            if (displayedParams.has(shortName)) {
                 return; // Skip duplicate
             }
-            displayedParams.add(displayKey);
+            displayedParams.add(shortName);
             
             const valueClass = isWaterQuality ? `water-quality ${qualityClass}` : stationClass;
             const qualityIcon = isWaterQuality && qualityClass === 'good' ? '✓' : 
