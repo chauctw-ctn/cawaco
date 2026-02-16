@@ -317,10 +317,21 @@ app.post('/api/delete-user', verifyToken, (req, res) => {
 // Visitor tracking sử dụng PostgreSQL database
 // currentVisitors và todayVisitors vẫn dùng RAM để tính real-time online users
 // totalVisitors lưu trong database để không bị reset khi restart
+// Helper function to get current date in Vietnam timezone
+function getCurrentDateVietnam() {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+    return formatter.format(new Date()); // Returns YYYY-MM-DD format
+}
+
 const visitorStats = {
     currentVisitors: new Map(), // sessionId -> { timestamp, page } (online users)
     todayVisitors: new Set(),   // Set of session IDs for today (unique visitors today)
-    lastResetDate: new Date().toDateString()
+    lastResetDate: getCurrentDateVietnam()
 };
 
 // Clean up stale visitor sessions (older than 5 minutes)
@@ -333,10 +344,11 @@ function cleanupStaleVisitors() {
     }
 }
 
-// Reset daily stats at midnight
+// Reset daily stats at midnight (Vietnam timezone GMT+7)
 function checkDailyReset() {
-    const today = new Date().toDateString();
+    const today = getCurrentDateVietnam();
     if (visitorStats.lastResetDate !== today) {
+        console.log(`🔄 Resetting daily visitor count: ${visitorStats.lastResetDate} -> ${today}`);
         visitorStats.todayVisitors.clear();
         visitorStats.lastResetDate = today;
     }

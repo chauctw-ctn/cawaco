@@ -231,11 +231,15 @@ async function initDatabase() {
         // Khởi tạo giá trị mặc định nếu chưa có
         const visitorCheck = await client.query('SELECT COUNT(*) as count FROM visitor_stats');
         if (parseInt(visitorCheck.rows[0].count) === 0) {
+            // Get current date in Vietnam timezone
+            const todayVietnam = await client.query(`
+                SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date as today
+            `);
             await client.query(`
                 INSERT INTO visitor_stats (total_visitors, today_date, today_visitors)
-                VALUES (20102347, CURRENT_DATE, 0)
-            `);
-            console.log('✅ Khởi tạo visitor_stats với total = 20,102,347');
+                VALUES (20102347, $1, 0)
+            `, [todayVietnam.rows[0].today]);
+            console.log('✅ Khởi tạo visitor_stats với total = 20,102,347 (GMT+7)');
         }
 
         await client.query('COMMIT');
@@ -819,16 +823,19 @@ async function getLatestStationsData() {
  */
 async function getVisitorStats() {
     const result = await pool.query(`
-        SELECT total_visitors, today_date, today_visitors, updated_at
+        SELECT total_visitors, today_date, today_visitors, updated_at,
+               (CURRENT_DATE AT TIME ZONE 'Asia/Ho_Chi_Minh')::date as current_date_vietnam
         FROM visitor_stats
         ORDER BY id DESC
         LIMIT 1
     `);
 
     if (result.rows.length === 0) {
+        // Get current date in Vietnam timezone
+        const vietnamDate = await pool.query(`SELECT (CURRENT_DATE AT TIME ZONE 'Asia/Ho_Chi_Minh')::date as today`);
         return {
             total_visitors: 20102347,
-            today_date: new Date().toISOString().split('T')[0],
+            today_date: vietnamDate.rows[0].today,
             today_visitors: 0
         };
     }
@@ -850,6 +857,12 @@ async function incrementVisitorCount() {
     try {
         await client.query('BEGIN');
 
+        // Get current date in Vietnam timezone (GMT+7)
+        const currentDateResult = await client.query(`
+            SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date as today
+        `);
+        const todayVietnam = currentDateResult.rows[0].today;
+
         // Check if visitor_stats table has any records
         const checkResult = await client.query('SELECT COUNT(*) as count FROM visitor_stats');
         
@@ -857,9 +870,9 @@ async function incrementVisitorCount() {
             // Insert initial record if table is empty
             const insertResult = await client.query(`
                 INSERT INTO visitor_stats (total_visitors, today_date, today_visitors)
-                VALUES (20102348, CURRENT_DATE, 1)
+                VALUES (20102348, $1, 1)
                 RETURNING total_visitors, today_visitors
-            `);
+            `, [todayVietnam]);
             await client.query('COMMIT');
             return insertResult.rows[0];
         }
@@ -868,14 +881,14 @@ async function incrementVisitorCount() {
             UPDATE visitor_stats
             SET total_visitors = total_visitors + 1,
                 today_visitors = CASE 
-                    WHEN today_date = CURRENT_DATE THEN today_visitors + 1
+                    WHEN today_date = $1 THEN today_visitors + 1
                     ELSE 1
                 END,
-                today_date = CURRENT_DATE,
+                today_date = $1,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = (SELECT id FROM visitor_stats ORDER BY id DESC LIMIT 1)
             RETURNING total_visitors, today_visitors
-        `);
+        `, [todayVietnam]);
 
         await client.query('COMMIT');
         return result.rows[0];

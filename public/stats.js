@@ -216,12 +216,32 @@ function updateCurrentTime() {
 }
 
 /**
+ * Get current date in Vietnam timezone (GMT+7)
+ */
+function getCurrentDateInVietnam() {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+    
+    const parts = formatter.formatToParts(now);
+    const year = parts.find(p => p.type === 'year').value;
+    const month = parts.find(p => p.type === 'month').value;
+    const day = parts.find(p => p.type === 'day').value;
+    
+    return `${day}/${month}/${year}`;
+}
+
+/**
  * Set default date values
  * Mặc định hiển thị dữ liệu từ 0 giờ 00 phút đến 23 giờ 59 phút của ngày hiện tại
  */
 function setDefaultDates() {
-    const now = new Date();
-    const dateStr = formatDateDDMMYYYY(now);
+    // Get current date in Vietnam timezone (GMT+7) to avoid issues at day transition
+    const dateStr = getCurrentDateInVietnam();
     
     document.getElementById('start-date').value = dateStr;
     document.getElementById('end-date').value = dateStr;
