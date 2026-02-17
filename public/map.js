@@ -7,7 +7,7 @@ let offlineTimeoutMinutes = 60; // Default 60 minutes
 let serverTimestamp = null; // Server timestamp for consistent offline calculation
 
 // Google Maps API Key
-const GOOGLE_MAPS_API_KEY = 'AIzaSyAyK0kR6vJbz16MxVEkYat34RKSALeLGrw';
+const GOOGLE_MAPS_API_KEY = 'AIzaSyAyK0kR6vJbz16MxVEkYat34RKSALeLGrw_';
 
 function createStationIcon(station) {
     const offline = isStationOffline(station);
@@ -239,12 +239,12 @@ function initMap() {
         subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
     });
     
-    // Thêm layer mặc định (OpenStreetMap)
-    openStreetMap.addTo(map);
+    // Thêm layer mặc định (Google Terrain)
+    googleTerrain.addTo(map);
     
     // Thêm layer control để chọn loại bản đồ
     const baseMaps = {
-        "OpenStreetMap (Mặc định)": openStreetMap,
+        "OpenStreetMap": openStreetMap,
         "Google Roadmap": googleRoadmap,
         "Google Satellite": googleSatellite,
         "Google Hybrid": googleHybrid,
