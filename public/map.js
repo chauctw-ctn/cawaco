@@ -1323,7 +1323,7 @@ function displayMultiParameterChart(allData) {
     // Define colors for different parameters
     const paramColors = {
         'Mực nước': { border: 'rgb(59, 130, 246)', bg: 'rgba(59, 130, 246, 0.1)' },
-        'Lưu lượng': { border: 'rgb(6, 182, 212)', bg: 'rgba(6, 182, 212, 0.1)' },
+        'Lưu lượng': { border: 'rgb(239, 68, 68)', bg: 'rgba(239, 68, 68, 0.1)' },
         'Nhiệt độ': { border: 'rgb(239, 68, 68)', bg: 'rgba(239, 68, 68, 0.1)' },
         'Áp lực': { border: 'rgb(168, 85, 247)', bg: 'rgba(168, 85, 247, 0.1)' }
     };
@@ -1463,8 +1463,8 @@ function displayChart(chartData) {
     let backgroundColor = 'rgba(59, 130, 246, 0.1)';
     
     if (currentChartParameter && currentChartParameter.toLowerCase().includes('lưu lượng')) {
-        borderColor = 'rgb(6, 182, 212)'; // Màu cyan cho lưu lượng
-        backgroundColor = 'rgba(6, 182, 212, 0.1)';
+        borderColor = 'rgb(239, 68, 68)'; // Màu đỏ cho lưu lượng
+        backgroundColor = 'rgba(239, 68, 68, 0.1)';
     } else if (currentChartParameter && currentChartParameter.toLowerCase().includes('nhiệt')) {
         borderColor = 'rgb(239, 68, 68)'; // Màu đỏ cho nhiệt độ
         backgroundColor = 'rgba(239, 68, 68, 0.1)';
