@@ -486,6 +486,9 @@ async function getStatsData(options) {
 
     const allData = [];
     
+    // Ensure timezone is set to GMT+7 for this query session
+    await pool.query("SET TIMEZONE='Asia/Ho_Chi_Minh'");
+    
     for (const table of tables) {
         const conditions = [];
         const params = [];
@@ -523,7 +526,7 @@ async function getStatsData(options) {
 
         // Query with interval sampling to reduce data points
         // Use FLOOR(EXTRACT(EPOCH FROM timestamp) / (interval * 60)) to group by time intervals
-        // Return created_at in Vietnam timezone for consistent display
+        // Use timestamp column consistently for filtering, partitioning and display
         const query = `
             WITH sampled_data AS (
                 SELECT 
@@ -532,14 +535,14 @@ async function getStatsData(options) {
                     parameter_name,
                     value,
                     unit,
-                    created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as timestamp,
+                    timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh' as timestamp,
                     update_time,
                     ROW_NUMBER() OVER (
                         PARTITION BY 
                             station_id, 
                             parameter_name, 
-                            FLOOR(EXTRACT(EPOCH FROM created_at) / (${interval} * 60))
-                        ORDER BY created_at DESC
+                            FLOOR(EXTRACT(EPOCH FROM timestamp) / (${interval} * 60))
+                        ORDER BY timestamp DESC
                     ) as rn
                 FROM ${table}
                 ${whereClause}
@@ -759,7 +762,7 @@ async function getLatestStationsData() {
 
     for (const table of tables) {
         const type = table.replace('_data', '').toUpperCase();
-        // Return created_at in Vietnam timezone for consistency with stats display
+        // Use timestamp column consistently with stats query
         const result = await pool.query(`
             SELECT DISTINCT ON (station_name, parameter_name)
                 station_name,
@@ -767,10 +770,10 @@ async function getLatestStationsData() {
                 parameter_name,
                 value,
                 unit,
-                created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as timestamp,
+                timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh' as timestamp,
                 update_time
             FROM ${table}
-            ORDER BY station_name, parameter_name, created_at DESC
+            ORDER BY station_name, parameter_name, timestamp DESC
         `);
 
         for (const row of result.rows) {
