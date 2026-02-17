@@ -148,15 +148,13 @@ async function initDatabase() {
                 parameter_name TEXT NOT NULL,
                 value REAL,
                 unit TEXT,
-                timestamp TIMESTAMPTZ NOT NULL,
-                update_time TEXT,
                 created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )
         `);
         console.log('✅ Bảng tva_data đã sẵn sàng');
         
         await client.query('CREATE INDEX IF NOT EXISTS idx_tva_station ON tva_data(station_name)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_timestamp ON tva_data(timestamp)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_created_at ON tva_data(created_at)');
         await client.query('CREATE INDEX IF NOT EXISTS idx_tva_parameter ON tva_data(parameter_name)');
 
         // Bảng lưu dữ liệu MQTT
@@ -169,15 +167,13 @@ async function initDatabase() {
                 parameter_name TEXT NOT NULL,
                 value REAL,
                 unit TEXT,
-                timestamp TIMESTAMPTZ NOT NULL,
-                update_time TEXT,
                 created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )
         `);
         console.log('✅ Bảng mqtt_data đã sẵn sàng');
         
         await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_station ON mqtt_data(station_name)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_timestamp ON mqtt_data(timestamp)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_created_at ON mqtt_data(created_at)');
         await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_parameter ON mqtt_data(parameter_name)');
 
         // Bảng lưu dữ liệu SCADA
@@ -189,15 +185,13 @@ async function initDatabase() {
                 parameter_name TEXT NOT NULL,
                 value REAL,
                 unit TEXT,
-                timestamp TIMESTAMPTZ NOT NULL,
-                update_time TEXT,
                 created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )
         `);
         console.log('✅ Bảng scada_data đã sẵn sàng');
         
         await client.query('CREATE INDEX IF NOT EXISTS idx_scada_station ON scada_data(station_name)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_timestamp ON scada_data(timestamp)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_created_at ON scada_data(created_at)');
         await client.query('CREATE INDEX IF NOT EXISTS idx_scada_parameter ON scada_data(parameter_name)');
 
         // Bảng lưu thông tin trạm
@@ -209,8 +203,7 @@ async function initDatabase() {
                 station_type TEXT NOT NULL,
                 latitude REAL,
                 longitude REAL,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )
         `);
         console.log('✅ Bảng stations đã sẵn sàng');
@@ -222,8 +215,7 @@ async function initDatabase() {
                 total_visitors BIGINT NOT NULL DEFAULT 20102347,
                 today_date DATE NOT NULL DEFAULT CURRENT_DATE,
                 today_visitors INTEGER NOT NULL DEFAULT 0,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )
         `);
         console.log('✅ Bảng visitor_stats đã sẵn sàng');
@@ -271,7 +263,7 @@ async function cleanupOldRecords(tableName, maxRecords) {
             DELETE FROM ${tableName}
             WHERE id IN (
                 SELECT id FROM ${tableName}
-                ORDER BY timestamp ASC
+                ORDER BY created_at ASC
                 LIMIT $1
             )
         `;
@@ -298,14 +290,13 @@ async function saveStationInfo(stationId, stationName, stationType, lat, lng, cl
     
     try {
         await client.query(
-            `INSERT INTO stations (station_id, station_name, station_type, latitude, longitude, updated_at)
-             VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+            `INSERT INTO stations (station_id, station_name, station_type, latitude, longitude)
+             VALUES ($1, $2, $3, $4, $5)
              ON CONFLICT (station_id) 
              DO UPDATE SET 
                 station_name = EXCLUDED.station_name,
                 latitude = EXCLUDED.latitude,
-                longitude = EXCLUDED.longitude,
-                updated_at = CURRENT_TIMESTAMP`,
+                longitude = EXCLUDED.longitude`,
             [stationId, stationName, stationType, lat, lng]
         );
     } catch (err) {
@@ -333,8 +324,6 @@ async function saveTVAData(stations) {
         
         for (const station of stations) {
             const stationId = `tva_${station.station.replace(/\s+/g, '_')}`;
-            const stationTimestamp = (await client.query('SELECT CURRENT_TIMESTAMP as ts')).rows[0].ts;
-            const updateTime = stationTimestamp.toISOString();
             
             await saveStationInfo(stationId, station.station, 'TVA', null, null, client);
 
@@ -344,9 +333,9 @@ async function saveTVAData(stations) {
                         const cleanValue = parseNumericValue(param.value);
                         const normalizedParamName = normalizeParameterNameByValue(param.name, cleanValue, param.unit);
                         await client.query(
-                            `INSERT INTO tva_data (station_name, station_id, parameter_name, value, unit, timestamp, update_time)
-                             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                            [station.station, stationId, normalizedParamName, cleanValue, param.unit, stationTimestamp, updateTime]
+                            `INSERT INTO tva_data (station_name, station_id, parameter_name, value, unit)
+                             VALUES ($1, $2, $3, $4, $5)`,
+                            [station.station, stationId, normalizedParamName, cleanValue, param.unit]
                         );
                         savedCount++;
                     } catch (err) {
@@ -379,8 +368,6 @@ async function saveMQTTData(stations) {
         
         for (const station of stations) {
             const stationId = `mqtt_${station.station.replace(/\s+/g, '_')}`;
-            const stationTimestamp = (await client.query('SELECT CURRENT_TIMESTAMP as ts')).rows[0].ts;
-            const updateTime = stationTimestamp.toISOString();
             
             await saveStationInfo(stationId, station.station, 'MQTT', station.lat, station.lng, client);
 
@@ -390,9 +377,9 @@ async function saveMQTTData(stations) {
                         const cleanValue = parseNumericValue(param.value);
                         const normalizedParamName = normalizeParameterNameByValue(param.name, cleanValue, param.unit);
                         await client.query(
-                            `INSERT INTO mqtt_data (station_name, station_id, device_name, parameter_name, value, unit, timestamp, update_time)
-                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                            [station.station, stationId, station.deviceName || '', normalizedParamName, cleanValue, param.unit, stationTimestamp, updateTime]
+                            `INSERT INTO mqtt_data (station_name, station_id, device_name, parameter_name, value, unit)
+                             VALUES ($1, $2, $3, $4, $5, $6)`,
+                            [station.station, stationId, station.deviceName || '', normalizedParamName, cleanValue, param.unit]
                         );
                         savedCount++;
                     } catch (err) {
@@ -425,8 +412,6 @@ async function saveSCADAData(stationsGrouped) {
         
         for (const station of Object.values(stationsGrouped)) {
             const stationId = `scada_${station.station}`;
-            const stationTimestamp = (await client.query('SELECT CURRENT_TIMESTAMP as ts')).rows[0].ts;
-            const updateTime = stationTimestamp.toISOString();
             
             await saveStationInfo(stationId, station.stationName || station.station, 'SCADA', null, null, client);
 
@@ -444,10 +429,10 @@ async function saveSCADAData(stationsGrouped) {
                         const paramName = param.parameterName || param.parameter;
                         const normalizedParamName = normalizeParameterNameByValue(paramName, numericValue, param.unit);
                         await client.query(
-                            `INSERT INTO scada_data (station_name, station_id, parameter_name, value, unit, timestamp, update_time)
-                             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                            `INSERT INTO scada_data (station_name, station_id, parameter_name, value, unit)
+                             VALUES ($1, $2, $3, $4, $5)`,
                             [station.stationName || station.station, stationId, normalizedParamName, 
-                             isNaN(numericValue) ? null : numericValue, param.unit || '', stationTimestamp, updateTime]
+                             isNaN(numericValue) ? null : numericValue, param.unit || '']
                         );
                         savedCount++;
                     } catch (err) {
@@ -511,22 +496,22 @@ async function getStatsData(options) {
         if (startDate) {
             // Parse as Vietnam time (GMT+7) - start of day 00:00:00
             const startDateTime = `${startDate}T00:00:00+07:00`;
-            conditions.push(`timestamp >= $${paramIndex++}::timestamptz`);
+            conditions.push(`created_at >= $${paramIndex++}::timestamptz`);
             params.push(startDateTime);
         }
 
         if (endDate) {
             // Parse as Vietnam time (GMT+7) - end of day 23:59:59
             const endDateTime = `${endDate}T23:59:59+07:00`;
-            conditions.push(`timestamp <= $${paramIndex++}::timestamptz`);
+            conditions.push(`created_at <= $${paramIndex++}::timestamptz`);
             params.push(endDateTime);
         }
 
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
         // Query with interval sampling to reduce data points
-        // Use FLOOR(EXTRACT(EPOCH FROM timestamp) / (interval * 60)) to group by time intervals
-        // Use timestamp column consistently for filtering, partitioning and display
+        // Use FLOOR(EXTRACT(EPOCH FROM created_at) / (interval * 60)) to group by time intervals
+        // Use created_at column consistently for filtering, partitioning and display
         const query = `
             WITH sampled_data AS (
                 SELECT 
@@ -535,14 +520,13 @@ async function getStatsData(options) {
                     parameter_name,
                     value,
                     unit,
-                    timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh' as timestamp,
-                    update_time,
+                    created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as created_at,
                     ROW_NUMBER() OVER (
                         PARTITION BY 
                             station_id, 
                             parameter_name, 
-                            FLOOR(EXTRACT(EPOCH FROM timestamp) / (${interval} * 60))
-                        ORDER BY timestamp DESC
+                            FLOOR(EXTRACT(EPOCH FROM created_at) / (${interval} * 60))
+                        ORDER BY created_at DESC
                     ) as rn
                 FROM ${table}
                 ${whereClause}
@@ -553,11 +537,10 @@ async function getStatsData(options) {
                 parameter_name,
                 value,
                 unit,
-                timestamp,
-                update_time
+                created_at
             FROM sampled_data
             WHERE rn = 1
-            ORDER BY timestamp DESC
+            ORDER BY created_at DESC
             LIMIT $${paramIndex}
         `;
         params.push(limit);
@@ -568,10 +551,10 @@ async function getStatsData(options) {
             // Add table type to each row
             const type = table.replace('_data', '').toUpperCase();
             allData.push(...result.rows.map(row => {
-                // Ensure timestamp is properly formatted for Vietnam timezone
+                // Ensure created_at is properly formatted for Vietnam timezone
                 let formattedTime = '';
-                if (row.timestamp) {
-                    const date = new Date(row.timestamp);
+                if (row.created_at) {
+                    const date = new Date(row.created_at);
                     // Format: dd/mm/yyyy HH:mm:ss in Vietnam timezone
                     formattedTime = date.toLocaleString('vi-VN', {
                         timeZone: 'Asia/Ho_Chi_Minh',
@@ -588,7 +571,7 @@ async function getStatsData(options) {
                 return {
                     ...row,
                     type: type,
-                    timestamp: row.timestamp,
+                    timestamp: row.created_at,
                     time: formattedTime
                 };
             }));
@@ -597,7 +580,7 @@ async function getStatsData(options) {
         }
     }
 
-    // Sort all data by timestamp descending
+    // Sort all data by created_at descending
     allData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     
     // Limit total results
@@ -639,7 +622,7 @@ async function cleanOldData(daysToKeep = 90) {
     
     for (const table of tables) {
         const result = await pool.query(
-            `DELETE FROM ${table} WHERE timestamp < $1`,
+            `DELETE FROM ${table} WHERE created_at < $1`,
             [cutoffDate]
         );
         totalDeleted += result.rowCount;
@@ -679,32 +662,32 @@ async function checkStationsValueChanges(timeoutMinutes = 60) {
     let totalOffline = 0;
 
     for (const table of tables) {
-        // Lấy timestamp mới nhất của mỗi trạm
+        // Lấy created_at mới nhất của mỗi trạm
         const query = `
             SELECT DISTINCT ON (station_name)
                 station_name,
-                timestamp
+                created_at
             FROM ${table.name}
-            ORDER BY station_name, timestamp DESC
+            ORDER BY station_name, created_at DESC
         `;
 
         const result = await pool.query(query);
         
         for (const row of result.rows) {
             const stationName = row.station_name;
-            const lastUpdate = new Date(row.timestamp);
+            const lastUpdate = new Date(row.created_at);
             const timeDiffMinutes = Math.floor((now - lastUpdate.getTime()) / (60 * 1000));
             
             // Trạm ONLINE nếu có dữ liệu trong khoảng timeout
             const isOnline = lastUpdate > cutoffTime;
             const status = isOnline ? 'online' : 'offline';
             
-            // Chỉ update nếu chưa có hoặc timestamp mới hơn
+            // Chỉ update nếu chưa có hoặc created_at mới hơn
             if (!statusMap[stationName] || new Date(statusMap[stationName].lastUpdate) < lastUpdate) {
                 statusMap[stationName] = {
                     status: status,
                     hasChange: isOnline,  // Giữ lại để tương thích ngược
-                    lastUpdate: row.timestamp,
+                    lastUpdate: row.created_at,
                     lastUpdateDate: lastUpdate.toISOString(),
                     timeSinceUpdate: timeDiffMinutes,
                     type: table.type
@@ -733,10 +716,9 @@ async function getStationLastUpdates() {
         const result = await pool.query(`
             SELECT DISTINCT ON (station_name)
                 station_name,
-                timestamp,
-                update_time
+                created_at
             FROM ${table}
-            ORDER BY station_name, timestamp DESC
+            ORDER BY station_name, created_at DESC
         `);
 
         for (const row of result.rows) {
@@ -744,8 +726,8 @@ async function getStationLastUpdates() {
                 updates[row.station_name] = {};
             }
             updates[row.station_name][type] = {
-                timestamp: row.timestamp,
-                updateTime: row.update_time
+                timestamp: row.created_at,
+                updateTime: row.created_at
             };
         }
     }
@@ -762,7 +744,7 @@ async function getLatestStationsData() {
 
     for (const table of tables) {
         const type = table.replace('_data', '').toUpperCase();
-        // Use timestamp column consistently with stats query
+        // Use created_at column consistently with stats query
         const result = await pool.query(`
             SELECT DISTINCT ON (station_name, parameter_name)
                 station_name,
@@ -770,19 +752,18 @@ async function getLatestStationsData() {
                 parameter_name,
                 value,
                 unit,
-                timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh' as timestamp,
-                update_time
+                created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as created_at
             FROM ${table}
-            ORDER BY station_name, parameter_name, timestamp DESC
+            ORDER BY station_name, parameter_name, created_at DESC
         `);
 
         for (const row of result.rows) {
             const stationName = row.station_name;
             
-            // Format timestamp for consistency
+            // Format created_at for consistency
             let formattedTime = '';
-            if (row.timestamp) {
-                const date = new Date(row.timestamp);
+            if (row.created_at) {
+                const date = new Date(row.created_at);
                 formattedTime = date.toLocaleString('vi-VN', {
                     timeZone: 'Asia/Ho_Chi_Minh',
                     year: 'numeric',
@@ -801,7 +782,7 @@ async function getLatestStationsData() {
                     stationName: stationName,
                     stationId: row.station_id,
                     type: type,
-                    timestamp: row.timestamp,  // ISO timestamp for client processing
+                    timestamp: row.created_at,  // ISO timestamp for client processing
                     updateTime: formattedTime,  // Formatted time for display
                     data: []
                 };
@@ -826,7 +807,7 @@ async function getLatestStationsData() {
  */
 async function getVisitorStats() {
     const result = await pool.query(`
-        SELECT total_visitors, today_date, today_visitors, updated_at,
+        SELECT total_visitors, today_date, today_visitors, created_at,
                (CURRENT_DATE AT TIME ZONE 'Asia/Ho_Chi_Minh')::date as current_date_vietnam
         FROM visitor_stats
         ORDER BY id DESC
@@ -847,7 +828,7 @@ async function getVisitorStats() {
         total_visitors: parseInt(result.rows[0].total_visitors),
         today_date: result.rows[0].today_date,
         today_visitors: parseInt(result.rows[0].today_visitors),
-        updated_at: result.rows[0].updated_at
+        created_at: result.rows[0].created_at
     };
 }
 
@@ -887,8 +868,7 @@ async function incrementVisitorCount() {
                     WHEN today_date = $1 THEN today_visitors + 1
                     ELSE 1
                 END,
-                today_date = $1,
-                updated_at = CURRENT_TIMESTAMP
+                today_date = $1
             WHERE id = (SELECT id FROM visitor_stats ORDER BY id DESC LIMIT 1)
             RETURNING total_visitors, today_visitors
         `, [todayVietnam]);
@@ -910,8 +890,7 @@ async function incrementVisitorCount() {
 async function setVisitorCount(totalVisitors) {
     const result = await pool.query(`
         UPDATE visitor_stats
-        SET total_visitors = $1,
-            updated_at = CURRENT_TIMESTAMP
+        SET total_visitors = $1
         WHERE id = (SELECT id FROM visitor_stats ORDER BY id DESC LIMIT 1)
         RETURNING total_visitors, today_visitors
     `, [totalVisitors]);
