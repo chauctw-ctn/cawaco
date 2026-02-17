@@ -6,6 +6,9 @@ let currentFilter = 'all';
 let offlineTimeoutMinutes = 60; // Default 60 minutes
 let serverTimestamp = null; // Server timestamp for consistent offline calculation
 
+// Google Maps API Key
+const GOOGLE_MAPS_API_KEY = 'AIzaSyAyK0kR6vJbz16MxVEkYat34RKSALeLGrw';
+
 function createStationIcon(station) {
     const offline = isStationOffline(station);
     // Sử dụng PS_GR.gif cho trạm online, DIS.gif cho trạm offline
@@ -172,10 +175,91 @@ function initMap() {
     map.createPane('markerOnTopPane');
     map.getPane('markerOnTopPane').style.zIndex = 620; // Cao hơn tooltips để marker luôn hiển thị rõ
     
-    // Thêm tile layer OpenStreetMap
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // Tạo các tile layer miễn phí (không cần token)
+    const openStreetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+    });
+    
+    const cartoDBPositron = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
         maxZoom: 20
+    });
+    
+    const cartoDBDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20
+    });
+    
+    const cartoDBVoyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20
+    });
+    
+    const esriWorldImagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+        maxZoom: 19
+    });
+    
+    const openTopoMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
+        maxZoom: 17
+    });
+    
+    const esriWorldStreetMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri',
+        maxZoom: 19
+    });
+    
+    // Google Maps tile layers
+    const googleRoadmap = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&key=' + GOOGLE_MAPS_API_KEY, {
+        attribution: '&copy; <a href="https://www.google.com/maps">Google Maps</a>',
+        maxZoom: 20,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+    });
+    
+    const googleSatellite = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}&key=' + GOOGLE_MAPS_API_KEY, {
+        attribution: '&copy; <a href="https://www.google.com/maps">Google Maps</a>',
+        maxZoom: 20,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+    });
+    
+    const googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&key=' + GOOGLE_MAPS_API_KEY, {
+        attribution: '&copy; <a href="https://www.google.com/maps">Google Maps</a>',
+        maxZoom: 20,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+    });
+    
+    const googleTerrain = L.tileLayer('https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}&key=' + GOOGLE_MAPS_API_KEY, {
+        attribution: '&copy; <a href="https://www.google.com/maps">Google Maps</a>',
+        maxZoom: 20,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+    });
+    
+    // Thêm layer mặc định (OpenStreetMap)
+    openStreetMap.addTo(map);
+    
+    // Thêm layer control để chọn loại bản đồ
+    const baseMaps = {
+        "OpenStreetMap (Mặc định)": openStreetMap,
+        "Google Roadmap": googleRoadmap,
+        "Google Satellite": googleSatellite,
+        "Google Hybrid": googleHybrid,
+        "Google Terrain": googleTerrain,
+        "CartoDB Positron (Sáng)": cartoDBPositron,
+        "CartoDB Dark (Tối)": cartoDBDark,
+        "CartoDB Voyager (Đầy màu)": cartoDBVoyager,
+        "ESRI Satellite (Ảnh vệ tinh)": esriWorldImagery,
+        "ESRI Street Map": esriWorldStreetMap,
+        "OpenTopoMap (Địa hình)": openTopoMap
+    };
+    
+    L.control.layers(baseMaps, null, {
+        position: 'topright',
+        collapsed: true
     }).addTo(map);
     
     // Fix: Cho phép zoom khi chuột ở trong popup
