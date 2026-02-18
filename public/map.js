@@ -239,8 +239,8 @@ function initMap() {
         subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
     });
     
-    // Thêm layer mặc định (Google Terrain)
-    googleTerrain.addTo(map);
+    // Thêm layer mặc định (Google Hybrid)
+    googleHybrid.addTo(map);
     
     // Thêm layer control để chọn loại bản đồ
     const baseMaps = {
