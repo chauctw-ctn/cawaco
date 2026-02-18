@@ -7,9 +7,11 @@ let scadaLoading = false;
 
 // Update last update time
 function updateLastUpdate() {
-    if (!scadaData || !scadaData.timestamp) return;
+    // Support both created_at (new) and timestamp (legacy) fields
+    const timeValue = scadaData?.created_at || scadaData?.timestamp;
+    if (!scadaData || !timeValue) return;
     
-    const timestamp = new Date(scadaData.timestamp);
+    const timestamp = new Date(timeValue);
     const el = document.getElementById('lastUpdate');
     if (!el) return;
     // Format theo timezone Việt Nam (GMT+7)

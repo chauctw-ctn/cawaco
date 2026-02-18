@@ -1173,14 +1173,14 @@ app.get('/api/scada/cached', async (req, res) => {
                 parameter_name,
                 value,
                 unit,
-                timestamp,
-                update_time
+                created_at
             FROM scada_data
-            ORDER BY station_name, parameter_name, timestamp DESC
+            ORDER BY station_name, parameter_name, created_at DESC
         `);
         
         // Group data by station
         const stationsGrouped = {};
+        let latestTimestamp = null;
         
         for (const row of result.rows) {
             const stationId = row.station_id.replace('scada_', '');
@@ -1200,8 +1200,13 @@ app.get('/api/scada/cached', async (req, res) => {
                 value: parseFloat(row.value) || 0,
                 displayText: row.value !== null ? String(row.value) : '--',
                 unit: row.unit || '',
-                timestamp: row.timestamp
+                created_at: row.created_at
             });
+            
+            // Track the most recent timestamp
+            if (!latestTimestamp || new Date(row.created_at) > new Date(latestTimestamp)) {
+                latestTimestamp = row.created_at;
+            }
         }
         
         // If we have data from database, return it
@@ -1209,7 +1214,8 @@ app.get('/api/scada/cached', async (req, res) => {
             console.log(`✅ [API] Trả về ${Object.keys(stationsGrouped).length} trạm SCADA từ database`);
             return res.json({
                 success: true,
-                timestamp: new Date().toISOString(),
+                timestamp: latestTimestamp || new Date().toISOString(),
+                created_at: latestTimestamp || new Date().toISOString(),
                 source: 'PostgreSQL Database',
                 method: 'SQL Query - Latest Data',
                 stationsGrouped: stationsGrouped,
