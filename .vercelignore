@@ -1,0 +1,10 @@
+node_modules
+.git
+*.md
+test-*.js
+check-*.js
+clean-*.js
+monitor-*.js
+optimize-database.js
+*.ps1
+data_*.json
