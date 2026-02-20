@@ -8,6 +8,56 @@ const config = require('../../config');
 
 let pool;
 
+// ============= CACHE LAYER =============
+// In-memory cache với TTL để giảm tải database
+const cache = {
+    data: new Map(),
+    
+    set(key, value, ttlSeconds = 60) {
+        this.data.set(key, {
+            value: value,
+            expiry: Date.now() + (ttlSeconds * 1000)
+        });
+    },
+    
+    get(key) {
+        const item = this.data.get(key);
+        if (!item) return null;
+        
+        // Kiểm tra expiry
+        if (Date.now() > item.expiry) {
+            this.data.delete(key);
+            return null;
+        }
+        
+        return item.value;
+    },
+    
+    delete(key) {
+        this.data.delete(key);
+    },
+    
+    clear() {
+        this.data.clear();
+    },
+    
+    // Cleanup expired items periodically
+    cleanup() {
+        const now = Date.now();
+        for (const [key, item] of this.data.entries()) {
+            if (now > item.expiry) {
+                this.data.delete(key);
+            }
+        }
+    }
+};
+
+// Cleanup cache mỗi 5 phút
+setInterval(() => {
+    cache.cleanup();
+    console.log(`🧹 Cache cleanup: ${cache.data.size} items remaining`);
+}, 5 * 60 * 1000);
+
 /**
  * Lấy timestamp hiện tại theo múi giờ GMT+7 (Hồ Chí Minh)
  */
@@ -99,14 +149,26 @@ function initPool() {
         pool = new Pool({
             connectionString: config.database.url,
             ssl: config.database.ssl,
-            options: config.database.options
+            options: config.database.options,
+            // Tối ưu connection pool
+            max: 20,                    // Số kết nối tối đa
+            min: 5,                     // Số kết nối tối thiểu
+            idleTimeoutMillis: 30000,   // Timeout cho kết nối idle
+            connectionTimeoutMillis: 5000, // Timeout khi tạo kết nối mới
+            maxUses: 7500,              // Số lần sử dụng tối đa trước khi đóng kết nối
+            allowExitOnIdle: false      // Không thoát khi idle
         });
 
         // Set timezone for all connections in the pool
         pool.on('connect', (client) => {
-            client.query('SET timezone = \'Asia/Ho_Chi_Minh\'', (err) => {
+            // Tối ưu performance cho mỗi connection
+            client.query(`
+                SET timezone = 'Asia/Ho_Chi_Minh';
+                SET statement_timeout = '30s';
+                SET work_mem = '32MB';
+            `, (err) => {
                 if (err) {
-                    console.error('❌ Lỗi thiết lập timezone:', err.message);
+                    console.error('❌ Lỗi thiết lập connection:', err.message);
                 }
             });
         });
@@ -153,9 +215,15 @@ async function initDatabase() {
         `);
         console.log('✅ Bảng tva_data đã sẵn sàng');
         
-        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_station ON tva_data(station_name)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_created_at ON tva_data(created_at)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_parameter ON tva_data(parameter_name)');
+        // Composite indexes cho tva_data - tối ưu cho query patterns thường dùng
+        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_station_time ON tva_data(station_name, created_at DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_param_time ON tva_data(parameter_name, created_at DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_station_param_time ON tva_data(station_name, parameter_name, created_at DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_time ON tva_data(created_at DESC)');
+        // Drop old single-column indexes if they exist (replaced by composite)
+        await client.query('DROP INDEX IF EXISTS idx_tva_station');
+        await client.query('DROP INDEX IF EXISTS idx_tva_created_at');
+        await client.query('DROP INDEX IF EXISTS idx_tva_parameter');
 
         // Bảng lưu dữ liệu MQTT
         await client.query(`
@@ -172,9 +240,15 @@ async function initDatabase() {
         `);
         console.log('✅ Bảng mqtt_data đã sẵn sàng');
         
-        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_station ON mqtt_data(station_name)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_created_at ON mqtt_data(created_at)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_parameter ON mqtt_data(parameter_name)');
+        // Composite indexes cho mqtt_data
+        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_station_time ON mqtt_data(station_name, created_at DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_param_time ON mqtt_data(parameter_name, created_at DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_station_param_time ON mqtt_data(station_name, parameter_name, created_at DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_time ON mqtt_data(created_at DESC)');
+        // Drop old single-column indexes
+        await client.query('DROP INDEX IF EXISTS idx_mqtt_station');
+        await client.query('DROP INDEX IF EXISTS idx_mqtt_created_at');
+        await client.query('DROP INDEX IF EXISTS idx_mqtt_parameter');
 
         // Bảng lưu dữ liệu SCADA
         await client.query(`
@@ -190,9 +264,15 @@ async function initDatabase() {
         `);
         console.log('✅ Bảng scada_data đã sẵn sàng');
         
-        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_station ON scada_data(station_name)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_created_at ON scada_data(created_at)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_parameter ON scada_data(parameter_name)');
+        // Composite indexes cho scada_data
+        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_station_time ON scada_data(station_name, created_at DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_param_time ON scada_data(parameter_name, created_at DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_station_param_time ON scada_data(station_name, parameter_name, created_at DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_time ON scada_data(created_at DESC)');
+        // Drop old single-column indexes
+        await client.query('DROP INDEX IF EXISTS idx_scada_station');
+        await client.query('DROP INDEX IF EXISTS idx_scada_created_at');
+        await client.query('DROP INDEX IF EXISTS idx_scada_parameter');
 
         // Bảng lưu thông tin trạm
         await client.query(`
@@ -346,6 +426,11 @@ async function saveTVAData(stations) {
         }
         
         await cleanupOldRecords('tva_data', config.database.maxRecords.tva);
+        
+        // Invalidate cache when new data is saved
+        cache.delete('latest_stations_data');
+        cache.delete('available_parameters');
+        
         return savedCount;
     } finally {
         client.release();
@@ -390,6 +475,11 @@ async function saveMQTTData(stations) {
         }
         
         await cleanupOldRecords('mqtt_data', config.database.maxRecords.mqtt);
+        
+        // Invalidate cache when new data is saved
+        cache.delete('latest_stations_data');
+        cache.delete('available_parameters');
+        
         return savedCount;
     } finally {
         client.release();
@@ -443,6 +533,11 @@ async function saveSCADAData(stationsGrouped) {
         }
         
         await cleanupOldRecords('scada_data', config.database.maxRecords.scada);
+        
+        // Invalidate cache when new data is saved
+        cache.delete('latest_stations_data');
+        cache.delete('available_parameters');
+        
         return savedCount;
     } finally {
         client.release();
@@ -509,11 +604,10 @@ async function getStatsData(options) {
 
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-        // Query with interval sampling to reduce data points
-        // Use FLOOR(EXTRACT(EPOCH FROM created_at) / (interval * 60)) to group by time intervals
-        // Use created_at column consistently for filtering, partitioning and display
+        // Optimized query using time-bucketing and DISTINCT ON
+        // Much faster than ROW_NUMBER() window function for large datasets
         const query = `
-            WITH sampled_data AS (
+            WITH time_bucketed AS (
                 SELECT 
                     station_name,
                     station_id,
@@ -521,26 +615,21 @@ async function getStatsData(options) {
                     value,
                     unit,
                     created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as created_at,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY 
-                            station_id, 
-                            parameter_name, 
-                            FLOOR(EXTRACT(EPOCH FROM created_at) / (${interval} * 60))
-                        ORDER BY created_at DESC
-                    ) as rn
+                    FLOOR(EXTRACT(EPOCH FROM created_at) / (${interval} * 60)) as time_bucket
                 FROM ${table}
                 ${whereClause}
+                ORDER BY created_at DESC
+                LIMIT ${limit * 2}
             )
-            SELECT 
+            SELECT DISTINCT ON (station_id, parameter_name, time_bucket)
                 station_name,
                 station_id,
                 parameter_name,
                 value,
                 unit,
                 created_at
-            FROM sampled_data
-            WHERE rn = 1
-            ORDER BY created_at DESC
+            FROM time_bucketed
+            ORDER BY station_id, parameter_name, time_bucket DESC, created_at DESC
             LIMIT $${paramIndex}
         `;
         params.push(limit);
@@ -588,9 +677,15 @@ async function getStatsData(options) {
 }
 
 /**
- * Lấy danh sách parameters có sẵn
+ * Lấy danh sách parameters có sẵn (với cache)
  */
 async function getAvailableParameters() {
+    const cacheKey = 'available_parameters';
+    const cached = cache.get(cacheKey);
+    if (cached) {
+        return cached;
+    }
+    
     const result = await pool.query(`
         SELECT DISTINCT parameter_name, 'TVA' as source FROM tva_data
         UNION
@@ -599,14 +694,26 @@ async function getAvailableParameters() {
         SELECT DISTINCT parameter_name, 'SCADA' as source FROM scada_data
         ORDER BY parameter_name
     `);
+    
+    // Cache for 5 minutes
+    cache.set(cacheKey, result.rows, 300);
     return result.rows;
 }
 
 /**
- * Lấy danh sách trạm
+ * Lấy danh sách trạm (với cache)
  */
 async function getStations() {
+    const cacheKey = 'stations_list';
+    const cached = cache.get(cacheKey);
+    if (cached) {
+        return cached;
+    }
+    
     const result = await pool.query('SELECT * FROM stations ORDER BY station_name');
+    
+    // Cache for 10 minutes
+    cache.set(cacheKey, result.rows, 600);
     return result.rows;
 }
 
@@ -642,12 +749,18 @@ async function cleanOldData(daysToKeep = 90) {
  * @returns {Object} Map của station_name => { hasChange, lastUpdate }
  */
 /**
- * Kiểm tra trạng thái online/offline của các trạm
+ * Kiểm tra trạng thái online/offline của các trạm (với cache)
  * Trạm được coi là ONLINE nếu có dữ liệu cập nhật trong khoảng timeoutMinutes
  * @param {number} timeoutMinutes - Số phút timeout (mặc định 60)
  * @returns {Object} Map chứa status của các trạm
  */
 async function checkStationsValueChanges(timeoutMinutes = 60) {
+    const cacheKey = `station_status_${timeoutMinutes}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+        return cached;
+    }
+    
     const now = Date.now();
     const cutoffTime = new Date(now - timeoutMinutes * 60 * 1000);
     
@@ -662,12 +775,14 @@ async function checkStationsValueChanges(timeoutMinutes = 60) {
     let totalOffline = 0;
 
     for (const table of tables) {
-        // Lấy created_at mới nhất của mỗi trạm
+        // Optimized query: Use index-friendly approach
+        // Uses idx_<table>_station_time index efficiently
         const query = `
             SELECT DISTINCT ON (station_name)
                 station_name,
                 created_at
             FROM ${table.name}
+            WHERE created_at > NOW() - INTERVAL '${timeoutMinutes + 5} minutes'
             ORDER BY station_name, created_at DESC
         `;
 
@@ -701,6 +816,8 @@ async function checkStationsValueChanges(timeoutMinutes = 60) {
 
     console.log(`🔍 Kiểm tra trạng thái: ${totalOnline} online, ${totalOffline} offline (timeout: ${timeoutMinutes} phút)`);
     
+    // Cache for 30 seconds
+    cache.set(cacheKey, statusMap, 30);
     return statusMap;
 }
 
@@ -744,7 +861,8 @@ async function getLatestStationsData() {
 
     for (const table of tables) {
         const type = table.replace('_data', '').toUpperCase();
-        // Use created_at column consistently with stats query
+        // Optimized query: Use index-friendly approach with subquery
+        // This allows PostgreSQL to use idx_<table>_station_param_time efficiently
         const result = await pool.query(`
             SELECT DISTINCT ON (station_name, parameter_name)
                 station_name,
@@ -754,6 +872,7 @@ async function getLatestStationsData() {
                 unit,
                 created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as created_at
             FROM ${table}
+            WHERE created_at > NOW() - INTERVAL '24 hours'
             ORDER BY station_name, parameter_name, created_at DESC
         `);
 

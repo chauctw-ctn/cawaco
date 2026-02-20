@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 
 // Import configuration
 const config = require('./config');
@@ -27,15 +28,24 @@ app.use(express.json());
 // Simple authentication (from config)
 const USERS = config.auth.users;
 
-// Token storage (in production, use Redis or database)
-const tokens = new Map();
+// JWT Secret (in production, use environment variable)
+const JWT_SECRET = process.env.JWT_SECRET || config.auth.jwtSecret || 'camau-water-monitoring-secret-key-2026';
+const JWT_EXPIRES_IN = '7d'; // Token hết hạn sau 7 ngày
 
-// Generate token
-function generateToken() {
-    return crypto.randomBytes(32).toString('hex');
+// Generate JWT token
+function generateToken(user) {
+    return jwt.sign(
+        { 
+            username: user.username, 
+            name: user.name, 
+            role: user.role 
+        },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRES_IN }
+    );
 }
 
-// Verify token middleware
+// Verify JWT token middleware
 function verifyToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -44,13 +54,16 @@ function verifyToken(req, res, next) {
         return res.status(401).json({ success: false, message: 'No token provided' });
     }
     
-    const user = tokens.get(token);
-    if (!user) {
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (error) {
+        if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({ success: false, message: 'Token expired' });
+        }
         return res.status(401).json({ success: false, message: 'Invalid token' });
     }
-    
-    req.user = user;
-    next();
 }
 
 /**
@@ -158,13 +171,8 @@ app.post('/api/login', (req, res) => {
         return res.json({ success: false, message: 'Tên đăng nhập hoặc mật khẩu không đúng' });
     }
     
-    // Generate token
-    const token = generateToken();
-    tokens.set(token, { 
-        username, 
-        name: user.name, 
-        role: user.role 
-    });
+    // Generate JWT token
+    const token = generateToken({ username, name: user.name, role: user.role });
     
     res.json({
         success: true,
@@ -175,13 +183,9 @@ app.post('/api/login', (req, res) => {
 });
 
 app.post('/api/logout', verifyToken, (req, res) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    
-    if (token) {
-        tokens.delete(token);
-    }
-    
+    // With JWT, no need to delete token from server
+    // Token will expire automatically based on JWT_EXPIRES_IN
+    // Client just needs to remove token from localStorage
     res.json({ success: true });
 });
 
@@ -301,12 +305,8 @@ app.post('/api/delete-user', verifyToken, (req, res) => {
     // Delete user
     delete USERS[username];
     
-    // Invalidate all tokens for this user
-    for (const [token, userData] of tokens.entries()) {
-        if (userData.username === username) {
-            tokens.delete(token);
-        }
-    }
+    // Note: With JWT, existing tokens will remain valid until expiry
+    // For immediate revocation, consider using token blacklist or shorter expiry
     
     res.json({ success: true, message: 'Đã xóa người dùng thành công' });
 });

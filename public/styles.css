@@ -472,7 +472,7 @@ body.page-transitioning {
 /* Sidebar Time Section */
 .sidebar-time-section {
     margin-top: 12px;
-    padding: 14px 16px;
+    padding: 5px 5px;
     background: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
     border-radius: 10px;
     text-align: center;
@@ -1258,6 +1258,9 @@ body.page-transitioning {
     color: #1f2937;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     white-space: nowrap;
+    /* Stroke for tooltip  */
+    border: 2px solid #0000ff;
+    /* text-shadow: -1px -1px 0 #0000ff, 1px -1px 0 #0000ff, -1px 1px 0 #0000ff, 1px 1px 0 #0000ff;     */
 }
 
 /* Offline station label */

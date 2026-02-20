@@ -658,7 +658,7 @@ function createPopupContent(station) {
         html += `
             <div class="popup-actions">
                 <button class="chart-btn" onclick='showMultiParameterChart("${station.id}", "${station.name.replace(/"/g, '&quot;')}", ${paramsJson})'
-                    style="width: 100%; padding: 8px 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    style="width: 100%; padding: 4px 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;
                     font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px;
                     transition: all 0.2s;" 
@@ -1482,7 +1482,9 @@ function displayMultiParameterChart(allData) {
                 },
                 tooltip: {
                     backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    padding: 12,
+                    padding: 12,                    
+                    displayColors: false,
+
                     titleFont: {
                         size: 13,
                         family: 'Inter, sans-serif'
@@ -1589,7 +1591,7 @@ function displayChart(chartData) {
                 },
                 tooltip: {
                     backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    padding: 12,
+                    padding: 12,                                        
                     titleFont: {
                         size: 13,
                         family: 'Inter, sans-serif'

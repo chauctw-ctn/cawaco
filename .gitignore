@@ -37,3 +37,5 @@ debug_db.js
 # data_mqtt.json
 # data_quantrac.json
 # data_quantrac.csv
+
+# Không tạo thêm file hướng dẫn sử dụng, vì đã có README.md

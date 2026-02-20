@@ -99,7 +99,9 @@ module.exports = {
                 role: 'user'
             }
         },
-        tokenExpiry: 24 * 60 * 60 * 1000 // 24 giờ
+        jwtSecret: process.env.JWT_SECRET || 'camau-water-monitoring-secret-key-2026',
+        jwtExpiresIn: '7d', // Token hết hạn sau 7 ngày
+        tokenExpiry: 24 * 60 * 60 * 1000 // 24 giờ (legacy, for reference)
     },
 
     // Cấu hình trạng thái trạm (online/offline)
