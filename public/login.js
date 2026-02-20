@@ -83,10 +83,15 @@ window.addEventListener('load', () => {
             if (result.success) {
                 // Already logged in, redirect to main page
                 window.location.href = '/';
+            } else {
+                // Token invalid, clear all auth data
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('username');
+                localStorage.removeItem('userRole');
             }
         })
         .catch(() => {
-            // Token invalid, stay on login page
+            // Token invalid or network error, clear all auth data
             localStorage.removeItem('authToken');
             localStorage.removeItem('username');
         });
