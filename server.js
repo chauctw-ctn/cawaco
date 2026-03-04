@@ -33,7 +33,10 @@ function saveTelegramConfig() {
     try {
         const configToSave = {
             enabled: config.telegram.enabled,
-            chatId: config.telegram.chatId
+            chatId: config.telegram.chatId,
+            refreshInterval: config.telegram.refreshInterval || 15,
+            delayThreshold: config.telegram.delayThreshold || 60,
+            alertCooldown: config.telegram.alertCooldown || 5
         };
         fs.writeFileSync(TELEGRAM_CONFIG_FILE, JSON.stringify(configToSave, null, 2), 'utf8');
         console.log('💾 Saved Telegram config to file');
@@ -572,7 +575,9 @@ app.get('/api/telegram/config', verifyToken, async (req, res) => {
             config: {
                 enabled: config.telegram.enabled,
                 chatId: config.telegram.chatId,
-                alertCooldown: config.telegram.alertCooldown / 60000 // Convert to minutes
+                refreshInterval: config.telegram.refreshInterval || 15,
+                delayThreshold: config.telegram.delayThreshold || 60,
+                alertCooldown: config.telegram.alertCooldown || 5
             }
         });
     } catch (error) {
@@ -596,7 +601,7 @@ app.post('/api/telegram/config', verifyToken, async (req, res) => {
             });
         }
         
-        const { enabled, chatId } = req.body;
+        const { enabled, chatId, refreshInterval, delayThreshold, alertCooldown } = req.body;
         
         if (enabled !== undefined) {
             config.telegram.enabled = Boolean(enabled);
@@ -604,6 +609,18 @@ app.post('/api/telegram/config', verifyToken, async (req, res) => {
         
         if (chatId !== undefined) {
             config.telegram.chatId = String(chatId).trim();
+        }
+        
+        if (refreshInterval !== undefined) {
+            config.telegram.refreshInterval = Math.max(15, parseInt(refreshInterval));
+        }
+        
+        if (delayThreshold !== undefined) {
+            config.telegram.delayThreshold = Math.max(1, parseInt(delayThreshold));
+        }
+        
+        if (alertCooldown !== undefined) {
+            config.telegram.alertCooldown = Math.max(1, parseInt(alertCooldown));
         }
         
         // Save to file
@@ -622,7 +639,9 @@ app.post('/api/telegram/config', verifyToken, async (req, res) => {
             config: {
                 enabled: config.telegram.enabled,
                 chatId: config.telegram.chatId,
-                alertCooldown: config.telegram.alertCooldown / 60000
+                refreshInterval: config.telegram.refreshInterval || 15,
+                delayThreshold: config.telegram.delayThreshold || 60,
+                alertCooldown: config.telegram.alertCooldown || 5
             }
         });
         

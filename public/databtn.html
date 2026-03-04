@@ -10,8 +10,8 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/logo.png">
     <title>Dữ liệu Giấy Phép - Công ty Cổ phần Cấp nước Cà Mau</title>
-    <link rel="stylesheet" href="styles.css?v=20260304">
-    <link rel="stylesheet" href="databtn.css?v=20260304fix1">
+    <link rel="stylesheet" href="styles.css?v=20260305">
+    <link rel="stylesheet" href="databtn.css?v=20260305fix1">
 </head>
 <body>
     <!-- Header -->
@@ -125,16 +125,51 @@
                     </svg>
                     <span>Thống kê dữ liệu</span>
                 </a>
-                <a href="databtn.html" class="menu-item active" id="databtn-btn">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <line x1="16" y1="13" x2="8" y2="13"/>
-                        <line x1="16" y1="17" x2="8" y2="17"/>
-                        <polyline points="10 9 9 9 8 9"/>
-                    </svg>
-                    <span>Dữ liệu Giấy phép</span>
-                </a>
+                
+                <!-- Dữ liệu Giấy phép with Filter Dropdown -->
+                <div class="menu-item-expandable" id="databtn-menu-expandable">
+                    <a href="databtn.html" class="menu-item active" id="databtn-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                        <span>Dữ liệu Giấy phép</span>
+                        <span class="expand-arrow" id="databtn-expand-arrow">▼</span>
+                    </a>
+                    <div class="menu-item-content" id="databtn-filter-content">
+                        <div class="sidebar-filter-section">
+                            <div class="sidebar-filter-header">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                                </svg>
+                                <span>Bộ lọc</span>
+                            </div>
+                            
+                            <div class="sidebar-filter-group">
+                                <div class="sidebar-filter-title">Giấy phép</div>
+                                <div class="permit-checkboxes" id="permit-checkboxes">
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="permit-all" value="all" checked>
+                                        <span>Tất cả</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="sidebar-filter-divider"></div>
+                            
+                            <div class="sidebar-filter-group">
+                                <div class="sidebar-filter-title">Trạng thái</div>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" id="filter-offline" value="offline">
+                                    <span>Các trạm offline / Mất kết nối</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <!-- Visitor Statistics Section -->
@@ -167,54 +202,7 @@
     <main>
         <div class="container">
             <!-- Title -->
-            <h2 class="page-title">DỮ LIỆU TRẠM QUAN TRẮC THEO GIẤY PHÉP</h2>
-            
-            <!-- Filter Section -->
-            <div class="filter-section">
-                <div class="filter-controls">
-                    <div class="filter-dropdown-container">
-                        <button class="filter-dropdown-btn" id="filter-dropdown-btn">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-                            </svg>
-                            <span>Bộ lọc</span>
-                            <svg class="arrow-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"/>
-                            </svg>
-                        </button>
-                        <div class="filter-dropdown-menu" id="filter-dropdown-menu">
-                            <div class="filter-dropdown-section">
-                                <div class="filter-section-title">Giấy phép</div>
-                                <div class="permit-checkboxes" id="permit-checkboxes">
-                                    <label class="checkbox-item">
-                                        <input type="checkbox" id="permit-all" value="all" checked>
-                                        <span>Tất cả</span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="filter-dropdown-divider"></div>
-                            <div class="filter-dropdown-section">
-                                <div class="filter-section-title">Trạng thái</div>
-                                <label class="checkbox-item">
-                                    <input type="checkbox" id="filter-offline" value="offline">
-                                    <span>Các trạm offline / Mất kết nối</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="config-inputs">
-                        <div class="config-input-group">
-                            <label for="refresh-interval">Chu kỳ quét (phút):</label>
-                            <input type="number" id="refresh-interval" min="15" value="15" step="1">
-                        </div>
-                        <div class="config-input-group">
-                            <label for="delay-threshold">Độ trễ offline (phút):</label>
-                            <input type="number" id="delay-threshold" min="1" value="60" step="1">
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <h2 class="page-title">DỮ LIỆU ĐỒNG BỘ CÁC TRẠM QUAN TRẮC VỚI WEB BỘ TÀI NGUYÊN</h2>
 
             <!-- Stats Table -->
             <div class="table-container">
@@ -379,17 +367,33 @@
                     </button>
                     <small id="test-telegram-result" style="color: #6b7280; display: block; margin-top: 8px;"></small>
                 </div>
+                
+                <div class="form-divider"></div>
+                
                 <div class="form-group">
-                    <label>Thông tin:</label>
-                    <div style="background: #f3f4f6; padding: 12px; border-radius: 6px; font-size: 13px; color: #374151;">
-                        <div style="margin-bottom: 8px;">
-                            <strong>Chu kỳ cảnh báo:</strong> 5 phút/trạm
-                        </div>
-                        <div>
-                            <strong>Điều kiện offline:</strong> Độ trễ > <span id="telegram-threshold-display">60</span> phút
-                        </div>
-                    </div>
+                    <label for="telegram-refresh-interval">Chu kỳ quét (phút):</label>
+                    <input type="number" id="telegram-refresh-interval" min="15" value="15" step="1" required>
+                    <small style="color: #6b7280; display: block; margin-top: 4px;">
+                        Tần suất tự động lấy dữ liệu mới từ server (tối thiểu 15 phút)
+                    </small>
                 </div>
+                
+                <div class="form-group">
+                    <label for="telegram-delay-threshold">Điều kiện offline (phút):</label>
+                    <input type="number" id="telegram-delay-threshold" min="1" value="60" step="1" required>
+                    <small style="color: #6b7280; display: block; margin-top: 4px;">
+                        Độ trễ tối đa trước khi trạm được coi là mất kết nối (tối thiểu 1 phút)
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="telegram-alert-cooldown">Chu kỳ cảnh báo (phút):</label>
+                    <input type="number" id="telegram-alert-cooldown" min="1" value="5" step="1" required>
+                    <small style="color: #6b7280; display: block; margin-top: 4px;">
+                        Thời gian chờ tối thiểu giữa các cảnh báo cho cùng một trạm (tối thiểu 1 phút)
+                    </small>
+                </div>
+                
                 <div class="modal-error" id="telegram-config-error"></div>
                 <div class="modal-footer">
                     <button type="button" class="btn-secondary" id="cancel-telegram-config">Hủy</button>
@@ -399,11 +403,11 @@
         </div>
     </div>
 
-    <script src="page-transition.js?v=20260304fix1"></script>
-    <script src="auth.js?v=20260304fix1"></script>
-    <script src="header.js?v=20260304fix1"></script>
-    <script src="visitor-tracker.js?v=20260304fix1"></script>
-    <script src="databtn.js?v=20260304fix1"></script>
+    <script src="page-transition.js?v=20260305fix1"></script>
+    <script src="auth.js?v=20260305fix1"></script>
+    <script src="header.js?v=20260305fix1"></script>
+    <script src="visitor-tracker.js?v=20260305fix1"></script>
+    <script src="databtn.js?v=20260305fix1"></script>
     <script>
         // Databtn page initialization
         document.addEventListener('DOMContentLoaded', async () => {
