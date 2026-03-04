@@ -3,9 +3,49 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const axios = require('axios');
 
 // Import configuration
 const config = require('./config');
+
+// Telegram config file path
+const TELEGRAM_CONFIG_FILE = path.join(__dirname, 'telegram-config.json');
+
+// Load Telegram config from file
+function loadTelegramConfig() {
+    try {
+        if (fs.existsSync(TELEGRAM_CONFIG_FILE)) {
+            const data = fs.readFileSync(TELEGRAM_CONFIG_FILE, 'utf8');
+            const savedConfig = JSON.parse(data);
+            // Merge saved config with default config
+            config.telegram = { ...config.telegram, ...savedConfig };
+            console.log('✅ Loaded Telegram config:', config.telegram);
+        } else {
+            console.log('ℹ️ No saved Telegram config found, using defaults');
+        }
+    } catch (error) {
+        console.error('❌ Error loading Telegram config:', error.message);
+    }
+}
+
+// Save Telegram config to file
+function saveTelegramConfig() {
+    try {
+        const configToSave = {
+            enabled: config.telegram.enabled,
+            chatId: config.telegram.chatId
+        };
+        fs.writeFileSync(TELEGRAM_CONFIG_FILE, JSON.stringify(configToSave, null, 2), 'utf8');
+        console.log('💾 Saved Telegram config to file');
+        return true;
+    } catch (error) {
+        console.error('❌ Error saving Telegram config:', error.message);
+        return false;
+    }
+}
+
+// Load Telegram config on startup
+loadTelegramConfig();
 
 // Import coordinates
 const { TVA_STATION_COORDINATES } = require('./tva-coordinates');
@@ -17,6 +57,7 @@ const mqttModule = require('./modules/mqtt');
 const tvaModule = require('./modules/tva');
 const scadaModule = require('./modules/scada');
 const dbModule = require('./modules/database');
+const monreModule = require('./modules/monre');
 
 const app = express();
 const PORT = config.server.port;
@@ -309,6 +350,290 @@ app.post('/api/delete-user', verifyToken, (req, res) => {
     // For immediate revocation, consider using token blacklist or shorter expiry
     
     res.json({ success: true, message: 'Đã xóa người dùng thành công' });
+});
+
+// ============================================
+// MONRE PERMIT DATA API
+// ============================================
+
+// Get permit data from MONRE IoT
+app.get('/api/permit-data', verifyToken, async (req, res) => {
+    try {
+        const data = await monreModule.getPermitData();
+        res.json({ 
+            success: true, 
+            data: data,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Error fetching permit data:', error.message);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Không thể lấy dữ liệu từ MONRE IoT',
+            error: error.message 
+        });
+    }
+});
+
+// Force refresh permit data
+app.post('/api/permit-data/refresh', verifyToken, async (req, res) => {
+    try {
+        const data = await monreModule.getPermitData(true);
+        res.json({ 
+            success: true, 
+            data: data,
+            timestamp: new Date().toISOString(),
+            message: 'Đã làm mới dữ liệu thành công'
+        });
+    } catch (error) {
+        console.error('Error refreshing permit data:', error.message);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Không thể làm mới dữ liệu',
+            error: error.message 
+        });
+    }
+});
+
+// ============================================
+// TELEGRAM ALERT API
+// ============================================
+
+// Send Telegram alert
+app.post('/api/telegram/alert', verifyToken, async (req, res) => {
+    try {
+        const { station, status, measurementTime, delayMinutes } = req.body;
+        
+        if (!station || !status) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Thiếu thông tin trạm hoặc trạng thái' 
+            });
+        }
+        
+        // Check if Telegram is enabled and chat ID is configured
+        if (!config.telegram.enabled || !config.telegram.chatId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Telegram chưa được cấu hình hoặc chưa bật' 
+            });
+        }
+        
+        // Format the message
+        const statusEmoji = status === 'offline' ? '❌ Offline' : '✅ Online';
+        
+        // Measurement time (from data)
+        const measurementTimeStr = measurementTime ? new Date(measurementTime).toLocaleString('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        }) : 'N/A';
+        
+        // Alert send time (current time)
+        const alertTime = new Date().toLocaleString('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+        
+        // Format delay time
+        let delayStr = 'N/A';
+        if (delayMinutes !== undefined && delayMinutes !== null) {
+            if (delayMinutes < 60) {
+                delayStr = `${delayMinutes} phút`;
+            } else if (delayMinutes < 1440) {
+                const hours = Math.floor(delayMinutes / 60);
+                const mins = delayMinutes % 60;
+                delayStr = mins > 0 ? `${hours} giờ ${mins} phút` : `${hours} giờ`;
+            } else {
+                const days = Math.floor(delayMinutes / 1440);
+                const hours = Math.floor((delayMinutes % 1440) / 60);
+                delayStr = hours > 0 ? `${days} ngày ${hours} giờ` : `${days} ngày`;
+            }
+        }
+        
+        const message = `📍 Trạm: ${station}\n📡 ${statusEmoji}\n🕒 Thời gian đo: ${measurementTimeStr}\n⏱️ Thời gian chậm gửi dữ liệu: ${delayStr}\n🕒 Thời gian gửi cảnh báo: ${alertTime}`;
+        
+        // Send to Telegram
+        const telegramUrl = `https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`;
+        const response = await axios.post(telegramUrl, {
+            chat_id: config.telegram.chatId,
+            text: message,
+            parse_mode: 'HTML'
+        }, {
+            timeout: 10000
+        });
+        
+        if (response.data.ok) {
+            res.json({ 
+                success: true, 
+                message: 'Đã gửi cảnh báo thành công' 
+            });
+        } else {
+            throw new Error('Telegram API trả về lỗi');
+        }
+        
+    } catch (error) {
+        console.error('Error sending Telegram alert:', error.message);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Không thể gửi cảnh báo',
+            error: error.message 
+        });
+    }
+});
+
+// Test Telegram connection (send a test message)
+app.post('/api/telegram/test', verifyToken, async (req, res) => {
+    try {
+        const { chatId } = req.body;
+        
+        // Use provided chatId or use configured one
+        const targetChatId = chatId || config.telegram.chatId;
+        
+        if (!targetChatId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Vui lòng cung cấp Chat ID để test' 
+            });
+        }
+        
+        // Format test message
+        const currentTime = new Date().toLocaleString('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+        
+        const message = `🧪 TEST CẢNH BÁO TELEGRAM\n\n📍 Trạm: TEST_STATION\n📡 ✅ Online\n🕒 Thời gian đo: ${currentTime}\n⏱️ Thời gian chậm gửi dữ liệu: 0 phút\n🕒 Thời gian gửi cảnh báo: ${currentTime}\n\n✅ Kết nối Telegram thành công!`;
+        
+        // Send to Telegram
+        const telegramUrl = `https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`;
+        console.log(`📤 Sending test message to chat ID: ${targetChatId}`);
+        
+        const response = await axios.post(telegramUrl, {
+            chat_id: targetChatId,
+            text: message,
+            parse_mode: 'HTML'
+        }, {
+            timeout: 10000
+        });
+        
+        if (response.data.ok) {
+            console.log('✅ Test message sent successfully');
+            res.json({ 
+                success: true, 
+                message: 'Đã gửi tin nhắn test thành công! Kiểm tra Telegram của bạn.',
+                data: {
+                    chatId: targetChatId,
+                    messageId: response.data.result.message_id
+                }
+            });
+        } else {
+            throw new Error('Telegram API trả về lỗi');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error sending test message:', error.message);
+        
+        // Provide more detailed error message
+        let errorMsg = 'Không thể gửi tin nhắn test';
+        if (error.response?.data?.description) {
+            errorMsg += ': ' + error.response.data.description;
+        } else if (error.message) {
+            errorMsg += ': ' + error.message;
+        }
+        
+        res.status(500).json({ 
+            success: false, 
+            message: errorMsg,
+            error: error.response?.data || error.message 
+        });
+    }
+});
+
+// Get Telegram configuration
+app.get('/api/telegram/config', verifyToken, async (req, res) => {
+    try {
+        res.json({ 
+            success: true, 
+            config: {
+                enabled: config.telegram.enabled,
+                chatId: config.telegram.chatId,
+                alertCooldown: config.telegram.alertCooldown / 60000 // Convert to minutes
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching Telegram config:', error.message);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Không thể lấy cấu hình Telegram',
+            error: error.message 
+        });
+    }
+});
+
+// Update Telegram configuration
+app.post('/api/telegram/config', verifyToken, async (req, res) => {
+    try {
+        // Only admin can update config
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Chỉ admin mới có thể cập nhật cấu hình' 
+            });
+        }
+        
+        const { enabled, chatId } = req.body;
+        
+        if (enabled !== undefined) {
+            config.telegram.enabled = Boolean(enabled);
+        }
+        
+        if (chatId !== undefined) {
+            config.telegram.chatId = String(chatId).trim();
+        }
+        
+        // Save to file
+        const saved = saveTelegramConfig();
+        
+        if (!saved) {
+            return res.status(500).json({ 
+                success: false, 
+                message: 'Không thể lưu cấu hình vào file' 
+            });
+        }
+        
+        res.json({ 
+            success: true, 
+            message: 'Đã cập nhật và lưu cấu hình Telegram',
+            config: {
+                enabled: config.telegram.enabled,
+                chatId: config.telegram.chatId,
+                alertCooldown: config.telegram.alertCooldown / 60000
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error updating Telegram config:', error.message);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Không thể cập nhật cấu hình',
+            error: error.message 
+        });
+    }
 });
 
 // ============================================

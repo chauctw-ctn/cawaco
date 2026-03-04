@@ -69,6 +69,7 @@ function updateUserUI() {
     const dropdownRole = document.getElementById('dropdown-role');
     const addUserBtn = document.getElementById('add-user-btn');
     const manageUsersBtn = document.getElementById('manage-users-btn');
+    const telegramConfigBtn = document.getElementById('telegram-config-btn');
     
     // Update username displays
     if (usernameDisplay) {
@@ -92,6 +93,11 @@ function updateUserUI() {
     // Show/hide manage users button based on role
     if (manageUsersBtn) {
         manageUsersBtn.style.display = userRole === 'admin' ? 'flex' : 'none';
+    }
+    
+    // Show/hide telegram config button based on role
+    if (telegramConfigBtn) {
+        telegramConfigBtn.style.display = userRole === 'admin' ? 'flex' : 'none';
     }
 }
 

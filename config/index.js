@@ -114,5 +114,13 @@ module.exports = {
             'MQTT': 30,     // MQTT: 30 phút (Real-time nên timeout ngắn hơn)
             'SCADA': 60     // SCADA: 60 phút
         }
+    },
+
+    // Cấu hình Telegram Alerts
+    telegram: {
+        botToken: process.env.TELEGRAM_BOT_TOKEN || '8705883687:AAEx3A1Y3VshJG1R4Si9syxQsOFX9RSQVu0',
+        chatId: process.env.TELEGRAM_CHAT_ID || '', // Chat ID để nhận cảnh báo (cần cấu hình)
+        alertCooldown: 5 * 60 * 1000, // 5 phút - Thời gian tối thiểu giữa 2 lần cảnh báo cho cùng 1 trạm
+        enabled: false // Bật/tắt chức năng cảnh báo (mặc định tắt cho đến khi cấu hình chat ID)
     }
 };
