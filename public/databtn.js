@@ -220,14 +220,18 @@ function checkStationStatusChanges() {
         const measurementTime = data.measurementTime; // Get measurement time
         const delayMinutes = data.delayMinutes; // Get delay in minutes
         
-        // Always send alert for offline stations (periodic alert)
-        if (currentStatus === 'offline') {
-            console.log(`🔔 Station ${station} is offline (${delayMinutes} minutes delay)`);
+        // Skip first check after page reload (when previousStatus is undefined)
+        if (previousStatus === undefined) {
+            console.log(`ℹ️ Khởi tạo trạm ${station}: ${currentStatus} (${delayMinutes} phút)`);
+        }
+        // Send periodic alert for offline stations (only after first check)
+        else if (currentStatus === 'offline') {
+            console.log(`🔔 Cảnh báo trạm ${station} mất kết nối (${delayMinutes} phút)`);
             sendTelegramAlert(station, 'offline', measurementTime, delayMinutes);
         }
         // Send alert when station comes back online (status changed from offline to online)
         else if (previousStatus === 'offline' && currentStatus === 'online') {
-            console.log(`🔔 Station ${station} came back online`);
+            console.log(`🔔 Trạm ${station} đã kết nối lại`);
             sendTelegramAlert(station, 'online', measurementTime, delayMinutes);
         }
         
