@@ -4,15 +4,14 @@ let currentData = [];
 let lastUpdateTime = null;
 let allPermits = []; // Danh sách tất cả giấy phép
 let autoRefreshInterval = null; // Auto refresh timer
-let statusCheckInterval = null; // Status check timer for Telegram alerts
 let refreshIntervalMinutes = 15; // Default 15 minutes (from Telegram config)
 let delayThresholdMinutes = 60; // Default 60 minutes (from Telegram config)
-let alertCooldownMinutes = 5; // Default 5 minutes (from Telegram config)
 
 // Telegram alert tracking
 let stationStatusMap = {}; // Track previous status of each station
-let lastAlertTime = {}; // Track last alert time for each station
 let telegramConfig = null; // Telegram configuration
+let pendingOfflineAlerts = new Set(); // Stations to alert on next check cycle
+let isFirstCheck = true; // Track if this is the first check after page load
 
 /**
  * Format timestamp to Vietnamese date/time
@@ -131,12 +130,6 @@ async function fetchTelegramConfig() {
                 if (telegramConfig.delayThreshold) {
                     delayThresholdMinutes = Math.max(1, parseInt(telegramConfig.delayThreshold));
                 }
-                if (telegramConfig.alertCooldown) {
-                    alertCooldownMinutes = Math.max(1, parseInt(telegramConfig.alertCooldown));
-                }
-                
-                // Setup status check interval after loading config
-                setupStatusCheckInterval();
             }
         }
     } catch (error) {
@@ -151,15 +144,6 @@ async function sendTelegramAlert(station, status, measurementTime, delayMinutes)
     try {
         // Check if Telegram is enabled
         if (!telegramConfig || !telegramConfig.enabled) {
-            return;
-        }
-        
-        // Check cooldown period
-        const now = Date.now();
-        const lastAlert = lastAlertTime[station];
-        const cooldownMs = alertCooldownMinutes * 60 * 1000;
-        if (lastAlert && (now - lastAlert) < cooldownMs) {
-            console.log(`⏳ Skipping alert for ${station} - cooldown period`);
             return;
         }
         
@@ -185,7 +169,6 @@ async function sendTelegramAlert(station, status, measurementTime, delayMinutes)
             const data = await response.json();
             if (data.success) {
                 console.log(`✅ Sent Telegram alert for ${station}: ${status}`);
-                lastAlertTime[station] = now;
             }
         }
     } catch (error) {
@@ -239,55 +222,56 @@ function checkStationStatusChanges() {
         const measurementTime = data.measurementTime; // Get measurement time
         const delayMinutes = data.delayMinutes; // Get delay in minutes
         
-        // If this is the first time seeing this station
-        if (previousStatus === undefined) {
-            // If station is offline on first check, send alert
+        // First check after page reload
+        if (isFirstCheck) {
+            // Initialize status without sending alert
             if (currentStatus === 'offline') {
-                console.log(`🔔 Station ${station} is offline (initial check)`);
-                sendTelegramAlert(station, 'offline', measurementTime, delayMinutes);
+                // Mark this station to send alert on next check cycle
+                pendingOfflineAlerts.add(station);
+                console.log(`ℹ️ Station ${station} is offline - will alert on next cycle`);
+            } else {
+                console.log(`ℹ️ Station ${station} initialized: ${currentStatus}`);
             }
         }
-        // If status changed from online to offline, send alert
-        else if (previousStatus === 'online' && currentStatus === 'offline') {
-            console.log(`🔔 Station ${station} went offline`);
-            sendTelegramAlert(station, 'offline', measurementTime, delayMinutes);
+        // Second check (first cycle after reload) - send alerts for pending offline stations
+        else if (pendingOfflineAlerts.has(station)) {
+            if (currentStatus === 'offline') {
+                // Station still offline after first cycle - send alert
+                console.log(`🔔 Station ${station} confirmed offline (> ${delayMinutes} minutes)`);
+                sendTelegramAlert(station, 'offline', measurementTime, delayMinutes);
+                pendingOfflineAlerts.delete(station);
+            } else {
+                // Station came back online before alert was sent
+                console.log(`ℹ️ Station ${station} back online before alert sent`);
+                pendingOfflineAlerts.delete(station);
+            }
         }
-        // If status changed from offline to online, send alert
-        else if (previousStatus === 'offline' && currentStatus === 'online') {
-            console.log(`🔔 Station ${station} came back online`);
-            sendTelegramAlert(station, 'online', measurementTime, delayMinutes);
+        // Normal status change detection
+        else if (previousStatus !== undefined) {
+            // Status changed from online to offline
+            if (previousStatus === 'online' && currentStatus === 'offline') {
+                console.log(`🔔 Station ${station} went offline`);
+                sendTelegramAlert(station, 'offline', measurementTime, delayMinutes);
+            }
+            // Status changed from offline to online
+            else if (previousStatus === 'offline' && currentStatus === 'online') {
+                console.log(`🔔 Station ${station} came back online`);
+                sendTelegramAlert(station, 'online', measurementTime, delayMinutes);
+            }
         }
         
         // Update status map
         stationStatusMap[station] = currentStatus;
     });
+    
+    // Mark that first check is complete
+    if (isFirstCheck) {
+        isFirstCheck = false;
+        console.log(`✅ First check complete. ${pendingOfflineAlerts.size} stations queued for alert on next cycle.`);
+    }
 }
 
-/**
- * Setup periodic status checking for Telegram alerts
- * This runs independently of data fetching to catch status changes in real-time
- */
-function setupStatusCheckInterval() {
-    // Clear existing interval
-    if (statusCheckInterval) {
-        clearInterval(statusCheckInterval);
-    }
-    
-    // Only setup if Telegram is enabled
-    if (!telegramConfig || !telegramConfig.enabled) {
-        return;
-    }
-    
-    // Check status every alertCooldownMinutes
-    statusCheckInterval = setInterval(() => {
-        if (telegramConfig && telegramConfig.enabled && currentData.length > 0) {
-            console.log('⏰ Running periodic status check...');
-            checkStationStatusChanges();
-        }
-    }, alertCooldownMinutes * 60 * 1000);
-    
-    console.log(`✅ Status check interval set to ${alertCooldownMinutes} minutes`);
-}
+// Removed setupStatusCheckInterval - alerts are now sent only after data fetch/update
 
 /**
  * Setup auto refresh
@@ -581,18 +565,49 @@ async function initializePage() {
     const databtnExpandArrow = document.getElementById('databtn-expand-arrow');
     const databtnFilterContent = document.getElementById('databtn-filter-content');
     
-    if (databtnBtn && databtnFilterContent) {
+    if (databtnMenuExpandable && databtnBtn && databtnFilterContent) {
+        console.log('Setting up dropdown toggle...');
+        
         // Expand filter on databtn page by default
         databtnMenuExpandable.classList.add('expanded');
         databtnFilterContent.classList.add('active');
         
-        // Toggle filter dropdown
-        databtnBtn.addEventListener('click', function(e) {
+        // Toggle filter dropdown when clicking the menu item
+        const toggleDropdown = function(e) {
+            console.log('Dropdown clicked!');
             e.preventDefault();
             e.stopPropagation();
             
-            databtnMenuExpandable.classList.toggle('expanded');
-            databtnFilterContent.classList.toggle('active');
+            // Toggle expanded state
+            const isExpanded = databtnMenuExpandable.classList.contains('expanded');
+            console.log('Current state:', isExpanded ? 'expanded' : 'collapsed');
+            
+            if (isExpanded) {
+                databtnMenuExpandable.classList.remove('expanded');
+                databtnFilterContent.classList.remove('active');
+                console.log('Collapsing dropdown');
+            } else {
+                databtnMenuExpandable.classList.add('expanded');
+                databtnFilterContent.classList.add('active');
+                console.log('Expanding dropdown');
+            }
+        };
+        
+        databtnBtn.addEventListener('click', toggleDropdown);
+        
+        // Also allow clicking on the arrow or the entire expandable area
+        if (databtnExpandArrow) {
+            databtnExpandArrow.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleDropdown(e);
+            });
+        }
+    } else {
+        console.error('Dropdown elements not found:', {
+            databtnMenuExpandable: !!databtnMenuExpandable,
+            databtnBtn: !!databtnBtn,
+            databtnFilterContent: !!databtnFilterContent
         });
     }
     
@@ -685,13 +700,11 @@ async function loadTelegramConfigToModal() {
                 const chatIdInput = document.getElementById('telegram-chat-id');
                 const refreshIntervalInput = document.getElementById('telegram-refresh-interval');
                 const delayThresholdInput = document.getElementById('telegram-delay-threshold');
-                const alertCooldownInput = document.getElementById('telegram-alert-cooldown');
                 
                 if (enabledCheckbox) enabledCheckbox.checked = data.config.enabled;
                 if (chatIdInput) chatIdInput.value = data.config.chatId || '';
                 if (refreshIntervalInput) refreshIntervalInput.value = data.config.refreshInterval || 15;
                 if (delayThresholdInput) delayThresholdInput.value = data.config.delayThreshold || 60;
-                if (alertCooldownInput) alertCooldownInput.value = data.config.alertCooldown || 5;
             }
         }
     } catch (error) {
@@ -707,7 +720,6 @@ async function saveTelegramConfig() {
     const chatIdInput = document.getElementById('telegram-chat-id');
     const refreshIntervalInput = document.getElementById('telegram-refresh-interval');
     const delayThresholdInput = document.getElementById('telegram-delay-threshold');
-    const alertCooldownInput = document.getElementById('telegram-alert-cooldown');
     const telegramConfigError = document.getElementById('telegram-config-error');
     const telegramConfigModal = document.getElementById('telegram-config-modal');
     
@@ -723,7 +735,6 @@ async function saveTelegramConfig() {
         const chatId = chatIdInput.value.trim();
         const refreshInterval = parseInt(refreshIntervalInput.value);
         const delayThreshold = parseInt(delayThresholdInput.value);
-        const alertCooldown = parseInt(alertCooldownInput.value);
         
         // Validate
         if (enabled && !chatId) {
@@ -738,10 +749,6 @@ async function saveTelegramConfig() {
             throw new Error('Độ trễ offline tối thiểu là 1 phút');
         }
         
-        if (isNaN(alertCooldown) || alertCooldown < 1) {
-            throw new Error('Chu kỳ cảnh báo tối thiểu là 1 phút');
-        }
-        
         const response = await fetch('/api/telegram/config', {
             method: 'POST',
             headers: {
@@ -752,8 +759,7 @@ async function saveTelegramConfig() {
                 enabled: enabled,
                 chatId: chatId,
                 refreshInterval: refreshInterval,
-                delayThreshold: delayThreshold,
-                alertCooldown: alertCooldown
+                delayThreshold: delayThreshold
             })
         });
         
@@ -767,11 +773,9 @@ async function saveTelegramConfig() {
         telegramConfig = data.config;
         refreshIntervalMinutes = refreshInterval;
         delayThresholdMinutes = delayThreshold;
-        alertCooldownMinutes = alertCooldown;
         
-        // Restart intervals with new settings
+        // Restart interval with new settings
         setupAutoRefresh();
-        setupStatusCheckInterval();
         
         // Re-render table with new threshold
         renderTable();
@@ -852,11 +856,24 @@ async function testTelegramConnection() {
     }
 }
 
-// Initialize Telegram modal when document is ready
+// Initialize Telegram modal after header is loaded
+function initializeTelegramModal() {
+    // Wait for header to be loaded (telegram button is in the header)
+    if (document.getElementById('telegram-config-btn')) {
+        setupTelegramConfigModal();
+    } else {
+        // If telegram button doesn't exist yet, wait for headerLoaded event
+        document.addEventListener('headerLoaded', function() {
+            setupTelegramConfigModal();
+        }, { once: true });
+    }
+}
+
+// Call initialization
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setupTelegramConfigModal);
+    document.addEventListener('DOMContentLoaded', initializeTelegramModal);
 } else {
-    setupTelegramConfigModal();
+    initializeTelegramModal();
 }
 
 // Export for manual initialization after auth

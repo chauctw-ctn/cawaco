@@ -57,6 +57,7 @@ main.sidebar-hidden {
 
 .sidebar-filter-group {
     margin-bottom: 12px;
+    width: 100%;
 }
 
 .sidebar-filter-title {
@@ -66,6 +67,7 @@ main.sidebar-hidden {
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 8px;
+    text-align: left;
 }
 
 .sidebar-filter-divider {
@@ -78,11 +80,13 @@ main.sidebar-hidden {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    align-items: flex-start;
 }
 
 .sidebar-filter-section .checkbox-item {
     display: flex;
     align-items: center;
+    justify-content: flex-start;
     gap: 8px;
     padding: 8px 10px;
     background: white;
@@ -91,6 +95,7 @@ main.sidebar-hidden {
     cursor: pointer;
     transition: all 0.2s;
     user-select: none;
+    width: 100%;
 }
 
 .sidebar-filter-section .checkbox-item:hover {
@@ -135,11 +140,13 @@ main.sidebar-hidden {
 .menu-item-content {
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.3s ease-out;
+    transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
+    opacity: 0;
 }
 
 .menu-item-content.active {
     max-height: 500px;
+    opacity: 1;
 }
 
 /* Old Filter Section (removed from main) - Keep for legacy compatibility */

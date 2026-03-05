@@ -395,6 +395,15 @@ async function logout() {
 
 // Initialize auth on page load
 document.addEventListener('DOMContentLoaded', async () => {
+    // Wait for header to be loaded first (buttons are in the header)
+    await new Promise(resolve => {
+        if (document.querySelector('header')) {
+            resolve();
+        } else {
+            document.addEventListener('headerLoaded', resolve, { once: true });
+        }
+    });
+    
     // Require authentication first
     await requireAuth();
     
