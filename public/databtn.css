@@ -1,7 +1,7 @@
 /* Databtn Page Styles */
 
 main {
-    padding-top: 70px;
+    padding-top: 60px;
     height: 100vh;
     overflow-y: auto;
     transition: margin-left 0.3s ease;
@@ -18,21 +18,32 @@ main.sidebar-hidden {
 .container {
     max-width: 100%;
     margin: 0;
-    padding: 12px 4px;
+    padding: 6px;
+    height: calc(100vh - 60px);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Data Card - Container for title and table */
+.data-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
 }
 
 .page-title {
     text-align: center;
-    color: #1f2937;
-    font-size: 24px;
-    font-weight: 700;
+    color: #0066cc;
+    font-size: 22px;
+    font-weight: 600;
+    margin-top: 0;
     margin-bottom: 16px;
-    margin-left: 4px;
-    margin-right: 4px;
-    padding: 12px;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 0;
 }
 
 /* Sidebar Filter Section */
@@ -351,14 +362,13 @@ main.sidebar-hidden {
 .table-container {
     overflow-x: auto;
     overflow-y: auto;
-    margin-bottom: 20px;
-    margin-left: 4px;
-    margin-right: 4px;
+    margin-bottom: 0;
     border: 1px solid #e0e0e0;
-    border-radius: 8px;
+    border-radius: 6px;
     position: relative;
     max-width: 100%;
-    max-height: calc(100vh - 280px);
+    flex: 1;
+    max-height: none;
     -webkit-overflow-scrolling: touch;
     background: white;
 }
@@ -595,9 +605,8 @@ main.sidebar-hidden {
         margin-left: 0;
     }
     
-    .table-container {
-        overflow-x: auto;
-        max-height: calc(100vh - 280px);
+    .data-card {
+        padding: 12px;
     }
     
     #data-table {
@@ -611,21 +620,21 @@ main.sidebar-hidden {
 
 @media (max-width: 768px) {
     .container {
-        padding: 8px 2px;
+        padding: 4px;
+    }
+    
+    .data-card {
+        padding: 10px;
+        border-radius: 6px;
     }
     
     .page-title {
         font-size: 18px;
-        padding: 10px 12px;
         margin-bottom: 12px;
-        margin-left: 2px;
-        margin-right: 2px;
     }
     
     .filter-section {
         padding: 12px;
-        margin-left: 2px;
-        margin-right: 2px;
     }
     
     .filter-controls {
@@ -645,7 +654,6 @@ main.sidebar-hidden {
     }
     
     .table-container {
-        max-height: calc(100vh - 260px);
         border-radius: 4px;
     }
     
@@ -710,9 +718,13 @@ main.sidebar-hidden {
 }
 
 @media (max-width: 480px) {
+    .data-card {
+        padding: 8px;
+    }
+    
     .page-title {
         font-size: 16px;
-        padding: 8px 10px;
+        margin-bottom: 10px;
     }
     
     .filter-section {
@@ -771,6 +783,10 @@ main.sidebar-hidden {
     width: 90%;
     max-width: 500px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .modal-header {
@@ -828,6 +844,33 @@ main.sidebar-hidden {
     margin: 24px 0;
 }
 
+/* Scrollable form body - keeps footer always visible inside modal */
+.form-scroll-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure form inside modal uses flex layout */
+.modal-content form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Footer stays fixed at bottom */
+.modal-footer {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding: 20px 24px;
+    border-top: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
 .form-group input,
 .form-group select {
     width: 100%;
@@ -848,14 +891,6 @@ main.sidebar-hidden {
     color: #dc2626;
     font-size: 14px;
     margin-top: 10px;
-}
-
-.modal-footer {
-    display: flex;
-    gap: 12px;
-    justify-content: flex-end;
-    padding: 20px 24px;
-    border-top: 1px solid #e5e7eb;
 }
 
 .btn-primary,
@@ -921,3 +956,35 @@ main.sidebar-hidden {
         font-size: 12px;
     }
 }
+
+/* Toast notification */
+.toast {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #fff;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 9999;
+    white-space: nowrap;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+}
+
+.toast.toast-success { background: #059669; }
+.toast.toast-error   { background: #dc2626; }
+.toast.toast-info    { background: #0066cc; }

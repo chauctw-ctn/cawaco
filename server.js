@@ -577,7 +577,7 @@ app.get('/api/telegram/config', verifyToken, async (req, res) => {
                 chatId: config.telegram.chatId,
                 refreshInterval: config.telegram.refreshInterval || 15,
                 delayThreshold: config.telegram.delayThreshold || 60,
-                alertCooldown: config.telegram.alertCooldown || 5
+                alertInterval: config.telegram.alertInterval || 30
             }
         });
     } catch (error) {
@@ -601,7 +601,7 @@ app.post('/api/telegram/config', verifyToken, async (req, res) => {
             });
         }
         
-        const { enabled, chatId, refreshInterval, delayThreshold, alertCooldown } = req.body;
+        const { enabled, chatId, refreshInterval, delayThreshold, alertInterval } = req.body;
         
         if (enabled !== undefined) {
             config.telegram.enabled = Boolean(enabled);
@@ -619,8 +619,8 @@ app.post('/api/telegram/config', verifyToken, async (req, res) => {
             config.telegram.delayThreshold = Math.max(1, parseInt(delayThreshold));
         }
         
-        if (alertCooldown !== undefined) {
-            config.telegram.alertCooldown = Math.max(1, parseInt(alertCooldown));
+        if (alertInterval !== undefined) {
+            config.telegram.alertInterval = Math.max(1, parseInt(alertInterval));
         }
         
         // Save to file
@@ -1632,6 +1632,16 @@ app.listen(PORT, async () => {
         console.error('❌ Lỗi khởi tạo database:', error.message);
     }
     
+    // ⚡ PRIORITY: Fetch MONRE permit data FIRST (for Telegram alerts)
+    console.log('🔔 [PRIORITY] Đang tải dữ liệu MONRE (giấy phép) cho cảnh báo Telegram...');
+    try {
+        const permitData = await monreModule.getPermitData();
+        console.log(`✅ Đã tải ${permitData.length} bản ghi MONRE - Sẵn sàng cảnh báo Telegram\n`);
+    } catch (error) {
+        console.error('❌ Lỗi tải dữ liệu MONRE lần đầu:', error.message);
+        console.log('⚠️ Cảnh báo Telegram có thể bị trễ cho đến khi có dữ liệu\n');
+    }
+    
     // Khởi động MQTT client
     console.log('🔌 Đang khởi động MQTT client...');
     try {
@@ -1706,6 +1716,17 @@ app.listen(PORT, async () => {
         }
     }, config.intervals.scada);
     
+    // 🔔 Cập nhật dữ liệu MONRE (giấy phép) mỗi 5 phút - ưu tiên cho Telegram alerts
+    setInterval(async () => {
+        try {
+            console.log('🔄 Đang làm mới dữ liệu MONRE (giấy phép)...');
+            const permitData = await monreModule.getPermitData(true); // Force refresh
+            console.log(`✅ [MONRE] Đã cập nhật ${permitData.length} bản ghi - Sẵn sàng cho Telegram alerts`);
+        } catch (error) {
+            console.error('❌ Lỗi cập nhật MONRE định kỳ:', error.message);
+        }
+    }, 5 * 60 * 1000); // 5 minutes
+    
     // Dọn dẹp dữ liệu cũ mỗi ngày (giữ lại 90 ngày)
     setInterval(async () => {
         console.log('🧹 Đang dọn dẹp dữ liệu cũ...');
@@ -1717,7 +1738,12 @@ app.listen(PORT, async () => {
         }
     }, config.intervals.cleanup);
     
-    console.log('🔄 Tự động lưu dữ liệu vào SQL mỗi 5 phút\n');
+    console.log('🔄 Các tác vụ định kỳ đã được khởi động:');
+    console.log('   • MONRE (Giấy phép): mỗi 5 phút - ưu tiên cho Telegram');
+    console.log('   • TVA: mỗi 5 phút');
+    console.log('   • MQTT: mỗi 1 phút');
+    console.log('   • SCADA: mỗi 5 phút');
+    console.log('   • Cleanup: mỗi ngày\n');
 });
 
 // Xử lý khi thoát

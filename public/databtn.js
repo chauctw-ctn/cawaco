@@ -4,12 +4,45 @@ let currentData = [];
 let lastUpdateTime = null;
 let allPermits = []; // Danh sách tất cả giấy phép
 let autoRefreshInterval = null; // Auto refresh timer
+let alertCheckInterval = null; // Alert check timer
 let refreshIntervalMinutes = 15; // Default 15 minutes (from Telegram config)
 let delayThresholdMinutes = 60; // Default 60 minutes (from Telegram config)
+let alertIntervalMinutes = 30; // Default 30 minutes - how often to send alerts for offline stations
 
 // Telegram alert tracking
 let stationStatusMap = {}; // Track previous status of each station
+let lastAlertTime = {}; // Track last alert time for each station (milliseconds, persisted in localStorage)
+let lastStatusCheckTime = 0; // Track last time we checked status (for debouncing)
 let telegramConfig = null; // Telegram configuration
+
+/**
+ * Load alert tracking state from localStorage (survives page reloads)
+ */
+function loadAlertStateFromStorage() {
+    try {
+        const savedStatusMap = localStorage.getItem('tg_stationStatusMap');
+        const savedAlertTime = localStorage.getItem('tg_lastAlertTime');
+        if (savedStatusMap) stationStatusMap = JSON.parse(savedStatusMap);
+        if (savedAlertTime) lastAlertTime = JSON.parse(savedAlertTime);
+        console.log('📂 Loaded alert state from storage:', Object.keys(stationStatusMap).length, 'stations');
+    } catch (e) {
+        console.warn('⚠️ Could not load alert state from localStorage, starting fresh');
+        stationStatusMap = {};
+        lastAlertTime = {};
+    }
+}
+
+/**
+ * Save alert tracking state to localStorage
+ */
+function saveAlertStateToStorage() {
+    try {
+        localStorage.setItem('tg_stationStatusMap', JSON.stringify(stationStatusMap));
+        localStorage.setItem('tg_lastAlertTime', JSON.stringify(lastAlertTime));
+    } catch (e) {
+        console.warn('⚠️ Could not save alert state to localStorage');
+    }
+}
 
 /**
  * Format timestamp to Vietnamese date/time
@@ -56,7 +89,7 @@ function formatDelay(minutes) {
 function createStatusBadge(delayMinutes) {
     const isOnline = delayMinutes <= delayThresholdMinutes;
     const statusClass = isOnline ? 'status-online' : 'status-offline';
-    const statusText = isOnline ? '✅ Online' : '❌ Mất kết nối';
+    const statusText = isOnline ? '✅ Bình thường' : '❌ Chưa gửi dữ liệu';
     return `<span class="status-badge ${statusClass}">${statusText}</span>`;
 }
 
@@ -128,11 +161,43 @@ async function fetchTelegramConfig() {
                 if (telegramConfig.delayThreshold) {
                     delayThresholdMinutes = Math.max(1, parseInt(telegramConfig.delayThreshold));
                 }
+                if (telegramConfig.alertInterval) {
+                    alertIntervalMinutes = Math.max(1, parseInt(telegramConfig.alertInterval));
+                }
             }
         }
     } catch (error) {
         console.error('Error fetching Telegram config:', error);
     }
+}
+
+/**
+ * Show a toast notification (replaces browser alert)
+ * @param {string} message
+ * @param {'success'|'error'|'info'} type
+ * @param {number} duration ms
+ */
+function showToast(message, type = 'success', duration = 3000) {
+    let toast = document.getElementById('app-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'app-toast';
+        toast.className = 'toast';
+        document.body.appendChild(toast);
+    }
+    // Reset classes
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    
+    // Trigger show
+    requestAnimationFrame(() => {
+        toast.classList.add('show');
+    });
+    
+    clearTimeout(toast._hideTimeout);
+    toast._hideTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+    }, duration);
 }
 
 /**
@@ -142,12 +207,18 @@ async function sendTelegramAlert(station, status, measurementTime, delayMinutes)
     try {
         // Check if Telegram is enabled
         if (!telegramConfig || !telegramConfig.enabled) {
+            console.log(`⚠️ Telegram disabled - skip alert for ${station}`);
             return;
         }
         
+        console.log(`📤 Chuẩn bị gửi Telegram alert: ${station} - ${status} (${delayMinutes} phút)`);
+        
         // Send alert
         const token = localStorage.getItem('authToken');
-        if (!token) return;
+        if (!token) {
+            console.log(`⚠️ No auth token - skip alert`);
+            return;
+        }
         
         const response = await fetch('/api/telegram/alert', {
             method: 'POST',
@@ -166,11 +237,15 @@ async function sendTelegramAlert(station, status, measurementTime, delayMinutes)
         if (response.ok) {
             const data = await response.json();
             if (data.success) {
-                console.log(`✅ Sent Telegram alert for ${station}: ${status}`);
+                console.log(`✅ Đã gửi Telegram alert: ${station} - ${status}`);
+            } else {
+                console.log(`❌ Telegram alert failed: ${data.message}`);
             }
+        } else {
+            console.log(`❌ Telegram API error: ${response.status}`);
         }
     } catch (error) {
-        console.error('Error sending Telegram alert:', error);
+        console.error('❌ Error sending Telegram alert:', error);
     }
 }
 
@@ -183,12 +258,24 @@ function checkStationStatusChanges() {
         return;
     }
     
-    // Group data by station and recalculate delays
-    const stationData = {};
     const now = Date.now();
     
+    // Debounce: Don't check more than once per 10 seconds to prevent spam
+    const timeSinceLastCheck = now - lastStatusCheckTime;
+    if (timeSinceLastCheck < 10000) { // 10 seconds
+        console.log(`⏸️ Debouncing status check (${Math.floor(timeSinceLastCheck / 1000)}s since last check)`);
+        return;
+    }
+    
+    lastStatusCheckTime = now;
+    
+    // Group data by station and recalculate delays
+    const stationData = {};
+    
+    console.log(`🔍 Đang kiểm tra ${currentData.length} records từ API...`);
+    
     currentData.forEach(row => {
-        const station = row.station || 'N/A';
+        const station = (row.station || 'N/A').trim(); // Trim whitespace to avoid duplicates
         if (!stationData[station]) {
             // Recalculate delay based on current time
             const measurementTime = new Date(row.measurementTime).getTime();
@@ -197,12 +284,15 @@ function checkStationStatusChanges() {
             stationData[station] = {
                 station: station,
                 delayMinutes: currentDelayMinutes,
-                measurementTime: row.measurementTime
+                measurementTime: row.measurementTime,
+                recordCount: 1 // Track how many records merged
             };
         } else {
             // Keep the maximum delay for this station
             const measurementTime = new Date(row.measurementTime).getTime();
             const currentDelayMinutes = Math.floor((now - measurementTime) / (1000 * 60));
+            
+            stationData[station].recordCount++; // Increment record count
             
             if (currentDelayMinutes > stationData[station].delayMinutes) {
                 stationData[station].delayMinutes = currentDelayMinutes;
@@ -211,36 +301,76 @@ function checkStationStatusChanges() {
         }
     });
     
-    // Check each station and send periodic alerts
+    const stationList = Object.keys(stationData).map(key => 
+        `${key} (${stationData[key].recordCount} records, delay=${stationData[key].delayMinutes}m)`
+    );
+    console.log(`📊 Đã group thành ${Object.keys(stationData).length} trạm duy nhất:`, stationList);
+    
+    let stateChanged = false;
+    
+    // Check each station and send alerts based on lastAlertTime (works across page reloads)
     Object.values(stationData).forEach(data => {
         const station = data.station;
         const isOnline = data.delayMinutes <= delayThresholdMinutes;
         const currentStatus = isOnline ? 'online' : 'offline';
-        const previousStatus = stationStatusMap[station];
-        const measurementTime = data.measurementTime; // Get measurement time
-        const delayMinutes = data.delayMinutes; // Get delay in minutes
+        const previousStatus = stationStatusMap[station]; // Restored from localStorage
+        const measurementTime = data.measurementTime;
+        const delayMinutes = data.delayMinutes;
         
-        // Skip first check after page reload (when previousStatus is undefined)
-        if (previousStatus === undefined) {
-            console.log(`ℹ️ Khởi tạo trạm ${station}: ${currentStatus} (${delayMinutes} phút)`);
-        }
-        // Send periodic alert for offline stations (only after first check)
-        else if (currentStatus === 'offline') {
-            console.log(`🔔 Cảnh báo trạm ${station} mất kết nối (${delayMinutes} phút)`);
-            sendTelegramAlert(station, 'offline', measurementTime, delayMinutes);
-        }
-        // Send alert when station comes back online (status changed from offline to online)
-        else if (previousStatus === 'offline' && currentStatus === 'online') {
-            console.log(`🔔 Trạm ${station} đã kết nối lại`);
+        if (currentStatus === 'offline') {
+            // Use lastAlertTime to throttle - works correctly across page reloads
+            const lastAlert = lastAlertTime[station] || 0;
+            const timeSinceLastAlert = Math.floor((now - lastAlert) / (1000 * 60)); // minutes
+            
+            if (timeSinceLastAlert >= alertIntervalMinutes) {
+                const isFirstAlert = !lastAlertTime[station];
+                console.log(`🔔 ${isFirstAlert ? 'Cảnh báo ban đầu' : `Cảnh báo định kỳ (${timeSinceLastAlert} phút trước)`} - Trạm ${station} chưa gửi dữ liệu (${delayMinutes} phút)`);
+                sendTelegramAlert(station, 'offline', measurementTime, delayMinutes);
+                lastAlertTime[station] = now;
+                stateChanged = true;
+            } else {
+                console.log(`⏳ Trạm ${station} offline (${delayMinutes} phút) - Chờ ${alertIntervalMinutes - timeSinceLastAlert} phút nữa`);
+            }
+        } else if (previousStatus === 'offline' && currentStatus === 'online') {
+            // Station just came back online
+            console.log(`✅ Trạm ${station} đã kết nối lại - Gửi thông báo`);
             sendTelegramAlert(station, 'online', measurementTime, delayMinutes);
+            delete lastAlertTime[station];
+            stateChanged = true;
+        } else {
+            console.log(`✅ Trạm ${station} bình thường (${delayMinutes} phút)`);
         }
         
         // Update status map
         stationStatusMap[station] = currentStatus;
     });
+    
+    // Persist state to localStorage so reloads don't re-trigger alerts
+    if (stateChanged) {
+        saveAlertStateToStorage();
+    } else {
+        // Always save stationStatusMap so online/offline transitions are tracked across reloads
+        localStorage.setItem('tg_stationStatusMap', JSON.stringify(stationStatusMap));
+    }
 }
 
-// Removed setupStatusCheckInterval - alerts are now sent only after data fetch/update
+/**
+ * Setup alert check interval - checks station status periodically
+ */
+function setupAlertCheckInterval() {
+    // Clear existing interval
+    if (alertCheckInterval) {
+        clearInterval(alertCheckInterval);
+    }
+    
+    // Set new interval based on alert interval (convert minutes to milliseconds)
+    alertCheckInterval = setInterval(() => {
+        console.log(`⏰ Kiểm tra trạng thái trạm định kỳ (mỗi ${alertIntervalMinutes} phút)`);
+        checkStationStatusChanges();
+    }, alertIntervalMinutes * 60 * 1000);
+    
+    console.log(`✅ Alert check interval set to ${alertIntervalMinutes} minutes`);
+}
 
 /**
  * Setup auto refresh
@@ -260,9 +390,9 @@ function setupAutoRefresh() {
 }
 
 /**
- * Fetch data from API
+ * Fetch data from API with retry logic
  */
-async function fetchData() {
+async function fetchData(retryCount = 0, maxRetries = 3) {
     try {
         showLoading();
         
@@ -274,7 +404,8 @@ async function fetchData() {
         const response = await fetch('/api/permit-data', {
             headers: {
                 'Authorization': `Bearer ${token}`
-            }
+            },
+            timeout: 10000 // 10 second timeout
         });
         
         if (!response.ok) {
@@ -293,6 +424,16 @@ async function fetchData() {
             throw new Error(data.message || 'Không thể lấy dữ liệu');
         }
         
+        // Check if we got empty data on initial load
+        if (!currentData.length && (!data.data || data.data.length === 0) && retryCount < maxRetries) {
+            console.log(`⏳ Server đang khởi động, chưa có dữ liệu. Thử lại sau ${2 * (retryCount + 1)} giây... (${retryCount + 1}/${maxRetries})`);
+            hideLoading();
+            
+            // Exponential backoff: wait 2s, 4s, 6s
+            await new Promise(resolve => setTimeout(resolve, 2000 * (retryCount + 1)));
+            return fetchData(retryCount + 1, maxRetries);
+        }
+        
         currentData = data.data || [];
         lastUpdateTime = Date.now();
         
@@ -306,8 +447,24 @@ async function fetchData() {
         renderTable();
         updateLastUpdateDisplay();
         
+        // Show success message on first successful load after retries
+        if (retryCount > 0) {
+            console.log(`✅ Đã tải dữ liệu thành công sau ${retryCount} lần thử`);
+        }
+        
     } catch (error) {
         console.error('Error fetching data:', error);
+        
+        // Retry on network error or server error
+        if (retryCount < maxRetries && (error.message.includes('Failed to fetch') || error.message.includes('500'))) {
+            console.log(`⚠️ Lỗi kết nối. Thử lại sau ${2 * (retryCount + 1)} giây... (${retryCount + 1}/${maxRetries})`);
+            hideLoading();
+            
+            // Exponential backoff
+            await new Promise(resolve => setTimeout(resolve, 2000 * (retryCount + 1)));
+            return fetchData(retryCount + 1, maxRetries);
+        }
+        
         hideLoading();
         showError(error.message || 'Không thể tải dữ liệu. Vui lòng thử lại.');
     }
@@ -525,6 +682,9 @@ function renderTable() {
  * Initialize page
  */
 async function initializePage() {
+    // Load persisted alert state BEFORE fetching config/data (prevents re-alerting on reload)
+    loadAlertStateFromStorage();
+    
     // Fetch Telegram configuration first (this loads all settings)
     await fetchTelegramConfig();
     
@@ -587,6 +747,11 @@ async function initializePage() {
     
     // Setup auto refresh
     setupAutoRefresh();
+    
+    // Setup alert check interval (only if Telegram is enabled)
+    if (telegramConfig && telegramConfig.enabled) {
+        setupAlertCheckInterval();
+    }
 }
 
 /**
@@ -669,11 +834,13 @@ async function loadTelegramConfigToModal() {
                 const chatIdInput = document.getElementById('telegram-chat-id');
                 const refreshIntervalInput = document.getElementById('telegram-refresh-interval');
                 const delayThresholdInput = document.getElementById('telegram-delay-threshold');
+                const alertIntervalInput = document.getElementById('telegram-alert-interval');
                 
                 if (enabledCheckbox) enabledCheckbox.checked = data.config.enabled;
                 if (chatIdInput) chatIdInput.value = data.config.chatId || '';
                 if (refreshIntervalInput) refreshIntervalInput.value = data.config.refreshInterval || 15;
                 if (delayThresholdInput) delayThresholdInput.value = data.config.delayThreshold || 60;
+                if (alertIntervalInput) alertIntervalInput.value = data.config.alertInterval || 30;
             }
         }
     } catch (error) {
@@ -689,6 +856,7 @@ async function saveTelegramConfig() {
     const chatIdInput = document.getElementById('telegram-chat-id');
     const refreshIntervalInput = document.getElementById('telegram-refresh-interval');
     const delayThresholdInput = document.getElementById('telegram-delay-threshold');
+    const alertIntervalInput = document.getElementById('telegram-alert-interval');
     const telegramConfigError = document.getElementById('telegram-config-error');
     const telegramConfigModal = document.getElementById('telegram-config-modal');
     
@@ -704,6 +872,7 @@ async function saveTelegramConfig() {
         const chatId = chatIdInput.value.trim();
         const refreshInterval = parseInt(refreshIntervalInput.value);
         const delayThreshold = parseInt(delayThresholdInput.value);
+        const alertInterval = parseInt(alertIntervalInput.value);
         
         // Validate
         if (enabled && !chatId) {
@@ -718,6 +887,10 @@ async function saveTelegramConfig() {
             throw new Error('Độ trễ offline tối thiểu là 1 phút');
         }
         
+        if (isNaN(alertInterval) || alertInterval < 1) {
+            throw new Error('Chu kỳ gửi cảnh báo tối thiểu là 1 phút');
+        }
+        
         const response = await fetch('/api/telegram/config', {
             method: 'POST',
             headers: {
@@ -728,7 +901,8 @@ async function saveTelegramConfig() {
                 enabled: enabled,
                 chatId: chatId,
                 refreshInterval: refreshInterval,
-                delayThreshold: delayThreshold
+                delayThreshold: delayThreshold,
+                alertInterval: alertInterval
             })
         });
         
@@ -742,9 +916,27 @@ async function saveTelegramConfig() {
         telegramConfig = data.config;
         refreshIntervalMinutes = refreshInterval;
         delayThresholdMinutes = delayThreshold;
+        alertIntervalMinutes = alertInterval;
         
-        // Restart interval with new settings
+        // Reset tracking variables and clear localStorage when config changes
+        lastStatusCheckTime = 0;
+        stationStatusMap = {};
+        lastAlertTime = {};
+        localStorage.removeItem('tg_stationStatusMap');
+        localStorage.removeItem('tg_lastAlertTime');
+        console.log('🔄 Reset alert tracking + cleared localStorage - new config will apply immediately');
+        
+        // Restart intervals with new settings
         setupAutoRefresh();
+        
+        // Setup or clear alert check interval based on enabled status
+        if (enabled) {
+            setupAlertCheckInterval();
+        } else if (alertCheckInterval) {
+            clearInterval(alertCheckInterval);
+            alertCheckInterval = null;
+            console.log('⏹️ Alert check interval stopped (Telegram disabled)');
+        }
         
         // Re-render table with new threshold
         renderTable();
@@ -752,8 +944,8 @@ async function saveTelegramConfig() {
         // Close modal
         telegramConfigModal.style.display = 'none';
         
-        // Show success message
-        alert('Đã lưu cấu hình Telegram thành công!');
+        // Show success toast
+        showToast('✅ Đã lưu cấu hình Telegram thành công!');
         
     } catch (error) {
         console.error('Error saving Telegram config:', error);
