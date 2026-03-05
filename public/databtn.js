@@ -10,8 +10,6 @@ let delayThresholdMinutes = 60; // Default 60 minutes (from Telegram config)
 // Telegram alert tracking
 let stationStatusMap = {}; // Track previous status of each station
 let telegramConfig = null; // Telegram configuration
-let pendingOfflineAlerts = new Set(); // Stations to alert on next check cycle
-let isFirstCheck = true; // Track if this is the first check after page load
 
 /**
  * Format timestamp to Vietnamese date/time
@@ -213,7 +211,7 @@ function checkStationStatusChanges() {
         }
     });
     
-    // Check each station for status changes
+    // Check each station and send periodic alerts
     Object.values(stationData).forEach(data => {
         const station = data.station;
         const isOnline = data.delayMinutes <= delayThresholdMinutes;
@@ -222,53 +220,20 @@ function checkStationStatusChanges() {
         const measurementTime = data.measurementTime; // Get measurement time
         const delayMinutes = data.delayMinutes; // Get delay in minutes
         
-        // First check after page reload
-        if (isFirstCheck) {
-            // Initialize status without sending alert
-            if (currentStatus === 'offline') {
-                // Mark this station to send alert on next check cycle
-                pendingOfflineAlerts.add(station);
-                console.log(`ℹ️ Station ${station} is offline - will alert on next cycle`);
-            } else {
-                console.log(`ℹ️ Station ${station} initialized: ${currentStatus}`);
-            }
+        // Always send alert for offline stations (periodic alert)
+        if (currentStatus === 'offline') {
+            console.log(`🔔 Station ${station} is offline (${delayMinutes} minutes delay)`);
+            sendTelegramAlert(station, 'offline', measurementTime, delayMinutes);
         }
-        // Second check (first cycle after reload) - send alerts for pending offline stations
-        else if (pendingOfflineAlerts.has(station)) {
-            if (currentStatus === 'offline') {
-                // Station still offline after first cycle - send alert
-                console.log(`🔔 Station ${station} confirmed offline (> ${delayMinutes} minutes)`);
-                sendTelegramAlert(station, 'offline', measurementTime, delayMinutes);
-                pendingOfflineAlerts.delete(station);
-            } else {
-                // Station came back online before alert was sent
-                console.log(`ℹ️ Station ${station} back online before alert sent`);
-                pendingOfflineAlerts.delete(station);
-            }
-        }
-        // Normal status change detection
-        else if (previousStatus !== undefined) {
-            // Status changed from online to offline
-            if (previousStatus === 'online' && currentStatus === 'offline') {
-                console.log(`🔔 Station ${station} went offline`);
-                sendTelegramAlert(station, 'offline', measurementTime, delayMinutes);
-            }
-            // Status changed from offline to online
-            else if (previousStatus === 'offline' && currentStatus === 'online') {
-                console.log(`🔔 Station ${station} came back online`);
-                sendTelegramAlert(station, 'online', measurementTime, delayMinutes);
-            }
+        // Send alert when station comes back online (status changed from offline to online)
+        else if (previousStatus === 'offline' && currentStatus === 'online') {
+            console.log(`🔔 Station ${station} came back online`);
+            sendTelegramAlert(station, 'online', measurementTime, delayMinutes);
         }
         
         // Update status map
         stationStatusMap[station] = currentStatus;
     });
-    
-    // Mark that first check is complete
-    if (isFirstCheck) {
-        isFirstCheck = false;
-        console.log(`✅ First check complete. ${pendingOfflineAlerts.size} stations queued for alert on next cycle.`);
-    }
 }
 
 // Removed setupStatusCheckInterval - alerts are now sent only after data fetch/update
