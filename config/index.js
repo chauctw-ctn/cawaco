@@ -120,7 +120,7 @@ module.exports = {
     telegram: {
         botToken: process.env.TELEGRAM_BOT_TOKEN || '8705883687:AAEx3A1Y3VshJG1R4Si9syxQsOFX9RSQVu0',
         chatId: process.env.TELEGRAM_CHAT_ID || '', // Chat ID để nhận cảnh báo (cần cấu hình)
-        alertCooldown: 5, // 5 phút - Thời gian tối thiểu giữa 2 lần cảnh báo cho cùng 1 trạm
+        alertRepeatInterval: 1, // 1 phút - Chu kỳ nhắc lại cảnh báo cho các trạm vẫn offline
         refreshInterval: 15, // 15 phút - Chu kỳ quét dữ liệu mới từ server
         delayThreshold: 60, // 60 phút - Độ trễ tối đa trước khi trạm được coi là offline
         enabled: false // Bật/tắt chức năng cảnh báo (mặc định tắt cho đến khi cấu hình chat ID)

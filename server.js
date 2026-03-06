@@ -36,7 +36,7 @@ function saveTelegramConfig() {
             chatId: config.telegram.chatId,
             refreshInterval: config.telegram.refreshInterval || 15,
             delayThreshold: config.telegram.delayThreshold || 60,
-            alertCooldown: config.telegram.alertCooldown || 5
+            alertRepeatInterval: config.telegram.alertRepeatInterval || 1
         };
         fs.writeFileSync(TELEGRAM_CONFIG_FILE, JSON.stringify(configToSave, null, 2), 'utf8');
         console.log('💾 Saved Telegram config to file');
@@ -577,7 +577,7 @@ app.get('/api/telegram/config', verifyToken, async (req, res) => {
                 chatId: config.telegram.chatId,
                 refreshInterval: config.telegram.refreshInterval || 15,
                 delayThreshold: config.telegram.delayThreshold || 60,
-                alertCooldown: config.telegram.alertCooldown || 5
+                alertRepeatInterval: config.telegram.alertRepeatInterval || 1
             }
         });
     } catch (error) {
@@ -601,7 +601,7 @@ app.post('/api/telegram/config', verifyToken, async (req, res) => {
             });
         }
         
-        const { enabled, chatId, refreshInterval, delayThreshold, alertCooldown } = req.body;
+        const { enabled, chatId, refreshInterval, delayThreshold, alertRepeatInterval } = req.body;
         
         if (enabled !== undefined) {
             config.telegram.enabled = Boolean(enabled);
@@ -619,8 +619,8 @@ app.post('/api/telegram/config', verifyToken, async (req, res) => {
             config.telegram.delayThreshold = Math.max(1, parseInt(delayThreshold));
         }
         
-        if (alertCooldown !== undefined) {
-            config.telegram.alertCooldown = Math.max(1, parseInt(alertCooldown));
+        if (alertRepeatInterval !== undefined) {
+            config.telegram.alertRepeatInterval = Math.max(1, parseInt(alertRepeatInterval));
         }
         
         // Save to file
@@ -641,7 +641,7 @@ app.post('/api/telegram/config', verifyToken, async (req, res) => {
                 chatId: config.telegram.chatId,
                 refreshInterval: config.telegram.refreshInterval || 15,
                 delayThreshold: config.telegram.delayThreshold || 60,
-                alertCooldown: config.telegram.alertCooldown || 5
+                alertRepeatInterval: config.telegram.alertRepeatInterval || 1
             }
         });
         
