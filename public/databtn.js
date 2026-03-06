@@ -1188,7 +1188,7 @@ function renderTable() {
             if (index === 0) {
                 tr.innerHTML = `
                     <td rowspan="${rowCount}">${stationNumber}</td>
-                    <td rowspan="${rowCount}">${row.station || 'N/A'}</td>
+                    <td rowspan="${rowCount}" class="station-name">${row.station || 'N/A'}</td>
                     <td>${row.parameter || 'N/A'}</td>
                     <td>${row.value !== null && row.value !== undefined ? row.value : 'N/A'}</td>
                     <td>${row.unit || 'N/A'}</td>
@@ -1211,6 +1211,9 @@ function renderTable() {
             tbody.appendChild(tr);
         });
     });
+    
+    // Make station names clickable after rendering
+    makeStationNamesClickable();
 }
 
 /**
@@ -1292,6 +1295,9 @@ async function initializePage() {
     
     // Setup status check interval for periodic alerts
     setupStatusCheckInterval();
+    
+    // Setup station history modal
+    setupStationHistoryModal();
     
     console.log('✅ Databtn page initialization complete');
 }
@@ -1554,6 +1560,285 @@ function initializeTelegramModal() {
             setupTelegramConfigModal();
         }, { once: true });
     }
+}
+
+// ============================================
+// STATION HISTORY MODAL
+// ============================================
+
+/**
+ * Open station history modal
+ */
+async function openStationHistoryModal(stationName) {
+    const modal = document.getElementById('station-history-modal');
+    const modalTitle = document.getElementById('history-modal-title');
+    const stationNameEl = document.getElementById('history-station-name');
+    const loading = document.getElementById('history-loading');
+    const error = document.getElementById('history-error');
+    const tableContainer = document.getElementById('history-table-container');
+    const tableBody = document.getElementById('history-table-body');
+    
+    if (!modal) return;
+    
+    // Show modal
+    modal.style.display = 'flex';
+    
+    // Set station name and title
+    if (stationNameEl) {
+        stationNameEl.textContent = stationName;
+    }
+    if (modalTitle) {
+        modalTitle.innerHTML = `Lịch sử 7 ngày gần nhất - <span id="history-station-name">${stationName}</span>`;
+    }
+    
+    // Show loading
+    if (loading) loading.style.display = 'block';
+    if (error) error.style.display = 'none';
+    if (tableContainer) tableContainer.style.display = 'none';
+    if (tableBody) tableBody.innerHTML = '';
+    
+    try {
+        // Fetch history data (last 7 days)
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            throw new Error('Vui lòng đăng nhập lại');
+        }
+        
+        const response = await fetch(`/api/station-history/${encodeURIComponent(stationName)}?days=7`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.message || 'Không thể lấy dữ liệu lịch sử');
+        }
+        
+        // Hide loading
+        if (loading) loading.style.display = 'none';
+        
+        // Show table
+        if (tableContainer) tableContainer.style.display = 'block';
+        
+        // Render history data
+        renderHistoryTable(result.data);
+        
+    } catch (err) {
+        console.error('Error fetching station history:', err);
+        
+        // Hide loading
+        if (loading) loading.style.display = 'none';
+        
+        // Show error
+        if (error) {
+            error.textContent = err.message || 'Không thể lấy dữ liệu lịch sử';
+            error.style.display = 'block';
+        }
+    }
+}
+
+/**
+ * Render history data in table
+ */
+function renderHistoryTable(data) {
+    const tableBody = document.getElementById('history-table-body');
+    const tableHead = document.querySelector('#history-table thead');
+    if (!tableBody || !tableHead) return;
+    
+    tableBody.innerHTML = '';
+    
+    if (!data || data.length === 0) {
+        // Reset header to default
+        tableHead.innerHTML = `
+            <tr>
+                <th>STT</th>
+                <th>Thời gian đo</th>
+                <th>Thông số</th>
+                <th>Giá trị</th>
+                <th>Đơn vị</th>
+            </tr>
+        `;
+        
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="100" style="text-align: center; padding: 40px; color: #9ca3af;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 12px; display: block; opacity: 0.5;">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <div style="font-size: 14px; font-weight: 500;">Không có dữ liệu lịch sử</div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">Trạm chưa có dữ liệu trong hệ thống</div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    // Group data by timestamp
+    const groupedByTime = {};
+    const parameters = new Set();
+    const parameterUnits = {}; // Store units for each parameter
+    
+    data.forEach(row => {
+        const timeKey = row.time || formatDateTime(row.timestamp);
+        const paramName = row.parameter_name || '-';
+        
+        if (!groupedByTime[timeKey]) {
+            groupedByTime[timeKey] = {
+                timestamp: row.timestamp,
+                time: timeKey,
+                parameters: {}
+            };
+        }
+        
+        groupedByTime[timeKey].parameters[paramName] = {
+            value: row.value,
+            unit: row.unit
+        };
+        
+        parameters.add(paramName);
+        
+        // Store unit for this parameter
+        if (row.unit && !parameterUnits[paramName]) {
+            parameterUnits[paramName] = row.unit;
+        }
+    });
+    
+    // Convert to array and sort by timestamp descending
+    const timePoints = Object.values(groupedByTime).sort((a, b) => 
+        new Date(b.timestamp) - new Date(a.timestamp)
+    );
+    
+    // Get sorted parameters list
+    const sortedParams = Array.from(parameters).sort();
+    
+    // Create dynamic table header
+    let headerHTML = '<tr><th>STT</th><th>Thời gian đo</th>';
+    sortedParams.forEach(param => {
+        const unit = parameterUnits[param] || '';
+        const headerText = unit ? `${param}<br><span style="font-size: 11px; font-weight: 400;">(${unit})</span>` : param;
+        headerHTML += `<th>${headerText}</th>`;
+    });
+    headerHTML += '</tr>';
+    tableHead.innerHTML = headerHTML;
+    
+    // Render each time point as a row
+    timePoints.forEach((timePoint, index) => {
+        const tr = document.createElement('tr');
+        
+        let rowHTML = `
+            <td>${index + 1}</td>
+            <td>${timePoint.time}</td>
+        `;
+        
+        // Add value for each parameter
+        sortedParams.forEach(param => {
+            const paramData = timePoint.parameters[param];
+            
+            if (paramData && paramData.value !== null && paramData.value !== undefined) {
+                // Format value with proper number formatting
+                let formattedValue = paramData.value;
+                
+                if (typeof paramData.value === 'number') {
+                    // Check if it's a large number (>= 1000) to use thousand separator
+                    if (Math.abs(paramData.value) >= 1000) {
+                        formattedValue = paramData.value.toLocaleString('vi-VN', { 
+                            minimumFractionDigits: 0, 
+                            maximumFractionDigits: 2 
+                        });
+                    } else {
+                        formattedValue = paramData.value.toLocaleString('vi-VN', { 
+                            minimumFractionDigits: 0, 
+                            maximumFractionDigits: 2 
+                        });
+                    }
+                } else {
+                    // Try to parse string as number
+                    const numValue = parseFloat(paramData.value);
+                    if (!isNaN(numValue)) {
+                        if (Math.abs(numValue) >= 1000) {
+                            formattedValue = numValue.toLocaleString('vi-VN', { 
+                                minimumFractionDigits: 0, 
+                                maximumFractionDigits: 2 
+                            });
+                        } else {
+                            formattedValue = numValue.toLocaleString('vi-VN', { 
+                                minimumFractionDigits: 0, 
+                                maximumFractionDigits: 2 
+                            });
+                        }
+                    }
+                }
+                
+                rowHTML += `<td style="text-align: right;">${formattedValue}</td>`;
+            } else {
+                rowHTML += `<td style="text-align: center; color: #9ca3af;">-</td>`;
+            }
+        });
+        
+        tr.innerHTML = rowHTML;
+        tableBody.appendChild(tr);
+    });
+}
+
+/**
+ * Setup station history modal
+ */
+function setupStationHistoryModal() {
+    const modal = document.getElementById('station-history-modal');
+    const closeBtn = document.getElementById('close-history-modal');
+    
+    if (!modal) return;
+    
+    // Close button
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+    }
+    
+    // Close on background click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+    
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.style.display === 'flex') {
+            modal.style.display = 'none';
+        }
+    });
+}
+
+/**
+ * Make station names clickable in table
+ */
+function makeStationNamesClickable() {
+    const tableBody = document.getElementById('table-body');
+    if (!tableBody) return;
+    
+    // Find all station name cells (second column, with station-name class)
+    const stationCells = tableBody.querySelectorAll('td.station-name');
+    
+    stationCells.forEach(cell => {
+        const stationName = cell.textContent.trim();
+        
+        // Make clickable
+        cell.style.cursor = 'pointer';
+        cell.style.color = '#0066cc';
+        cell.style.textDecoration = 'underline';
+        cell.title = `Xem lịch sử dữ liệu của ${stationName}`;
+        
+        // Add click event
+        cell.addEventListener('click', () => {
+            openStationHistoryModal(stationName);
+        });
+    });
 }
 
 // Call initialization

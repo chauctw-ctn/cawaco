@@ -184,7 +184,82 @@ async function getPermitData(forceRefresh = false) {
     }
 }
 
+/**
+ * Get station history (last 30 days data for a specific station)
+ */
+async function getStationHistory(stationName, days = 30) {
+    try {
+        const token = await getToken();
+        
+        // Calculate timestamp for 30 days ago
+        const now = Date.now();
+        const daysAgo = now - (days * 24 * 60 * 60 * 1000);
+        
+        // Query for specific station within date range
+        const stationFilter = `${PROJECT_FILTER} AND tram='${stationName.replace(/'/g, "''")}' AND thoigiando >= ${daysAgo}`;
+        
+        const params = {
+            f: 'json',
+            where: stationFilter,
+            outFields: '*',
+            orderByFields: 'thoigiando DESC',
+            resultRecordCount: 10000, // High limit to get all records within date range
+            token: token
+        };
+        
+        const response = await axios.get(DATA_URL, { 
+            params,
+            timeout: 30000
+        });
+        
+        const features = response.data.features || [];
+        
+        if (features.length === 0) {
+            console.log(`⚠️ Không có dữ liệu lịch sử cho trạm: ${stationName} trong ${days} ngày qua`);
+            return [];
+        }
+        
+        // Process history data
+        const historyData = features.map(f => {
+            const attr = f.attributes;
+            const projectName = attr.congtrinh;
+            const permit = getPermitByProject(projectName) || "Chưa có GP";
+            
+            // Convert timestamp to Date object
+            const measurementDate = new Date(attr.thoigiando);
+            const formattedTime = measurementDate.toLocaleString('vi-VN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+            
+            return {
+                station_name: attr.tram,
+                parameter_name: attr.chiso,
+                value: attr.giatri,
+                unit: attr.donvido,
+                timestamp: attr.thoigiando,
+                time: formattedTime,
+                project: projectName,
+                permit: permit
+            };
+        });
+        
+        console.log(`✅ Lấy được ${historyData.length} records lịch sử cho trạm: ${stationName} trong ${days} ngày qua`);
+        return historyData;
+        
+    } catch (error) {
+        console.error(`❌ Lỗi lấy lịch sử trạm ${stationName}:`, error.message);
+        throw error;
+    }
+}
+
 module.exports = {
     getPermitData,
-    fetchMonreData
+    fetchMonreData,
+    getStationHistory
 };

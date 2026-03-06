@@ -398,6 +398,42 @@ app.post('/api/permit-data/refresh', verifyToken, async (req, res) => {
     }
 });
 
+// Get station history data (30 latest records)
+app.get('/api/station-history/:stationName', verifyToken, async (req, res) => {
+    try {
+        const { stationName } = req.params;
+        const { days = 30 } = req.query; // Allow custom days param, default 30
+        
+        if (!stationName) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Thiếu tên trạm' 
+            });
+        }
+        
+        const decodedStationName = decodeURIComponent(stationName);
+        const numDays = parseInt(days) || 30;
+        
+        // Get history from MONRE API (all records within date range)
+        const historyData = await monreModule.getStationHistory(decodedStationName, numDays);
+        
+        res.json({
+            success: true,
+            stationName: decodedStationName,
+            days: numDays,
+            totalRecords: historyData.length,
+            data: historyData
+        });
+    } catch (error) {
+        console.error('Error fetching station history:', error.message);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Không thể lấy dữ liệu lịch sử',
+            error: error.message 
+        });
+    }
+});
+
 // ============================================
 // TELEGRAM ALERT API
 // ============================================

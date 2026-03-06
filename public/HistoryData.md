@@ -1,0 +1,8 @@
+LỊCH SỬ DỮ LIỆU
+Công trình: CONGTYCOPHANCAPNUOCC - Trạm quan trắc: G21 - Chỉ số:
+Từ thời điểm: 27/02/2026 12:01:07 - Đến thời điểm: 06/03/2026 12:01:07
+STT	Thời gian đo	MUCNUOC (m)	LUULUONG (m3/h)
+1	27/02/2026 20:00:00	30.71	97.28
+2	27/02/2026 21:00:00	30.6	96.55
+3	27/02/2026 22:00:00	28.25	67.61
+4	27/02/2026 23:00:00	27.09	52.52

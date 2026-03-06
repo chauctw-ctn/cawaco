@@ -898,6 +898,275 @@ main.sidebar-hidden {
     }
 }
 
+/* ============================================ */
+/* STATION HISTORY MODAL STYLES */
+/* ============================================ */
+
+/* History Modal Container */
+#station-history-modal .modal-content {
+    max-width: 900px;
+}
+
+#history-modal-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+#history-station-name {
+    color: #0066cc;
+    font-weight: 700;
+}
+
+/* History Table Container */
+#history-table-container {
+    max-height: 500px;
+    overflow-y: auto;
+    overflow-x: auto;
+    position: relative;
+    background: white;
+    border-radius: 6px;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* History Table Styles - Match main table */
+#history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 600px;
+}
+
+#history-table thead {
+    background-color: #0066cc;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+
+#history-table th {
+    padding: 10px 8px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    white-space: nowrap;
+    background-color: #0066cc;
+    vertical-align: middle;
+}
+
+#history-table th:first-child {
+    width: 60px;
+    position: sticky;
+    left: 0;
+    z-index: 21;
+}
+
+#history-table th:nth-child(2) {
+    min-width: 150px;
+    position: sticky;
+    left: 60px;
+    z-index: 21;
+}
+
+#history-table th span {
+    display: block;
+    margin-top: 2px;
+}
+
+#history-table td {
+    padding: 10px 8px;
+    font-size: 13px;
+    color: #1f2937;
+    text-align: center;
+    border: 1px solid #e0e0e0;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+#history-table td:first-child {
+    text-align: center;
+    color: #6b7280;
+    font-weight: 500;
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    background: inherit;
+}
+
+#history-table td:nth-child(2) {
+    min-width: 150px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #374151;
+    position: sticky;
+    left: 60px;
+    z-index: 10;
+    background: inherit;
+}
+
+/* Value columns - right aligned with proper styling */
+#history-table td[style*="text-align: right"] {
+    font-weight: 600;
+    color: #059669;
+    padding-right: 12px;
+}
+
+/* Empty cells */
+#history-table td[style*="color: #9ca3af"] {
+    font-style: italic;
+}
+
+/* Alternating row colors for history table */
+#history-table tbody tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+#history-table tbody tr:nth-child(even) td:first-child,
+#history-table tbody tr:nth-child(even) td:nth-child(2) {
+    background-color: #f8f9fa;
+}
+
+#history-table tbody tr:nth-child(odd) {
+    background-color: #ffffff;
+}
+
+#history-table tbody tr:nth-child(odd) td:first-child,
+#history-table tbody tr:nth-child(odd) td:nth-child(2) {
+    background-color: #ffffff;
+}
+
+#history-table tbody tr:hover {
+    background-color: #e3f2fd !important;
+}
+
+#history-table tbody tr:hover td {
+    background-color: #e3f2fd !important;
+}
+
+/* Empty state for history table */
+#history-table tbody tr td[colspan] {
+    text-align: center !important;
+    padding: 40px 20px;
+    color: #9ca3af;
+    font-size: 14px;
+    font-style: italic;
+    position: static !important;
+    left: auto !important;
+    z-index: 1 !important;
+}
+
+/* History loading spinner */
+#history-loading {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+#history-loading .spinner {
+    border: 3px solid #f3f4f6;
+    border-top: 3px solid #0066cc;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 16px;
+}
+
+#history-loading p {
+    color: #6b7280;
+    font-size: 14px;
+    margin: 0;
+}
+
+/* History error message */
+#history-error {
+    background: #fee2e2;
+    color: #991b1b;
+    padding: 16px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    text-align: center;
+    font-size: 14px;
+    border: 1px solid #fecaca;
+}
+
+/* Station name clickable in main table */
+.station-name {
+    cursor: pointer;
+    color: #0066cc;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.station-name:hover {
+    color: #0052a3;
+    text-decoration: underline;
+}
+
+/* Responsive design for history modal */
+@media (max-width: 768px) {
+    #station-history-modal .modal-content {
+        max-width: 95%;
+        margin: 2% auto;
+    }
+    
+    #history-modal-title {
+        font-size: 16px;
+    }
+    
+    #history-table-container {
+        max-height: 400px;
+    }
+    
+    #history-table {
+        font-size: 11px;
+        min-width: 500px;
+    }
+    
+    #history-table th,
+    #history-table td {
+        padding: 8px 6px;
+        font-size: 11px;
+    }
+    
+    #history-table th:first-child {
+        width: 45px;
+    }
+    
+    #history-table td:nth-child(2) {
+        min-width: 120px;
+        font-size: 11px;
+    }
+}
+
+@media (max-width: 480px) {
+    #history-table {
+        font-size: 10px;
+    }
+    
+    #history-table th,
+    #history-table td {
+        padding: 6px 4px;
+        font-size: 10px;
+    }
+    
+    #history-table th:first-child {
+        width: 40px;
+    }
+    
+    #history-table td:nth-child(2) {
+        min-width: 100px;
+        font-size: 10px;
+    }
+    
+    #history-loading {
+        padding: 40px 10px;
+    }
+}
+
+
 /* Modal Styles */
 .modal {
     display: none;

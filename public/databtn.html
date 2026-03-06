@@ -11,7 +11,7 @@
     <link rel="apple-touch-icon" href="/logo.png">
     <title>Dữ liệu Giấy Phép - Công ty Cổ phần Cấp nước Cà Mau</title>
     <link rel="stylesheet" href="styles.css?v=20260305">
-    <link rel="stylesheet" href="databtn.css?v=20260305fix1">
+    <link rel="stylesheet" href="databtn.css?v=20260306columns">
 </head>
 <body>
     <!-- Header will be loaded from header.html -->
@@ -152,6 +152,39 @@
         </div>
     </div>
 
+    <!-- Station History Modal -->
+    <div id="station-history-modal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h2 id="history-modal-title">Lịch sử dữ liệu - <span id="history-station-name"></span></h2>
+                <button class="modal-close" id="close-history-modal">&times;</button>
+            </div>
+            <div style="padding: 24px;">
+                <div id="history-loading" class="loading-spinner" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Đang tải dữ liệu lịch sử...</p>
+                </div>
+                <div id="history-error" class="error-message" style="display: none;"></div>
+                <div id="history-table-container" class="table-container" style="max-height: 500px; overflow-y: auto;">
+                    <table id="history-table">
+                        <thead>
+                            <tr>
+                                <th>STT</th>
+                                <th>Thời gian đo</th>
+                                <th>Thông số</th>
+                                <th>Giá trị</th>
+                                <th>Đơn vị</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body">
+                            <!-- Data will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Telegram Configuration Modal -->
     <div id="telegram-config-modal" class="modal">
         <div class="modal-content" style="max-width: 500px;">
@@ -233,7 +266,7 @@
     <script src="auth.js?v=20260305fix1"></script>
     <script src="header.js?v=20260305fix1"></script>
     <script src="visitor-tracker.js?v=20260305fix1"></script>
-    <script src="databtn.js?v=20260305fix1"></script>
+    <script src="databtn.js?v=202603067days"></script>
     <script>
         // Databtn page initialization
         document.addEventListener('DOMContentLoaded', async () => {
