@@ -833,6 +833,17 @@ main.sidebar-hidden {
         overflow-y: auto;
     }
     
+    /* History Modal responsive adjustments */
+    #station-history-modal .modal-content {
+        max-height: 92vh;
+        width: 98%;
+        margin: 1% auto;
+    }
+    
+    #station-history-modal .modal-body {
+        padding: 12px;
+    }
+    
     .modal-header {
         padding: 16px 20px;
     }
@@ -896,6 +907,32 @@ main.sidebar-hidden {
     .modal-content {
         width: 98%;
     }
+    
+    /* History Modal for small screens */
+    #station-history-modal .modal-content {
+        max-height: 94vh;
+        width: 100%;
+        margin: 0;
+        border-radius: 0;
+    }
+    
+    #station-history-modal .modal-body {
+        padding: 8px;
+    }
+    
+    #history-modal-title {
+        font-size: 16px;
+    }
+    
+    #history-table {
+        font-size: 11px;
+    }
+    
+    #history-table th,
+    #history-table td {
+        padding: 8px 4px;
+        font-size: 11px;
+    }
 }
 
 /* ============================================ */
@@ -905,28 +942,72 @@ main.sidebar-hidden {
 /* History Modal Container */
 #station-history-modal .modal-content {
     max-width: 900px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#station-history-modal .modal-header {
+    flex-shrink: 0;
+    border-bottom: 1px solid #e2e8f0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-right: 56px;
+}
+
+.history-modal-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    width: 100%;
+    text-align: center;
+}
+
+#station-history-modal .modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+}
+
+#station-history-modal .modal-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 16px;
+    min-height: 0;
 }
 
 #history-modal-title {
     font-size: 20px;
     font-weight: 600;
     color: #1f2937;
+    margin: 0;
 }
 
-#history-station-name {
-    color: #0066cc;
-    font-weight: 700;
+#history-modal-station-info,
+#history-modal-time-range {
+    margin: 0;
+    color: #475569;
+    font-size: 14px;
+    line-height: 1.4;
+    text-align: center;
 }
 
 /* History Table Container */
 #history-table-container {
-    max-height: 500px;
+    flex: 1;
     overflow-y: auto;
     overflow-x: auto;
     position: relative;
     background: white;
     border-radius: 6px;
     -webkit-overflow-scrolling: touch;
+    min-height: 0;
 }
 
 /* History Table Styles - Match main table */

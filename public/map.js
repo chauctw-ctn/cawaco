@@ -290,7 +290,9 @@ async function loadStations() {
     
     try {
         // Include timeout parameter in request
-        const response = await fetch(`/api/stations?timeout=${offlineTimeoutMinutes}`);
+        const response = await fetch(`/api/stations?timeout=${offlineTimeoutMinutes}&_t=${Date.now()}`, {
+            cache: 'no-store'
+        });
         const data = await response.json();
         
         if (data.success) {
@@ -319,7 +321,9 @@ async function loadStations() {
 async function refreshStations() {
     try {
         // Include timeout parameter in request
-        const response = await fetch(`/api/stations?timeout=${offlineTimeoutMinutes}`);
+        const response = await fetch(`/api/stations?timeout=${offlineTimeoutMinutes}&_t=${Date.now()}`, {
+            cache: 'no-store'
+        });
         const data = await response.json();
         
         if (data.success) {
@@ -1294,7 +1298,10 @@ async function loadChartData() {
                 limit: 10000
             });
             
+            params.set('_t', Date.now().toString());
+
             const response = await fetch(`/api/stats?${params.toString()}`, {
+                cache: 'no-store',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 }

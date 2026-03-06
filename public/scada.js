@@ -39,7 +39,9 @@ async function loadScadaData(options = {}) {
     if (refreshBtn) refreshBtn.disabled = true;
 
     try {
-        const response = await fetch('/api/scada/cached');
+        const response = await fetch(`/api/scada/cached?_t=${Date.now()}`, {
+            cache: 'no-store'
+        });
         
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));

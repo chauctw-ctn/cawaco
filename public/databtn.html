@@ -154,18 +154,22 @@
 
     <!-- Station History Modal -->
     <div id="station-history-modal" class="modal">
-        <div class="modal-content" style="max-width: 900px;">
+        <div class="modal-content">
             <div class="modal-header">
-                <h2 id="history-modal-title">Lịch sử dữ liệu - <span id="history-station-name"></span></h2>
+                <div class="history-modal-heading">
+                    <h2 id="history-modal-title">LỊCH SỬ DỮ LIỆU</h2>
+                    <p id="history-modal-station-info">Công trình: N/A - Trạm quan trắc: N/A</p>
+                    <p id="history-modal-time-range">Từ thời điểm: N/A - Đến thời điểm: N/A</p>
+                </div>
                 <button class="modal-close" id="close-history-modal">&times;</button>
             </div>
-            <div style="padding: 24px;">
+            <div class="modal-body">
                 <div id="history-loading" class="loading-spinner" style="display: none;">
                     <div class="spinner"></div>
                     <p>Đang tải dữ liệu lịch sử...</p>
                 </div>
                 <div id="history-error" class="error-message" style="display: none;"></div>
-                <div id="history-table-container" class="table-container" style="max-height: 500px; overflow-y: auto;">
+                <div id="history-table-container" class="table-container">
                     <table id="history-table">
                         <thead>
                             <tr>

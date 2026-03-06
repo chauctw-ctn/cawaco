@@ -266,9 +266,10 @@ async function loadStations() {
         console.log('Loading stations from API...');
         
         // Fetch both regular stations (TVA+MQTT) and SCADA stations
+        const cacheBust = Date.now();
         const [regularResponse, scadaResponse] = await Promise.all([
-            fetch('/api/stations'),
-            fetch('/api/scada/cached').catch(() => ({ ok: false }))
+            fetch(`/api/stations?_t=${cacheBust}`, { cache: 'no-store' }),
+            fetch(`/api/scada/cached?_t=${cacheBust}`, { cache: 'no-store' }).catch(() => ({ ok: false }))
         ]);
         
         console.log('Regular stations status:', regularResponse.status);
@@ -611,7 +612,9 @@ async function loadStatsData() {
         console.log('⏰ Đang tải dữ liệu từ:', `${startDateInput} 00:00:00 đến ${endDateInput} 23:59:59 (GMT+7)`);
         console.log('📊 Selected parameters:', selectedParameters);
         console.log('Fetching from API:', `/api/stats?${queryParams}`);
-        const response = await fetch(`/api/stats?${queryParams}`);
+        const response = await fetch(`/api/stats?${queryParams}&_t=${Date.now()}`, {
+            cache: 'no-store'
+        });
         
         if (!response.ok) {
             throw new Error(`API error: ${response.status} ${response.statusText}`);

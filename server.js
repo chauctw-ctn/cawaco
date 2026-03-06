@@ -69,6 +69,17 @@ const PORT = config.server.port;
 app.use(express.static('public'));
 app.use(express.json());
 
+// Disable caching for API responses so dashboards always receive fresh data.
+app.use('/api', (req, res, next) => {
+    res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        Pragma: 'no-cache',
+        Expires: '0',
+        'Surrogate-Control': 'no-store'
+    });
+    next();
+});
+
 // Simple authentication (from config)
 const USERS = config.auth.users;
 
