@@ -8,6 +8,7 @@ let statusCheckInterval = null; // Status check timer for periodic alerts
 let refreshIntervalMinutes = 15; // Default 15 minutes (from Telegram config)
 let delayThresholdMinutes = 60; // Default 60 minutes (from Telegram config)
 let alertRepeatIntervalMinutes = 1; // Default 1 minute - repeat offline alerts
+let hasLoadedDataOnce = false; // Đánh dấu đã tải dữ liệu từ API ít nhất 1 lần
 
 // Table header filters
 let allStations = []; // Danh sách tất cả tên trạm
@@ -59,6 +60,39 @@ function formatDelay(minutes) {
             ? `${days} ngày ${remainingHours} giờ`
             : `${days} ngày`;
     }
+}
+
+/**
+ * Tính độ trễ (phút) theo thời gian đo và thời gian hiện tại.
+ * Ưu tiên measurementTime; nếu không hợp lệ thì fallback về row.delayMinutes hoặc 0.
+ */
+function getEffectiveDelayMinutes(row) {
+    const nowMs = Date.now();
+
+    if (row && row.measurementTime) {
+        let measurementMs = null;
+
+        if (typeof row.measurementTime === 'number') {
+            measurementMs = row.measurementTime;
+        } else {
+            const parsed = Date.parse(row.measurementTime);
+            if (!Number.isNaN(parsed)) {
+                measurementMs = parsed;
+            }
+        }
+
+        if (measurementMs !== null && measurementMs <= nowMs) {
+            const diffMinutes = Math.floor((nowMs - measurementMs) / (1000 * 60));
+            if (diffMinutes >= 0) return diffMinutes;
+        }
+    }
+
+    // Fallback: dùng delayMinutes từ API nếu có, ngược lại 0
+    if (row && typeof row.delayMinutes === 'number' && isFinite(row.delayMinutes) && row.delayMinutes >= 0) {
+        return row.delayMinutes;
+    }
+
+    return 0;
 }
 
 /**
@@ -260,7 +294,7 @@ function recordAlert(station, status) {
 /**
  * Send Telegram alert for station status change
  */
-async function sendTelegramAlert(station, status, measurementTime, delayMinutes, reason = '') {
+async function sendTelegramAlert(station, status, measurementTime, delayMinutes, permit, reason = '') {
     try {
         console.log(`📤 sendTelegramAlert called for ${station}:`, { status, delayMinutes, reason });
         
@@ -298,7 +332,8 @@ async function sendTelegramAlert(station, status, measurementTime, delayMinutes,
                 station: station,
                 status: status,
                 measurementTime: measurementTime,
-                delayMinutes: delayMinutes
+                delayMinutes: delayMinutes,
+                permit: permit || null
             })
         });
         
@@ -340,43 +375,57 @@ function checkStationStatusChanges() {
         console.log(`❌ Telegram not enabled, skipping status check`);
         return;
     }
-    
-    if (currentData.length === 0) {
-        console.log(`⚠️ No data available for status check`);
+
+    // Đảm bảo đã có dữ liệu hợp lệ từ API
+    if (!hasLoadedDataOnce) {
+        console.log('⏭️ Skipping status check: data has not been loaded from API yet');
         return;
     }
-    
-    console.log(`✅ Telegram enabled, checking ${currentData.length} data points`);
-    
-    // Group data by station and recalculate delays
+
+    // Lấy dữ liệu nguồn cho cảnh báo: luôn dùng toàn bộ currentData
+    // (không phụ thuộc vào filter hiển thị của bảng)
+    const sourceData = currentData;
+
+    if (!sourceData || sourceData.length === 0) {
+        console.log('⚠️ No data available for status check');
+        return;
+    }
+
+    console.log(`✅ Telegram enabled, checking ${sourceData.length} data points`);
+
+    // Group data by station, sử dụng cùng độ trễ hiệu dụng với bảng hiển thị
+    // (tính theo thời gian đo → thời gian hiện tại)
     const stationData = {};
-    const now = Date.now();
-    
-    currentData.forEach(row => {
+
+    sourceData.forEach(row => {
         const station = row.station || 'N/A';
+
+        // Độ trễ hiệu dụng tính lại theo measurementTime
+        const effectiveDelay = getEffectiveDelayMinutes(row);
+
         if (!stationData[station]) {
-            // Recalculate delay based on current time
-            const measurementTime = new Date(row.measurementTime).getTime();
-            const currentDelayMinutes = Math.floor((now - measurementTime) / (1000 * 60));
-            
             stationData[station] = {
                 station: station,
-                delayMinutes: currentDelayMinutes,
-                measurementTime: row.measurementTime
+                delayMinutes: effectiveDelay,
+                measurementTime: row.measurementTime,
+                permit: row.permit || null
             };
         } else {
-            // Keep the maximum delay for this station
-            const measurementTime = new Date(row.measurementTime).getTime();
-            const currentDelayMinutes = Math.floor((now - measurementTime) / (1000 * 60));
-            
-            if (currentDelayMinutes > stationData[station].delayMinutes) {
-                stationData[station].delayMinutes = currentDelayMinutes;
+            // Với mỗi trạm, lấy độ trễ lớn nhất trong các dòng
+            if (effectiveDelay > stationData[station].delayMinutes) {
+                stationData[station].delayMinutes = effectiveDelay;
                 stationData[station].measurementTime = row.measurementTime;
+                stationData[station].permit = row.permit || stationData[station].permit || null;
             }
         }
     });
     
-    console.log(`📊 Grouped into ${Object.keys(stationData).length} stations`);
+    const stationCount = Object.keys(stationData).length;
+    const offlineStations = Object.values(stationData)
+        .filter(s => s.delayMinutes > delayThresholdMinutes)
+        .map(s => ({ station: s.station, delayMinutes: s.delayMinutes }));
+
+    console.log(`📊 Grouped into ${stationCount} stations, offline (by delayThresholdMinutes=${delayThresholdMinutes}):`, offlineStations);
     
     // Check each station for status changes
     Object.values(stationData).forEach(data => {
@@ -386,45 +435,51 @@ function checkStationStatusChanges() {
         const previousStatus = stationStatusMap[station];
         const measurementTime = data.measurementTime; // Get measurement time
         const delayMinutes = data.delayMinutes; // Get delay in minutes
+        const permit = data.permit || null;
         
         console.log(`\n🏢 Checking station: ${station}`);
         console.log(`   Current: ${currentStatus} (delay: ${delayMinutes} min)`);
         console.log(`   Previous: ${previousStatus || 'none'}`);
         console.log(`   isFirstCheck: ${isFirstCheck}`);
-        
-        // First check after page reload - just initialize, DO NOT send any alerts
-        if (isFirstCheck) {
-            console.log(`ℹ️ Station ${station} initialized: ${currentStatus} (no alert on first check)`);
-        }
-        // Normal operation - check for status changes or periodic alerts
-        else {
-            // Status changed or periodic check needed
-            if (previousStatus !== undefined) {
-                // Status changed from online to offline
-                if (previousStatus === 'online' && currentStatus === 'offline') {
-                    console.log(`🔔 Station ${station} went offline`);
-                    sendTelegramAlert(station, 'offline', measurementTime, delayMinutes, 'status_change');
-                }
-                // Status changed from offline to online
-                else if (previousStatus === 'offline' && currentStatus === 'online') {
-                    console.log(`🔔 Station ${station} came back online`);
-                    sendTelegramAlert(station, 'online', measurementTime, delayMinutes, 'status_change');
-                }
-                // Status unchanged but still offline - check if periodic alert needed
-                else if (currentStatus === 'offline') {
-                    console.log(`🔄 Station ${station} still offline, checking if periodic alert needed...`);
-                    sendTelegramAlert(station, 'offline', measurementTime, delayMinutes, 'periodic_check');
-                }
-                else {
-                    console.log(`✅ Station ${station} still online, no alert needed`);
-                }
+
+        // Luôn dùng alert history để chống spam, không chặn cảnh báo ở lần kiểm tra đầu tiên
+        // Status changed or periodic check needed
+        if (previousStatus !== undefined) {
+            // Status changed from online to offline
+            if (previousStatus === 'online' && currentStatus === 'offline') {
+                console.log(`🔔 Station ${station} went offline`);
+                sendTelegramAlert(station, 'offline', measurementTime, delayMinutes, permit, 'status_change');
             }
-            // First time tracking this station in this session (after initial page load)
+            // Status changed from offline to online
+            else if (previousStatus === 'offline' && currentStatus === 'online') {
+                console.log(`🔔 Station ${station} came back online`);
+                sendTelegramAlert(station, 'online', measurementTime, delayMinutes, permit, 'status_change');
+            }
+            // Status unchanged but still offline - check if periodic alert needed
+            else if (currentStatus === 'offline') {
+                console.log(`🔄 Station ${station} still offline, checking if periodic alert needed...`);
+                sendTelegramAlert(station, 'offline', measurementTime, delayMinutes, permit, 'periodic_check');
+            }
             else {
-                console.log(`🆕 First time tracking ${station} in this session`);
-                // Only send alert if station is offline, let history prevent spam
+                console.log(`✅ Station ${station} still online, no alert needed`);
+            }
+        }
+        // First time tracking this station in this session (sau khi reload trang)
+        else {
+            console.log(`🆕 First time tracking ${station} in this session`);
+
+            // Để tránh spam khi vừa khởi động server/trang,
+            // không gửi cảnh báo offline ngay lần check đầu tiên.
+            if (isFirstCheck) {
                 if (currentStatus === 'offline') {
-                    sendTelegramAlert(station, currentStatus, measurementTime, delayMinutes, 'first_in_session');
+                    console.log(`⏭️ Skipping initial offline alert for ${station} on first check to avoid spam`);
+                } else {
+                    console.log(`ℹ️ Station ${station} is online on first check, no alert needed`);
+                }
+            } else {
+                // Sau lần check đầu, nếu lần đầu gặp trạm trong session và đang offline thì mới gửi cảnh báo
+                if (currentStatus === 'offline') {
+                    sendTelegramAlert(station, currentStatus, measurementTime, delayMinutes, permit, 'first_in_session');
                 } else {
                     console.log(`ℹ️ Station ${station} is online, no alert needed`);
                 }
@@ -534,6 +589,7 @@ async function fetchData() {
         
         currentData = data.data || [];
         lastUpdateTime = Date.now();
+        hasLoadedDataOnce = true;
         
         // Extract unique permits for filter
         extractPermits();
@@ -741,25 +797,38 @@ function setupFilterDropdown(filterType, items, selectedItems, labelFormatter = 
             // Calculate position for fixed dropdown
             const buttonRect = button.getBoundingClientRect();
             const dropdownWidth = 250; // min-width from CSS
-            
-            // Position dropdown below button, centered
+
+            // Position dropdown below button, centered (initial guess)
             dropdown.style.top = `${buttonRect.bottom + 8}px`;
             dropdown.style.left = `${buttonRect.left + (buttonRect.width / 2) - (dropdownWidth / 2)}px`;
-            
-            // Check if dropdown goes off-screen to the right
+
+            // Ensure dropdown stays within horizontal viewport
             const rightEdge = buttonRect.left + (buttonRect.width / 2) + (dropdownWidth / 2);
             if (rightEdge > window.innerWidth) {
                 dropdown.style.left = `${window.innerWidth - dropdownWidth - 10}px`;
             }
-            
-            // Check if dropdown goes off-screen to the left
             const leftEdge = buttonRect.left + (buttonRect.width / 2) - (dropdownWidth / 2);
             if (leftEdge < 0) {
                 dropdown.style.left = '10px';
             }
-            
+
+            // Hiển thị tạm để đo chiều cao thực tế
             dropdown.classList.add('show');
             button.classList.add('active');
+
+            const dropdownRect = dropdown.getBoundingClientRect();
+
+            // Nếu dropdown bị tràn ra ngoài cạnh dưới màn hình (hay gặp trên mobile),
+            // thì đẩy nó lên trên sao cho luôn nhìn thấy được toàn bộ
+            if (dropdownRect.bottom > window.innerHeight - 10) {
+                const newTop = Math.max(10, window.innerHeight - dropdownRect.height - 10);
+                dropdown.style.top = `${newTop}px`;
+            }
+
+            // Nếu dropdown bị che phía trên (nằm sát mép trên), đẩy xuống một chút
+            if (dropdownRect.top < 10) {
+                dropdown.style.top = '10px';
+            }
         }
     });
     
@@ -1019,8 +1088,8 @@ function getFilteredData() {
             return false;
         }
         
-        // Filter by status
-        const delayMinutes = row.delayMinutes || 0;
+        // Filter by status (dùng độ trễ hiệu dụng theo thời gian đo → hiện tại)
+        const delayMinutes = getEffectiveDelayMinutes(row);
         const status = delayMinutes <= delayThresholdMinutes ? 'online' : 'offline';
         if (!selectedStatuses.has(status)) {
             return false;
@@ -1034,7 +1103,7 @@ function getFilteredData() {
         // Filter by offline status from sidebar
         if (offlineCheckbox && offlineCheckbox.checked) {
             filteredData = filteredData.filter(row => {
-                const delayMinutes = row.delayMinutes || 0;
+                const delayMinutes = getEffectiveDelayMinutes(row);
                 return delayMinutes > delayThresholdMinutes;
             });
         }
@@ -1111,7 +1180,8 @@ function renderTable() {
             const tr = document.createElement('tr');
             tr.className = colorClass;
             
-            const delayMinutes = row.delayMinutes || 0;
+            // Độ trễ hiển thị: tính theo (thời gian đo → thời gian hiện tại)
+            const delayMinutes = getEffectiveDelayMinutes(row);
             
             // For first row of station: add STT, TÊN TRẠM, and GIẤY PHÉP with rowspan
             // For subsequent rows: skip these columns (they are merged)
