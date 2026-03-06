@@ -833,21 +833,43 @@ main.sidebar-hidden {
         overflow-y: auto;
     }
     
-    /* History Modal responsive adjustments */
+    /* History Modal responsive adjustments - full screen on mobile */
+    #station-history-modal {
+        align-items: stretch;
+        overflow: hidden;
+        padding: 0;
+    }
+
     #station-history-modal .modal-content {
-        max-height: 92vh;
-        width: 98%;
-        margin: 1% auto;
+        width: 100%;
+        height: 100dvh;
+        max-height: 100dvh;
+        margin: 0;
+        border-radius: 0;
     }
-    
+
+    #station-history-modal .modal-header {
+        padding: 8px 12px;
+        padding-right: 48px;
+    }
+
+    #station-history-modal #history-modal-title {
+        font-size: 14px;
+    }
+
+    #history-modal-station-info,
+    #history-modal-time-range {
+        font-size: 11px;
+    }
+
     #station-history-modal .modal-body {
-        padding: 12px;
+        padding: 6px 8px;
     }
-    
+
     .modal-header {
         padding: 16px 20px;
     }
-    
+
     .modal-header h2 {
         font-size: 18px;
     }
@@ -908,20 +930,37 @@ main.sidebar-hidden {
         width: 98%;
     }
     
-    /* History Modal for small screens */
+    /* History Modal for small screens - full screen */
+    #station-history-modal {
+        align-items: stretch;
+        overflow: hidden;
+        padding: 0;
+    }
+
     #station-history-modal .modal-content {
-        max-height: 94vh;
         width: 100%;
+        height: 100dvh;
+        max-height: 100dvh;
         margin: 0;
         border-radius: 0;
     }
-    
-    #station-history-modal .modal-body {
-        padding: 8px;
+
+    #station-history-modal .modal-header {
+        padding: 6px 10px;
+        padding-right: 44px;
     }
-    
+
+    #station-history-modal .modal-body {
+        padding: 4px 6px;
+    }
+
     #history-modal-title {
-        font-size: 16px;
+        font-size: 13px;
+    }
+
+    #history-modal-station-info,
+    #history-modal-time-range {
+        font-size: 10px;
     }
     
     #history-table {
@@ -1195,10 +1234,6 @@ main.sidebar-hidden {
     
     #history-modal-title {
         font-size: 16px;
-    }
-    
-    #history-table-container {
-        max-height: 400px;
     }
     
     #history-table {
