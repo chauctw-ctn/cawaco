@@ -7,12 +7,36 @@ services:
     healthCheckPath: /api/stations
     disk:
       name: water-monitoring-data
-      mountPath: /opt/render/project/src
+      mountPath: /opt/render/project/src/data
       sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATA_DIR
+        value: /opt/render/project/src/data
       - key: DATABASE_URL
-        sync: false  # Set this in Render Dashboard
+        sync: false  # Required: Set in Render Dashboard
       - key: JWT_SECRET
-        sync: false  # Set this in Render Dashboard (generate a strong random string)
+        sync: false  # Required: Generate a strong random string
+      - key: MQTT_BROKER
+        value: mqtt://14.225.252.85
+      - key: MQTT_PORT
+        value: "1883"
+      - key: MQTT_TOPIC
+        value: telemetry
+      - key: TVA_URL
+        value: http://camau.dulieuquantrac.com:8906
+      - key: TVA_USERNAME
+        sync: false  # Set in Render Dashboard
+      - key: TVA_PASSWORD
+        sync: false  # Set in Render Dashboard
+      - key: SCADA_URL
+        value: http://14.161.36.253:86
+      - key: SCADA_USERNAME
+        sync: false  # Set in Render Dashboard
+      - key: SCADA_PASSWORD
+        sync: false  # Set in Render Dashboard
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false  # Optional: Set in Render Dashboard
+      - key: TELEGRAM_CHAT_ID
+        sync: false  # Optional: Set in Render Dashboard

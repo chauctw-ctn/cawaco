@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -8,8 +9,9 @@ const axios = require('axios');
 // Import configuration
 const config = require('./config');
 
-// Telegram config file path
-const TELEGRAM_CONFIG_FILE = path.join(__dirname, 'telegram-config.json');
+// Telegram config file path — use persistent disk on Render, fallback to project root locally
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+const TELEGRAM_CONFIG_FILE = path.join(DATA_DIR, 'telegram-config.json');
 
 // Load Telegram config from file
 function loadTelegramConfig() {
