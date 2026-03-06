@@ -445,8 +445,6 @@ function checkStationStatusChanges() {
     console.log(`===== End checkStationStatusChanges =====\n`);
 }
 
-// Removed setupStatusCheckInterval - alerts are now sent only after data fetch/update
-
 /**
  * Setup auto refresh
  */
