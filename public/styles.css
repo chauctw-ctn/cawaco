@@ -1703,13 +1703,10 @@ body.page-transitioning {
     .sidebar {
         width: 100%;
         max-width: 320px;
-        left: -100%;
-        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         -webkit-overflow-scrolling: touch;
     }
     
-    .sidebar:not(.hidden) {
-        left: 0;
+    .sidebar.active {
         box-shadow: 2px 0 20px rgba(0, 0, 0, 0.3);
     }
     

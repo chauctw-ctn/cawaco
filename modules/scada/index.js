@@ -6,7 +6,10 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
 const fs = require("fs");
+const path = require("path");
 const config = require('../../config');
+
+const DATA_SCADA_PATH = path.join(__dirname, '../../data_scada_tva.json');
 const { formatChannelData, groupByStation, TVA_CHANNEL_MAPPING } = require("../../tva-channel-mapping");
 
 /**
@@ -163,7 +166,7 @@ async function crawlScadaTVA() {
             stationsGrouped: groupedStations,
         };
         
-        fs.writeFileSync('data_scada_tva.json', JSON.stringify(outputData, null, 2), 'utf-8');
+        fs.writeFileSync(DATA_SCADA_PATH, JSON.stringify(outputData, null, 2), 'utf-8');
         console.log("💾 [SCADA] Đã lưu dữ liệu vào data_scada_tva.json");
         
         return stations;
@@ -278,8 +281,8 @@ async function getSCADADataWithRetry(maxRetries = null) {
  */
 function getGroupedStations() {
     try {
-        if (fs.existsSync('data_scada_tva.json')) {
-            const fileData = JSON.parse(fs.readFileSync('data_scada_tva.json', 'utf8'));
+        if (fs.existsSync(DATA_SCADA_PATH)) {
+            const fileData = JSON.parse(fs.readFileSync(DATA_SCADA_PATH, 'utf8'));
             
             const dataAge = Date.now() - new Date(fileData.timestamp).getTime();
             const tenMinutes = 10 * 60 * 1000;

@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="styles.css?v=20260305">
     <link rel="stylesheet" href="databtn.css?v=20260306mobile">
 </head>
-<body>
+<body class="loading">
     <!-- Header will be loaded from header.html -->
 
     <!-- Sidebar will be loaded from sidebar.html -->
@@ -23,16 +23,20 @@
         <div class="container">
             <!-- Data Section -->
             <div class="data-section">
-                <!-- Title -->
-                <h2 class="page-title">DỮ LIỆU ĐỒNG BỘ CÁC TRẠM QUAN TRẮC VỚI WEB BỘ TÀI NGUYÊN</h2>
-
-                <!-- Stats Table -->
-                <div class="table-container">
+                <!-- Loading and Error States -->
                 <div id="loading" class="loading-spinner" style="display: none;">
                     <div class="spinner"></div>
                     <p>Đang tải dữ liệu...</p>
                 </div>
                 <div id="error-message" class="error-message" style="display: none;"></div>
+
+                <!-- Data wrapper: title + table, hidden until data loads -->
+                <div id="data-wrapper" style="display: none;">
+                <!-- Title -->
+                <h2 class="page-title">DỮ LIỆU ĐỒNG BỘ CÁC TRẠM QUAN TRẮC VỚI WEB BỘ TÀI NGUYÊN</h2>
+
+                <!-- Stats Table -->
+                <div class="table-container">
                 <table id="data-table">
                     <thead>
                         <tr>
@@ -51,6 +55,7 @@
                         <!-- Data will be populated here -->
                     </tbody>
                 </table>
+                </div>
                 </div>
             </div>
         </div>
@@ -207,11 +212,18 @@
                     </small>
                 </div>
                 <div class="form-group">
+                    <label for="telegram-bot-token">Bot Token:</label>
+                    <input type="password" id="telegram-bot-token" placeholder="Nhập Bot Token (để trống giữ nguyên token hiện tại)">
+                    <small style="color: #6b7280; display: block; margin-top: 4px;">
+                        Token của Telegram Bot (lấy từ @BotFather). <strong>Token được lưu chung cho tất cả các trang.</strong>
+                    </small>
+                </div>
+                <div class="form-group">
                     <label for="telegram-chat-id">Chat ID:</label>
                     <input type="text" id="telegram-chat-id" placeholder="Nhập Telegram Chat ID" required>
                     <small style="color: #6b7280; display: block; margin-top: 4px;">
                         Để lấy Chat ID, hãy gửi tin nhắn cho bot và truy cập:<br>
-                        <a href="https://api.telegram.org/bot8705883687:AAEx3A1Y3VshJG1R4Si9syxQsOFX9RSQVu0/getUpdates" 
+                        <a href="/api/telegram/getupdates" id="get-chat-id-link"
                            target="_blank" style="color: #0066cc; text-decoration: underline;">
                             Xem Chat ID
                         </a>

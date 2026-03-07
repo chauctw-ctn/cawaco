@@ -2,13 +2,14 @@
 
 /* Main Container with Scroll */
 main {
-    min-height: calc(100vh - 70px);
+    margin-top: 66px;
+    min-height: calc(100vh - 66px);
     overflow-x: hidden;
     transition: margin-left 0.3s ease;
 }
 
 main.with-sidebar {
-    margin-left: 280px;
+    margin-left: 300px;
 }
 
 main.sidebar-hidden {
@@ -17,26 +18,26 @@ main.sidebar-hidden {
 
 .container {
     max-width: 100%;
-    padding: 8px 12px;
+    padding: 6px 10px;
     margin: 0 auto;
 }
 
 @media (min-width: 768px) {
     .container {
-        padding: 12px 16px;
+        padding: 8px 12px;
     }
 }
 
 .page-header {
     text-align: center;
-    margin-bottom: 12px;
+    margin-bottom: 6px;
 }
 
 .page-title {
     font-size: 20px;
     font-weight: 700;
     color: #1e3a8a;
-    margin: 0 0 4px 0;
+    margin: 0 0 2px 0;
 }
 
 .page-subtitle {
@@ -47,7 +48,7 @@ main.sidebar-hidden {
 
 @media (min-width: 768px) {
     .page-header {
-        margin-bottom: 16px;
+        margin-bottom: 8px;
     }
     .page-title {
         font-size: 24px;
@@ -58,33 +59,50 @@ main.sidebar-hidden {
     }
 }
 
+/* Unified data wrapper: summary cards + table in one container */
+.data-wrapper {
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+    padding: 12px;
+}
+
+@media (min-width: 768px) {
+    .data-wrapper {
+        padding: 16px;
+        border-radius: 14px;
+    }
+}
+
 /* Summary Cards */
 .summary-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 8px;
+    gap: 6px;
     margin-bottom: 12px;
 }
 
 @media (min-width: 480px) {
     .summary-cards {
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 10px;
+        gap: 8px;
     }
 }
 
 @media (min-width: 768px) {
     .summary-cards {
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 12px;
-        margin-bottom: 16px;
+        gap: 10px;
+        margin-bottom: 8px;
     }
 }
 
 .summary-card {
     background: white;
     border-radius: 8px;
-    padding: 10px 12px;
+    padding: 8px 10px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
     display: flex;
     align-items: center;
@@ -96,7 +114,7 @@ main.sidebar-hidden {
 @media (min-width: 768px) {
     .summary-card {
         border-radius: 10px;
-        padding: 14px 16px;
+        padding: 10px 12px;
     }
 }
 
@@ -148,18 +166,15 @@ main.sidebar-hidden {
 .table-container {
     background: white;
     border-radius: 8px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
     overflow-y: auto;
     overflow-x: hidden;
-    max-height: calc(100vh - 320px);
-    margin-bottom: 8px;
+    max-height: calc(100vh - 300px);
 }
 
 @media (min-width: 768px) {
     .table-container {
         border-radius: 10px;
-        max-height: 600px;
-        margin-bottom: 12px;
+        max-height: calc(100vh - 240px);
     }
 }
 
@@ -196,7 +211,7 @@ main.sidebar-hidden {
 }
 
 #capacity-table th {
-    padding: 8px 6px;
+    padding: 6px 4px;
     text-align: left;
     font-weight: 600;
     font-size: 11px;
@@ -208,7 +223,7 @@ main.sidebar-hidden {
 
 @media (min-width: 768px) {
     #capacity-table th {
-        padding: 10px 8px;
+        padding: 8px 6px;
         font-size: 13px;
         letter-spacing: 0.5px;
     }
@@ -225,10 +240,23 @@ main.sidebar-hidden {
     }
 }
 
-#capacity-table th:nth-child(3),
+#capacity-table th:nth-child(2) {
+    text-align: center;
+}
+
+#capacity-table th:nth-child(3) {
+    text-align: center;
+}
+
 #capacity-table th:nth-child(4),
 #capacity-table th:nth-child(5) {
     text-align: center;
+}
+
+/* Force center alignment for capacity column headers */
+#capacity-table thead tr th:nth-child(4),
+#capacity-table thead tr th:nth-child(5) {
+    text-align: center !important;
 }
 
 #capacity-table tbody tr {
@@ -245,7 +273,7 @@ main.sidebar-hidden {
 }
 
 #capacity-table td {
-    padding: 8px 6px;
+    padding: 6px 4px;
     color: #334155;
     vertical-align: middle;
     font-size: 12px;
@@ -254,7 +282,7 @@ main.sidebar-hidden {
 
 @media (min-width: 768px) {
     #capacity-table td {
-        padding: 10px 8px;
+        padding: 8px 6px;
         font-size: 14px;
     }
 }
@@ -265,10 +293,17 @@ main.sidebar-hidden {
     color: #64748b;
 }
 
-#capacity-table td:nth-child(3),
+#capacity-table td:nth-child(2) {
+    text-align: center;
+}
+
+#capacity-table td:nth-child(3) {
+    text-align: left !important;
+}
+
 #capacity-table td:nth-child(4),
 #capacity-table td:nth-child(5) {
-    text-align: center;
+    text-align: center !important;
 }
 
 #capacity-table .station-name {
@@ -276,6 +311,7 @@ main.sidebar-hidden {
     color: #1e3a8a;
     font-size: 12px;
     white-space: nowrap;
+    text-align: left !important;
 }
 
 @media (min-width: 768px) {
@@ -289,12 +325,114 @@ main.sidebar-hidden {
     color: #0066cc;
     font-size: 12px;
     white-space: nowrap;
+    text-align: center !important;
+}
+
+#capacity-table tbody td.capacity-value {
+    text-align: center !important;
+}
+
+/* Force center alignment for columns 4 and 5 (capacity columns) */
+#capacity-table tbody tr td:nth-child(4),
+#capacity-table tbody tr td:nth-child(5) {
+    text-align: center !important;
 }
 
 @media (min-width: 768px) {
     #capacity-table .capacity-value {
         font-size: 14px;
     }
+}
+
+/* Permit cell styling (merged cells) */
+#capacity-table .permit-cell {
+    font-weight: 700;
+    color: #1e3a8a;
+    background-color: #f3f4f6;
+    border-right: 2px solid #0066cc;
+    font-size: 13px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+@media (min-width: 768px) {
+    #capacity-table .permit-cell {
+        font-size: 15px;
+    }
+}
+
+/* Permit color-coding for rows */
+#capacity-table tr.permit-35 {
+    background-color: #bae6fd;
+}
+
+#capacity-table tr.permit-35:hover {
+    background-color: #7dd3fc;
+}
+
+#capacity-table tr.permit-35 td.capacity-value {
+    text-align: center !important;
+}
+
+#capacity-table tr.permit-36 {
+    background-color: #fde68a;
+}
+
+#capacity-table tr.permit-36:hover {
+    background-color: #fcd34d;
+}
+
+#capacity-table tr.permit-36 td.capacity-value {
+    text-align: center !important;
+}
+
+#capacity-table tr.permit-391 {
+    background-color: #e9d5ff;
+}
+
+#capacity-table tr.permit-391:hover {
+    background-color: #d8b4fe;
+}
+
+#capacity-table tr.permit-391 td.capacity-value {
+    text-align: center !important;
+}
+
+#capacity-table tr.permit-393 {
+    background-color: #fecdd3;
+}
+
+#capacity-table tr.permit-393:hover {
+    background-color: #fda4af;
+}
+
+#capacity-table tr.permit-393 td.capacity-value {
+    text-align: center !important;
+}
+
+/* Permit-specific permit cell colors */
+#capacity-table tr.permit-35 .permit-cell {
+    background-color: #bae6fd;
+    border-right-color: #0284c7;
+    color: #0369a1;
+}
+
+#capacity-table tr.permit-36 .permit-cell {
+    background-color: #fde68a;
+    border-right-color: #d97706;
+    color: #92400e;
+}
+
+#capacity-table tr.permit-391 .permit-cell {
+    background-color: #e9d5ff;
+    border-right-color: #7c3aed;
+    color: #5b21b6;
+}
+
+#capacity-table tr.permit-393 .permit-cell {
+    background-color: #fecdd3;
+    border-right-color: #e11d48;
+    color: #9f1239;
 }
 
 /* Permits Container */

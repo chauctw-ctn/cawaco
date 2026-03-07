@@ -19,9 +19,17 @@ function loadTelegramConfig() {
         if (fs.existsSync(TELEGRAM_CONFIG_FILE)) {
             const data = fs.readFileSync(TELEGRAM_CONFIG_FILE, 'utf8');
             const savedConfig = JSON.parse(data);
+            
+            // Backward compatibility: convert old field name to new one
+            if (savedConfig.alertCooldown !== undefined && savedConfig.alertRepeatInterval === undefined) {
+                savedConfig.alertRepeatInterval = savedConfig.alertCooldown;
+                delete savedConfig.alertCooldown;
+                console.log('⚠️ Converted alertCooldown to alertRepeatInterval for backward compatibility');
+            }
+            
             // Merge saved config with default config
             config.telegram = { ...config.telegram, ...savedConfig };
-            console.log('✅ Loaded Telegram config:', config.telegram);
+            console.log('✅ Loaded Telegram config:', { ...config.telegram, botToken: config.telegram.botToken ? '***set***' : '(empty)' });
         } else {
             console.log('ℹ️ No saved Telegram config found, using defaults');
         }
@@ -35,6 +43,7 @@ function saveTelegramConfig() {
     try {
         const configToSave = {
             enabled: config.telegram.enabled,
+            botToken: config.telegram.botToken || '',
             chatId: config.telegram.chatId,
             refreshInterval: config.telegram.refreshInterval || 15,
             delayThreshold: config.telegram.delayThreshold || 60,
@@ -68,7 +77,7 @@ const app = express();
 const PORT = config.server.port;
 
 // Middleware để serve static files
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
 // Disable caching for API responses so dashboards always receive fresh data.
@@ -87,6 +96,9 @@ const USERS = config.auth.users;
 
 // JWT Secret (in production, use environment variable)
 const JWT_SECRET = process.env.JWT_SECRET || config.auth.jwtSecret || 'camau-water-monitoring-secret-key-2026';
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+    console.warn('⚠️  CẢNH BÁO: JWT_SECRET chưa được đặt qua biến môi trường. Hãy đặt JWT_SECRET trong Render dashboard để bảo mật!');
+}
 const JWT_EXPIRES_IN = '7d'; // Token hết hạn sau 7 ngày
 
 // Generate JWT token
@@ -483,6 +495,9 @@ app.get('/api/permit-capacity', verifyToken, async (req, res) => {
         await pool.query('SELECT NOW()');
         console.log('✅ Đã kết nối PostgreSQL');
         
+        // Debug: Get all station names from database to see exact names
+        await permitModule.getAllStationNamesFromDB(pool);
+        
         // Get flow data from database (last 30 days)
         console.log('🔍 Đang truy vấn dữ liệu "Tổng lưu lượng" từ database...');
         const flowData = await permitModule.getFlowDataLast30Days(pool, null);
@@ -517,6 +532,8 @@ app.get('/api/permit-capacity', verifyToken, async (req, res) => {
                     permit: permitNumber,
                     monthlyCapacity: Math.round(station.lastMonthCapacity * 100) / 100, // Tháng trước đã hoàn thành
                     currentCapacity: Math.round(station.currentMonthCapacity * 100) / 100, // Tháng hiện tại (từ đầu tháng đến nay)
+                    previousDayCapacity: Math.round(station.previousDayCapacity * 100) / 100, // Ngày hôm qua
+                    todayCapacity: Math.round(station.todayCapacity * 100) / 100, // Ngày hôm nay
                     unit: station.unit || 'm³',
                     recordCount: station.recordCount,
                     source: station.source
@@ -577,6 +594,14 @@ app.post('/api/telegram/alert', verifyToken, async (req, res) => {
             return res.status(400).json({ 
                 success: false, 
                 message: 'Telegram chưa được cấu hình hoặc chưa bật' 
+            });
+        }
+        
+        // Validate bot token format (Telegram bot tokens have format: number:alphanumeric)
+        if (!config.telegram.botToken || !config.telegram.botToken.includes(':')) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Bot token không hợp lệ. Vui lòng cấu hình Bot Token đúng định dạng từ @BotFather' 
             });
         }
         
@@ -660,6 +685,14 @@ app.post('/api/telegram/test', verifyToken, async (req, res) => {
     try {
         const { chatId } = req.body;
         
+        // Validate bot token format first
+        if (!config.telegram.botToken || !config.telegram.botToken.includes(':')) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Bot token không hợp lệ. Vui lòng nhập Bot Token đúng định dạng từ @BotFather (format: 1234567890:ABCdef...)' 
+            });
+        }
+        
         // Use provided chatId or use configured one
         const targetChatId = chatId || config.telegram.chatId;
         
@@ -728,6 +761,28 @@ app.post('/api/telegram/test', verifyToken, async (req, res) => {
     }
 });
 
+// Proxy getUpdates (returns chat IDs without exposing bot token to frontend)
+app.get('/api/telegram/getupdates', verifyToken, async (req, res) => {
+    try {
+        if (!config.telegram.botToken || !config.telegram.botToken.includes(':')) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Bot token chưa được cấu hình hoặc không hợp lệ. Vui lòng nhập Bot Token từ @BotFather' 
+            });
+        }
+        const url = `https://api.telegram.org/bot${config.telegram.botToken}/getUpdates`;
+        const response = await axios.get(url, { timeout: 10000 });
+        res.json(response.data);
+    } catch (error) {
+        console.error('❌ Error fetching Telegram updates:', error.message);
+        let errorMsg = 'Không thể lấy updates từ Telegram';
+        if (error.response?.data?.description) {
+            errorMsg += ': ' + error.response.data.description;
+        }
+        res.status(500).json({ success: false, message: errorMsg });
+    }
+});
+
 // Get Telegram configuration
 app.get('/api/telegram/config', verifyToken, async (req, res) => {
     try {
@@ -735,6 +790,7 @@ app.get('/api/telegram/config', verifyToken, async (req, res) => {
             success: true, 
             config: {
                 enabled: config.telegram.enabled,
+                botToken: config.telegram.botToken ? '***set***' : '',
                 chatId: config.telegram.chatId,
                 refreshInterval: config.telegram.refreshInterval || 15,
                 delayThreshold: config.telegram.delayThreshold || 60,
@@ -762,7 +818,19 @@ app.post('/api/telegram/config', verifyToken, async (req, res) => {
             });
         }
         
-        const { enabled, chatId, refreshInterval, delayThreshold, alertRepeatInterval } = req.body;
+        const { enabled, chatId, refreshInterval, delayThreshold, alertRepeatInterval, botToken } = req.body;
+        
+        // Validate bot token format if provided
+        if (botToken !== undefined && String(botToken).trim() !== '' && botToken !== '***set***') {
+            const tokenStr = String(botToken).trim();
+            if (!tokenStr.includes(':')) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Bot token không hợp lệ. Token phải có định dạng: 1234567890:ABCdef... (lấy từ @BotFather)' 
+                });
+            }
+            config.telegram.botToken = tokenStr;
+        }
         
         if (enabled !== undefined) {
             config.telegram.enabled = Boolean(enabled);
@@ -794,11 +862,15 @@ app.post('/api/telegram/config', verifyToken, async (req, res) => {
             });
         }
         
+        // Restart periodic alert interval with new config
+        startTelegramAlertInterval();
+        
         res.json({ 
             success: true, 
             message: 'Đã cập nhật và lưu cấu hình Telegram',
             config: {
                 enabled: config.telegram.enabled,
+                botToken: config.telegram.botToken ? '***set***' : '',
                 chatId: config.telegram.chatId,
                 refreshInterval: config.telegram.refreshInterval || 15,
                 delayThreshold: config.telegram.delayThreshold || 60,
@@ -947,6 +1019,13 @@ app.post('/api/visitors/unload', (req, res) => {
     }
 });
 
+// ============================================
+// HEALTH CHECK (Lightweight - dành cho Render)
+// ============================================
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
+});
+
 /**
  * API: Lấy dữ liệu tất cả các trạm (TVA + MQTT + SCADA)
  */
@@ -1006,10 +1085,10 @@ app.get('/api/stations', async (req, res) => {
                     else offlineCount++;
                 }
             });
-        } else if (fs.existsSync('data_quantrac.json')) {
+        } else if (fs.existsSync(path.join(__dirname, 'data_quantrac.json'))) {
             // Fallback: Đọc từ file JSON nếu không có dữ liệu trong DB
             console.log('⚠️ No TVA data in DB, loading from JSON file');
-            const tvaData = JSON.parse(fs.readFileSync('data_quantrac.json', 'utf8'));
+            const tvaData = JSON.parse(fs.readFileSync(path.join(__dirname, 'data_quantrac.json'), 'utf8'));
             
             tvaData.stations.forEach(station => {
                 const coords = TVA_STATION_COORDINATES[station.station];
@@ -1106,10 +1185,10 @@ app.get('/api/stations', async (req, res) => {
                     console.warn(`   ⚠️ No coordinates found for MQTT station: ${stationName}`);
                 }
             });
-        } else if (fs.existsSync('data_mqtt.json')) {
+        } else if (fs.existsSync(path.join(__dirname, 'data_mqtt.json'))) {
             // Fallback: Đọc từ file JSON
             console.log('⚠️ No MQTT data in DB, loading from JSON file');
-            const mqttData = JSON.parse(fs.readFileSync('data_mqtt.json', 'utf8'));
+            const mqttData = JSON.parse(fs.readFileSync(path.join(__dirname, 'data_mqtt.json'), 'utf8'));
             
             mqttData.stations.forEach(station => {
                 const status = stationStatus[station.station] || { 
@@ -1183,10 +1262,10 @@ app.get('/api/stations', async (req, res) => {
                     console.warn(`   ⚠️ No coordinates found for SCADA station: ${stationName}`);
                 }
             });
-        } else if (fs.existsSync('data_scada_tva.json')) {
+        } else if (fs.existsSync(path.join(__dirname, 'data_scada_tva.json'))) {
             // Fallback: Đọc từ file JSON
             console.log('⚠️ No SCADA data in DB, loading from JSON file');
-            const scadaData = JSON.parse(fs.readFileSync('data_scada_tva.json', 'utf8'));
+            const scadaData = JSON.parse(fs.readFileSync(path.join(__dirname, 'data_scada_tva.json'), 'utf8'));
             
             if (scadaData.stationsGrouped) {
                 Object.keys(scadaData.stationsGrouped).forEach(stationName => {
@@ -1295,14 +1374,14 @@ app.get('/api/stations', async (req, res) => {
  */
 app.get('/api/stations/tva', (req, res) => {
     try {
-        if (!fs.existsSync('data_quantrac.json')) {
+        if (!fs.existsSync(path.join(__dirname, 'data_quantrac.json'))) {
             return res.status(404).json({
                 success: false,
                 error: 'Không tìm thấy dữ liệu TVA'
             });
         }
         
-        const tvaData = JSON.parse(fs.readFileSync('data_quantrac.json', 'utf8'));
+        const tvaData = JSON.parse(fs.readFileSync(path.join(__dirname, 'data_quantrac.json'), 'utf8'));
         
         const stations = tvaData.stations.map(station => {
             const coords = TVA_STATION_COORDINATES[station.station];
@@ -1337,14 +1416,14 @@ app.get('/api/stations/tva', (req, res) => {
  */
 app.get('/api/stations/mqtt', (req, res) => {
     try {
-        if (!fs.existsSync('data_mqtt.json')) {
+        if (!fs.existsSync(path.join(__dirname, 'data_mqtt.json'))) {
             return res.status(404).json({
                 success: false,
                 error: 'Không tìm thấy dữ liệu MQTT'
             });
         }
         
-        const mqttData = JSON.parse(fs.readFileSync('data_mqtt.json', 'utf8'));
+        const mqttData = JSON.parse(fs.readFileSync(path.join(__dirname, 'data_mqtt.json'), 'utf8'));
         
         const stations = mqttData.stations.filter(s => s.lat && s.lng).map(station => ({
             id: `mqtt_${station.station.replace(/\s+/g, '_')}`,
@@ -1381,8 +1460,8 @@ app.get('/api/station/:id', (req, res) => {
         
         let stationData = null;
         
-        if (type === 'tva' && fs.existsSync('data_quantrac.json')) {
-            const tvaData = JSON.parse(fs.readFileSync('data_quantrac.json', 'utf8'));
+        if (type === 'tva' && fs.existsSync(path.join(__dirname, 'data_quantrac.json'))) {
+            const tvaData = JSON.parse(fs.readFileSync(path.join(__dirname, 'data_quantrac.json'), 'utf8'));
             const station = tvaData.stations.find(s => 
                 s.station.replace(/\s+/g, '_') === nameParts.join('_')
             );
@@ -1400,8 +1479,8 @@ app.get('/api/station/:id', (req, res) => {
                     timestamp: tvaData.timestamp
                 };
             }
-        } else if (type === 'mqtt' && fs.existsSync('data_mqtt.json')) {
-            const mqttData = JSON.parse(fs.readFileSync('data_mqtt.json', 'utf8'));
+        } else if (type === 'mqtt' && fs.existsSync(path.join(__dirname, 'data_mqtt.json'))) {
+            const mqttData = JSON.parse(fs.readFileSync(path.join(__dirname, 'data_mqtt.json'), 'utf8'));
             const station = mqttData.stations.find(s => 
                 s.station.replace(/\s+/g, '_') === nameParts.join('_')
             );
@@ -1758,6 +1837,143 @@ app.get('/api/scada/cached', async (req, res) => {
 });
 
 
+// ============================================
+// SERVER-SIDE TELEGRAM PERIODIC ALERTS
+// ============================================
+
+// In-memory alert history: stationName -> { lastAlertTime, lastAlertStatus }
+const serverAlertHistory = new Map();
+let telegramAlertInterval = null;
+let telegramAlertInitialized = false; // First run: snapshot only, don't alert
+
+function formatDelayStr(delayMinutes) {
+    if (!delayMinutes && delayMinutes !== 0) return 'N/A';
+    if (delayMinutes < 60) return `${delayMinutes} phút`;
+    if (delayMinutes < 1440) {
+        const h = Math.floor(delayMinutes / 60), m = delayMinutes % 60;
+        return m > 0 ? `${h} giờ ${m} phút` : `${h} giờ`;
+    }
+    const d = Math.floor(delayMinutes / 1440), h = Math.floor((delayMinutes % 1440) / 60);
+    return h > 0 ? `${d} ngày ${h} giờ` : `${d} ngày`;
+}
+
+async function sendServerTelegramMessage(text) {
+    const botToken = config.telegram.botToken;
+    const chatId = config.telegram.chatId;
+    if (!botToken || !chatId) {
+        throw new Error('botToken hoặc chatId chưa được cấu hình');
+    }
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    const response = await axios.post(url, {
+        chat_id: chatId,
+        text,
+        parse_mode: 'HTML'
+    }, { timeout: 10000 });
+    if (!response.data.ok) throw new Error('Telegram API trả về lỗi');
+    return response.data;
+}
+
+async function checkAndSendTelegramAlerts() {
+    try {
+        if (!config.telegram.enabled || !config.telegram.botToken || !config.telegram.chatId) return;
+
+        const delayThreshold = config.telegram.delayThreshold || 60;
+        const alertRepeatInterval = config.telegram.alertRepeatInterval || 1;
+        const now = Date.now();
+
+        const stationStatus = await dbModule.checkStationsValueChanges(delayThreshold);
+
+        // First run: just snapshot all current statuses, don't send any alerts
+        if (!telegramAlertInitialized) {
+            for (const [stationName, status] of Object.entries(stationStatus)) {
+                serverAlertHistory.set(stationName, {
+                    lastAlertTime: now,
+                    lastAlertStatus: status.status
+                });
+            }
+            telegramAlertInitialized = true;
+            console.log(`🛡️ [TELEGRAM] Snapshot khởi tạo: ${Object.keys(stationStatus).length} trạm`);
+            return;
+        }
+
+        for (const [stationName, status] of Object.entries(stationStatus)) {
+            const currentStatus = status.status; // 'online' | 'offline'
+            const history = serverAlertHistory.get(stationName);
+            const timeSinceUpdate = status.timeSinceUpdate || 0;
+
+            let shouldSend = false;
+            let reason = '';
+
+            if (!history) {
+                // New station appeared after init — send if offline
+                if (currentStatus === 'offline') {
+                    shouldSend = true;
+                    reason = 'new_station_offline';
+                }
+                serverAlertHistory.set(stationName, { lastAlertTime: now, lastAlertStatus: currentStatus });
+            } else {
+                const minutesSinceLast = (now - history.lastAlertTime) / (1000 * 60);
+                if (history.lastAlertStatus !== currentStatus) {
+                    shouldSend = true;
+                    reason = 'status_changed';
+                } else if (currentStatus === 'offline' && minutesSinceLast >= alertRepeatInterval) {
+                    shouldSend = true;
+                    reason = 'periodic_reminder';
+                }
+            }
+
+            if (!shouldSend) continue;
+
+            const statusEmoji = currentStatus === 'offline' ? '❌ Offline' : '✅ Online';
+            const delayStr = formatDelayStr(timeSinceUpdate);
+            const alertTime = new Date().toLocaleString('vi-VN', {
+                timeZone: 'Asia/Ho_Chi_Minh',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                day: '2-digit', month: '2-digit', year: 'numeric'
+            });
+            const measurementTime = status.lastUpdate
+                ? new Date(status.lastUpdate).toLocaleString('vi-VN', {
+                    timeZone: 'Asia/Ho_Chi_Minh',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    day: '2-digit', month: '2-digit', year: 'numeric'
+                })
+                : 'N/A';
+
+            const message = `📍 Trạm: ${stationName}\n📡 ${statusEmoji}\n🕒 Thời gian đo: ${measurementTime}\n⏱️ Thời gian chậm gửi dữ liệu: ${delayStr}\n🕒 Thời gian gửi cảnh báo: ${alertTime}`;
+
+            try {
+                await sendServerTelegramMessage(message);
+                serverAlertHistory.set(stationName, { lastAlertTime: now, lastAlertStatus: currentStatus });
+                console.log(`✅ [TELEGRAM] Đã gửi: ${stationName} → ${currentStatus} (${reason})`);
+            } catch (err) {
+                console.error(`❌ [TELEGRAM] Lỗi gửi cho ${stationName}:`, err.message);
+            }
+        }
+    } catch (error) {
+        console.error('❌ [TELEGRAM] Lỗi kiểm tra định kỳ:', error.message);
+    }
+}
+
+function startTelegramAlertInterval() {
+    if (telegramAlertInterval) {
+        clearInterval(telegramAlertInterval);
+        telegramAlertInterval = null;
+    }
+    if (!config.telegram.enabled || !config.telegram.botToken || !config.telegram.chatId) {
+        console.log('ℹ️ [TELEGRAM] Cảnh báo định kỳ chưa bật (thiếu botToken/chatId hoặc disabled)');
+        return;
+    }
+    // Reset state so next run re-initializes snapshot
+    telegramAlertInitialized = false;
+    // Use refreshInterval as the check cycle; alertRepeatInterval only guards
+    // how often a repeat reminder is sent inside checkAndSendTelegramAlerts.
+    const intervalMs = Math.max(1, config.telegram.refreshInterval || 15) * 60 * 1000;
+    telegramAlertInterval = setInterval(checkAndSendTelegramAlerts, intervalMs);
+    console.log(`🔔 [TELEGRAM] Đã khởi động cảnh báo định kỳ mỗi ${config.telegram.refreshInterval || 15} phút (nhắc lại offline mỗi ${config.telegram.alertRepeatInterval || 1} phút)`);
+    // Run once immediately on start (will take snapshot, not alert)
+    checkAndSendTelegramAlerts();
+}
+
 // Khởi động server
 app.listen(PORT, async () => {
     console.log('╔═══════════════════════════════════════════════════════════════════════════╗');
@@ -1877,6 +2093,14 @@ app.listen(PORT, async () => {
             console.error('❌ Lỗi dọn dẹp dữ liệu:', error.message);
         }
     }, config.intervals.cleanup);
+
+    // =================================================
+    // CẢNH BÁO TELEGRAM ĐỊNH KỲ (Server-side)
+    // =================================================
+    // Khởi động sau 30 giây để DB có dữ liệu trước
+    setTimeout(() => {
+        startTelegramAlertInterval();
+    }, 30000);
     
     console.log('🔄 Tự động lưu dữ liệu vào SQL mỗi 5 phút\n');
 });

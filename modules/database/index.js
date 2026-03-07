@@ -59,10 +59,24 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 /**
- * Lấy timestamp hiện tại theo múi giờ GMT+7 (Hồ Chí Minh)
+ * Lấy timestamp hiện tại
+ * 
+ * QUAN TRỌNG:
+ * - PostgreSQL TIMESTAMPTZ tự động xử lý timezone
+ * - Connection pool đã set timezone = 'Asia/Ho_Chi_Minh'
+ * - Chỉ cần gửi timestamp chuẩn ISO/UTC, PostgreSQL sẽ tự convert và lưu đúng
+ * - Khi query, PostgreSQL trả về theo timezone session (GMT+7)
+ * 
+ * Trả về: ISO 8601 UTC string (JavaScript standard)
  */
 function getVietnamTimestamp() {
+    // Cách 1: Đơn giản nhất - return ISO UTC, để PostgreSQL xử lý
     return new Date().toISOString();
+    
+    // PostgreSQL sẽ:
+    // 1. Nhận ISO timestamp (UTC)
+    // 2. Lưu internally as UTC
+    // 3. Khi query với timezone='Asia/Ho_Chi_Minh', tự động chuyển sang GMT+7
 }
 
 /**
@@ -412,10 +426,11 @@ async function saveTVAData(stations) {
                     try {
                         const cleanValue = parseNumericValue(param.value);
                         const normalizedParamName = normalizeParameterNameByValue(param.name, cleanValue, param.unit);
+                        const timestamp = getVietnamTimestamp();
                         await client.query(
-                            `INSERT INTO tva_data (station_name, station_id, parameter_name, value, unit)
-                             VALUES ($1, $2, $3, $4, $5)`,
-                            [station.station, stationId, normalizedParamName, cleanValue, param.unit]
+                            `INSERT INTO tva_data (station_name, station_id, parameter_name, value, unit, created_at)
+                             VALUES ($1, $2, $3, $4, $5, $6)`,
+                            [station.station, stationId, normalizedParamName, cleanValue, param.unit, timestamp]
                         );
                         savedCount++;
                     } catch (err) {
@@ -461,10 +476,11 @@ async function saveMQTTData(stations) {
                     try {
                         const cleanValue = parseNumericValue(param.value);
                         const normalizedParamName = normalizeParameterNameByValue(param.name, cleanValue, param.unit);
+                        const timestamp = getVietnamTimestamp();
                         await client.query(
-                            `INSERT INTO mqtt_data (station_name, station_id, device_name, parameter_name, value, unit)
-                             VALUES ($1, $2, $3, $4, $5, $6)`,
-                            [station.station, stationId, station.deviceName || '', normalizedParamName, cleanValue, param.unit]
+                            `INSERT INTO mqtt_data (station_name, station_id, device_name, parameter_name, value, unit, created_at)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                            [station.station, stationId, station.deviceName || '', normalizedParamName, cleanValue, param.unit, timestamp]
                         );
                         savedCount++;
                     } catch (err) {
@@ -518,11 +534,12 @@ async function saveSCADAData(stationsGrouped) {
                     try {
                         const paramName = param.parameterName || param.parameter;
                         const normalizedParamName = normalizeParameterNameByValue(paramName, numericValue, param.unit);
+                        const timestamp = getVietnamTimestamp();
                         await client.query(
-                            `INSERT INTO scada_data (station_name, station_id, parameter_name, value, unit)
-                             VALUES ($1, $2, $3, $4, $5)`,
+                            `INSERT INTO scada_data (station_name, station_id, parameter_name, value, unit, created_at)
+                             VALUES ($1, $2, $3, $4, $5, $6)`,
                             [station.stationName || station.station, stationId, normalizedParamName, 
-                             isNaN(numericValue) ? null : numericValue, param.unit || '']
+                             isNaN(numericValue) ? null : numericValue, param.unit || '', timestamp]
                         );
                         savedCount++;
                     } catch (err) {
@@ -755,7 +772,7 @@ async function cleanOldData(daysToKeep = 90) {
  * @returns {Object} Map chứa status của các trạm
  */
 async function checkStationsValueChanges(timeoutMinutes = 60) {
-    const cacheKey = `station_status_${timeoutMinutes}`;
+    const cacheKey = `station_status_all`;
     const cached = cache.get(cacheKey);
     if (cached) {
         return cached;
@@ -775,14 +792,13 @@ async function checkStationsValueChanges(timeoutMinutes = 60) {
     let totalOffline = 0;
 
     for (const table of tables) {
-        // Optimized query: Use index-friendly approach
-        // Uses idx_<table>_station_time index efficiently
+        // Return the latest record for EVERY station regardless of age,
+        // so long-offline stations (no data in the window) are still detected.
         const query = `
             SELECT DISTINCT ON (station_name)
                 station_name,
                 created_at
             FROM ${table.name}
-            WHERE created_at > NOW() - INTERVAL '${timeoutMinutes + 5} minutes'
             ORDER BY station_name, created_at DESC
         `;
 
@@ -1046,6 +1062,160 @@ async function deleteTestStations() {
 }
 
 /**
+ * Đồng bộ lại timestamp của dữ liệu cũ
+ * Chuyển đổi timestamp từ UTC sang múi giờ Việt Nam (GMT+7) nếu cần
+ * 
+ * LƯU Ý: PostgreSQL TIMESTAMPTZ tự động lưu UTC và chuyển đổi khi query
+ * Hàm này chỉ cần thiết nếu muốn chuẩn hóa lại dữ liệu
+ */
+async function syncTimestamps(options = {}) {
+    const {
+        dryRun = true,  // Chế độ test, không thực sự update
+        tables = ['tva_data', 'mqtt_data', 'scada_data'],
+        hoursOffset = null // Nếu null, sẽ kiểm tra và tự động xác định
+    } = options;
+
+    const client = await pool.connect();
+    
+    try {
+        console.log('\n🔄 Bắt đầu đồng bộ timestamp...');
+        console.log(`📋 Mode: ${dryRun ? 'DRY RUN (không update)' : 'LIVE UPDATE'}`);
+        
+        // Set timezone cho session
+        await client.query("SET TIMEZONE='Asia/Ho_Chi_Minh'");
+        
+        for (const table of tables) {
+            console.log(`\n📊 Kiểm tra bảng: ${table}`);
+            
+            // Kiểm tra sample dữ liệu hiện tại
+            const sampleQuery = `
+                SELECT 
+                    id,
+                    created_at,
+                    created_at AT TIME ZONE 'UTC' as utc_time,
+                    created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as vietnam_time,
+                    EXTRACT(TIMEZONE_HOUR FROM created_at) as tz_offset
+                FROM ${table}
+                ORDER BY created_at DESC
+                LIMIT 5
+            `;
+            
+            const sample = await client.query(sampleQuery);
+            
+            if (sample.rows.length === 0) {
+                console.log(`  ⚠️ Bảng ${table} không có dữ liệu`);
+                continue;
+            }
+            
+            console.log(`  📝 Sample 5 records gần nhất:`);
+            sample.rows.forEach((row, idx) => {
+                const created = new Date(row.created_at);
+                const vietnam = new Date(row.vietnam_time);
+                console.log(`    ${idx + 1}. ID: ${row.id}`);
+                console.log(`       - Timestamp hiện tại: ${created.toISOString()}`);
+                console.log(`       - Hiển thị GMT+7: ${vietnam.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
+                console.log(`       - Timezone offset: ${row.tz_offset}h`);
+            });
+            
+            // Đếm tổng số records
+            const countResult = await client.query(`SELECT COUNT(*) as total FROM ${table}`);
+            const totalRecords = parseInt(countResult.rows[0].total);
+            console.log(`  📊 Tổng số records: ${totalRecords.toLocaleString()}`);
+            
+            // Nếu không phải dry run và cần update
+            if (!dryRun && hoursOffset !== null) {
+                console.log(`  🔧 Đang điều chỉnh timestamp (${hoursOffset > 0 ? '+' : ''}${hoursOffset}h)...`);
+                
+                const updateQuery = `
+                    UPDATE ${table}
+                    SET created_at = created_at + INTERVAL '${hoursOffset} hours'
+                    WHERE created_at IS NOT NULL
+                `;
+                
+                const result = await client.query(updateQuery);
+                console.log(`  ✅ Đã cập nhật ${result.rowCount} records`);
+            }
+        }
+        
+        console.log('\n✅ Hoàn tất kiểm tra timestamp');
+        
+        if (dryRun) {
+            console.log('\n💡 TIP: Chạy với { dryRun: false, hoursOffset: 7 } để update thực sự');
+            console.log('   Ví dụ: await syncTimestamps({ dryRun: false, hoursOffset: 7 })');
+        }
+        
+        return true;
+    } catch (err) {
+        console.error('❌ Lỗi khi đồng bộ timestamp:', err.message);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+/**
+ * Kiểm tra và báo cáo tình trạng timestamp trong database
+ */
+async function checkTimestampStatus() {
+    const client = await pool.connect();
+    
+    try {
+        await client.query("SET TIMEZONE='Asia/Ho_Chi_Minh'");
+        
+        console.log('\n🔍 KIỂM TRA TÌNH TRẠNG TIMESTAMP\n');
+        
+        const tables = ['tva_data', 'mqtt_data', 'scada_data'];
+        
+        for (const table of tables) {
+            console.log(`📊 Bảng: ${table}`);
+            
+            const query = `
+                SELECT 
+                    MIN(created_at) as oldest,
+                    MAX(created_at) as newest,
+                    COUNT(*) as total,
+                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 hour') as last_hour,
+                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day') as last_day
+                FROM ${table}
+            `;
+            
+            const result = await client.query(query);
+            const row = result.rows[0];
+            
+            if (parseInt(row.total) === 0) {
+                console.log('  ⚠️ Không có dữ liệu\n');
+                continue;
+            }
+            
+            const oldest = new Date(row.oldest);
+            const newest = new Date(row.newest);
+            
+            console.log(`  • Tổng records: ${parseInt(row.total).toLocaleString()}`);
+            console.log(`  • Record cũ nhất: ${oldest.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
+            console.log(`  • Record mới nhất: ${newest.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
+            console.log(`  • Records 1 giờ qua: ${parseInt(row.last_hour).toLocaleString()}`);
+            console.log(`  • Records 24 giờ qua: ${parseInt(row.last_day).toLocaleString()}`);
+            console.log('');
+        }
+        
+        // Kiểm tra timezone setting
+        const tzResult = await client.query('SHOW timezone');
+        console.log(`⚙️ Timezone hiện tại: ${tzResult.rows[0].TimeZone}`);
+        
+        const nowResult = await client.query('SELECT NOW() as now, CURRENT_TIMESTAMP as current_ts');
+        const now = new Date(nowResult.rows[0].now);
+        console.log(`🕐 Thời gian server: ${now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
+        
+        return true;
+    } catch (err) {
+        console.error('❌ Lỗi khi kiểm tra timestamp:', err.message);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+/**
  * Đóng database connection
  */
 async function closeDatabase() {
@@ -1076,5 +1246,7 @@ module.exports = {
     deleteTestStations,
     closeDatabase,
     getVietnamTimestamp,
+    syncTimestamps,
+    checkTimestampStatus,
     pool
 };

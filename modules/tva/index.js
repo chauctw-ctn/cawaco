@@ -6,7 +6,10 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
 const fs = require("fs");
+const path = require("path");
 const config = require('../../config');
+
+const DATA_QUANTRAC_PATH = path.join(__dirname, '../../data_quantrac.json');
 
 /**
  * Thu thập dữ liệu từ hệ thống TVA
@@ -157,7 +160,7 @@ async function crawlTVAData() {
                 stations: allStations
             };
 
-            fs.writeFileSync("data_quantrac.json", JSON.stringify(outputData, null, 2), "utf8");
+            fs.writeFileSync(DATA_QUANTRAC_PATH, JSON.stringify(outputData, null, 2), "utf8");
         } catch (fileError) {
             console.warn("⚠️ [TVA] Không thể lưu file:", fileError.message);
         }

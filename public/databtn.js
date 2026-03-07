@@ -324,9 +324,11 @@ function showLoading() {
     const loading = document.getElementById('loading');
     const errorMessage = document.getElementById('error-message');
     const tableBody = document.getElementById('table-body');
+    const dataWrapper = document.getElementById('data-wrapper');
     
     if (loading) loading.style.display = 'block';
     if (errorMessage) errorMessage.style.display = 'none';
+    if (dataWrapper) dataWrapper.style.display = 'none';
     if (tableBody) tableBody.innerHTML = '';
 }
 
@@ -335,7 +337,9 @@ function showLoading() {
  */
 function hideLoading() {
     const loading = document.getElementById('loading');
+    const dataWrapper = document.getElementById('data-wrapper');
     if (loading) loading.style.display = 'none';
+    if (dataWrapper) dataWrapper.style.display = 'block';
 }
 
 /**
@@ -739,6 +743,7 @@ function setupStatusCheckInterval() {
     // Only setup if Telegram is enabled
     if (!telegramConfig || !telegramConfig.enabled) {
         console.log('⚠️ Telegram not enabled, skipping status check interval setup');
+        console.log('   Telegram config:', telegramConfig);
         return;
     }
     
@@ -749,15 +754,26 @@ function setupStatusCheckInterval() {
     
     console.log(`⚙️ Setting up status check interval: ${CHECK_INTERVAL_MINUTES} minute(s)`);
     console.log(`   Alert repeat interval: ${alertRepeatIntervalMinutes} minute(s)`);
+    console.log(`   Telegram enabled: ${telegramConfig.enabled}`);
+    console.log(`   Telegram chatId: ${telegramConfig.chatId}`);
     
     // Set new interval for status checks (convert minutes to milliseconds)
     statusCheckInterval = setInterval(() => {
         console.log('⏰ Periodic status check triggered at', new Date().toLocaleString('vi-VN'));
+        console.log('   Current data length:', currentData?.length || 0);
+        console.log('   Has loaded data once:', hasLoadedDataOnce);
         void checkStationStatusChanges();
     }, intervalMs);
     
     console.log(`✅ Status check interval set to ${CHECK_INTERVAL_MINUTES} minute(s)`);
     console.log(`📅 Next check will run at: ${new Date(Date.now() + intervalMs).toLocaleString('vi-VN')}`);
+    
+    // Run first check immediately after 5 seconds (give time for data to load)
+    console.log('⏱️ First status check will run in 5 seconds...');
+    setTimeout(() => {
+        console.log('🔔 Running initial status check after delay...');
+        void checkStationStatusChanges();
+    }, 5000);
 }
 
 /**
@@ -1340,266 +1356,6 @@ async function initializePage() {
     console.log('✅ Databtn page initialization complete');
 }
 
-/**
- * Setup Telegram configuration modal
- */
-function setupTelegramConfigModal() {
-    const telegramConfigBtn = document.getElementById('telegram-config-btn');
-    const telegramConfigModal = document.getElementById('telegram-config-modal');
-    const closeTelegramConfig = document.getElementById('close-telegram-config');
-    const cancelTelegramConfig = document.getElementById('cancel-telegram-config');
-    const telegramConfigForm = document.getElementById('telegram-config-form');
-    const telegramConfigError = document.getElementById('telegram-config-error');
-    const testTelegramBtn = document.getElementById('test-telegram-btn');
-    
-    // Open modal
-    if (telegramConfigBtn) {
-        telegramConfigBtn.addEventListener('click', async function() {
-            // Load current config
-            await loadTelegramConfigToModal();
-            telegramConfigModal.style.display = 'flex';
-        });
-    }
-    
-    // Test Telegram button
-    if (testTelegramBtn) {
-        testTelegramBtn.addEventListener('click', async function() {
-            await testTelegramConnection();
-        });
-    }
-    
-    // Close modal handlers
-    [closeTelegramConfig, cancelTelegramConfig].forEach(btn => {
-        if (btn) {
-            btn.addEventListener('click', function() {
-                telegramConfigModal.style.display = 'none';
-                telegramConfigError.textContent = '';
-                const testResult = document.getElementById('test-telegram-result');
-                if (testResult) testResult.textContent = '';
-            });
-        }
-    });
-    
-    // Close on outside click
-    telegramConfigModal?.addEventListener('click', function(e) {
-        if (e.target === telegramConfigModal) {
-            telegramConfigModal.style.display = 'none';
-            telegramConfigError.textContent = '';
-            const testResult = document.getElementById('test-telegram-result');
-            if (testResult) testResult.textContent = '';
-        }
-    });
-    
-    // Handle form submit
-    if (telegramConfigForm) {
-        telegramConfigForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            await saveTelegramConfig();
-        });
-    }
-}
-
-/**
- * Load Telegram config to modal
- */
-async function loadTelegramConfigToModal() {
-    try {
-        const token = localStorage.getItem('authToken');
-        if (!token) return;
-        
-        const response = await fetch('/api/telegram/config', {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            if (data.success) {
-                const enabledCheckbox = document.getElementById('telegram-enabled');
-                const chatIdInput = document.getElementById('telegram-chat-id');
-                const refreshIntervalInput = document.getElementById('telegram-refresh-interval');
-                const delayThresholdInput = document.getElementById('telegram-delay-threshold');
-                const alertRepeatInput = document.getElementById('telegram-alert-repeat');
-                
-                if (enabledCheckbox) enabledCheckbox.checked = data.config.enabled;
-                if (chatIdInput) chatIdInput.value = data.config.chatId || '';
-                if (refreshIntervalInput) refreshIntervalInput.value = data.config.refreshInterval || 15;
-                if (delayThresholdInput) delayThresholdInput.value = data.config.delayThreshold || 60;
-                if (alertRepeatInput) alertRepeatInput.value = data.config.alertRepeatInterval || 1;
-            }
-        }
-    } catch (error) {
-        console.error('Error loading Telegram config:', error);
-    }
-}
-
-/**
- * Save Telegram config
- */
-async function saveTelegramConfig() {
-    const enabledCheckbox = document.getElementById('telegram-enabled');
-    const chatIdInput = document.getElementById('telegram-chat-id');
-    const refreshIntervalInput = document.getElementById('telegram-refresh-interval');
-    const delayThresholdInput = document.getElementById('telegram-delay-threshold');
-    const alertRepeatInput = document.getElementById('telegram-alert-repeat');
-    const telegramConfigError = document.getElementById('telegram-config-error');
-    const telegramConfigModal = document.getElementById('telegram-config-modal');
-    
-    try {
-        telegramConfigError.textContent = '';
-        
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-            throw new Error('Chưa đăng nhập');
-        }
-        
-        const enabled = enabledCheckbox.checked;
-        const chatId = chatIdInput.value.trim();
-        const refreshInterval = parseInt(refreshIntervalInput.value);
-        const delayThreshold = parseInt(delayThresholdInput.value);
-        const alertRepeat = parseInt(alertRepeatInput.value);
-        
-        // Validate
-        if (enabled && !chatId) {
-            throw new Error('Vui lòng nhập Chat ID để bật cảnh báo');
-        }
-        
-        if (isNaN(refreshInterval) || refreshInterval < 15) {
-            throw new Error('Chu kỳ quét tối thiểu là 15 phút');
-        }
-        
-        if (isNaN(delayThreshold) || delayThreshold < 1) {
-            throw new Error('Độ trễ offline tối thiểu là 1 phút');
-        }
-        
-        if (isNaN(alertRepeat) || alertRepeat < 1) {
-            throw new Error('Chu kỳ nhắc lại cảnh báo tối thiểu là 1 phút');
-        }
-        
-        const response = await fetch('/api/telegram/config', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                enabled: enabled,
-                chatId: chatId,
-                refreshInterval: refreshInterval,
-                delayThreshold: delayThreshold,
-                alertRepeatInterval: alertRepeat
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok || !data.success) {
-            throw new Error(data.message || 'Không thể lưu cấu hình');
-        }
-        
-        // Update local config
-        telegramConfig = data.config;
-        refreshIntervalMinutes = refreshInterval;
-        delayThresholdMinutes = delayThreshold;
-        alertRepeatIntervalMinutes = alertRepeat;
-        
-        // Restart intervals with new settings
-        setupAutoRefresh();
-        setupStatusCheckInterval();
-        
-        // Re-render table with new threshold
-        renderTable();
-        
-        // Close modal
-        telegramConfigModal.style.display = 'none';
-        
-        // Show success message
-        alert('Đã lưu cấu hình Telegram thành công!');
-        
-    } catch (error) {
-        console.error('Error saving Telegram config:', error);
-        telegramConfigError.textContent = error.message || 'Không thể lưu cấu hình';
-    }
-}
-
-/**
- * Test Telegram connection
- */
-async function testTelegramConnection() {
-    const chatIdInput = document.getElementById('telegram-chat-id');
-    const testResult = document.getElementById('test-telegram-result');
-    const testBtn = document.getElementById('test-telegram-btn');
-    const telegramConfigError = document.getElementById('telegram-config-error');
-    
-    try {
-        telegramConfigError.textContent = '';
-        testResult.textContent = '';
-        testResult.style.color = '#6b7280';
-        
-        const chatId = chatIdInput.value.trim();
-        
-        if (!chatId) {
-            throw new Error('Vui lòng nhập Chat ID trước khi test');
-        }
-        
-        // Disable button while testing
-        testBtn.disabled = true;
-        testBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px; animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Đang gửi...';
-        testResult.textContent = '⏳ Đang gửi tin nhắn test...';
-        
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-            throw new Error('Chưa đăng nhập');
-        }
-        
-        const response = await fetch('/api/telegram/test', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                chatId: chatId
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok || !data.success) {
-            throw new Error(data.message || 'Không thể gửi tin nhắn test');
-        }
-        
-        // Success
-        testResult.textContent = '✅ ' + data.message;
-        testResult.style.color = '#059669';
-        
-    } catch (error) {
-        console.error('Error testing Telegram:', error);
-        testResult.textContent = '❌ ' + (error.message || 'Không thể gửi tin nhắn test');
-        testResult.style.color = '#dc2626';
-    } finally {
-        // Re-enable button
-        if (testBtn) {
-            testBtn.disabled = false;
-            testBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Gửi tin nhắn test';
-        }
-    }
-}
-
-// Initialize Telegram modal after header is loaded
-function initializeTelegramModal() {
-    // Wait for header to be loaded (telegram button is in the header)
-    if (document.getElementById('telegram-config-btn')) {
-        setupTelegramConfigModal();
-    } else {
-        // If telegram button doesn't exist yet, wait for headerLoaded event
-        document.addEventListener('headerLoaded', function() {
-            setupTelegramConfigModal();
-        }, { once: true });
-    }
-}
-
 // ============================================
 // STATION HISTORY MODAL
 // ============================================
@@ -1882,13 +1638,6 @@ function makeStationNamesClickable() {
             openStationHistoryModal(stationName);
         });
     });
-}
-
-// Call initialization
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeTelegramModal);
-} else {
-    initializeTelegramModal();
 }
 
 // Export for manual initialization after auth

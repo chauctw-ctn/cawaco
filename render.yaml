@@ -4,7 +4,7 @@ services:
     runtime: node
     buildCommand: npm install
     startCommand: node server.js
-    healthCheckPath: /api/stations
+    healthCheckPath: /health
     disk:
       name: water-monitoring-data
       mountPath: /opt/render/project/src/data

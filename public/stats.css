@@ -187,8 +187,11 @@ body {
     z-index: 100;
     transition: transform 0.3s ease;
     overflow-y: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
-    transform: translateX(0);
+    overscroll-behavior: contain;
+    will-change: transform;
+    transform: translateX(-100%);
 }
 
 .sidebar.hidden {

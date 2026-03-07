@@ -1,209 +1,179 @@
 /**
- * Script: Liệt kê danh sách các Giếng/Trạm bơm theo nhóm giấy phép
- * Lấy dữ liệu từ MONRE IoT API (không kể các trạm quan trắc)
- * Tính công suất hoạt động từ PostgreSQL (Tổng lưu lượng 30 ngày gần nhất)
+ * Module để nhóm các trạm bơm/giếng theo giấy phép
+ * và tính toán công suất từ database
  */
 
-const axios = require('axios');
 const { Pool } = require('pg');
 const config = require('./config');
+const monreModule = require('./modules/monre');
 
-// --- CẤU HÌNH MONRE API ---
-const USERNAME = 'capnuoccamau';
-const PASSWORD = 'Qu@nTr@c2121';
-const PORTAL_URL = "https://iot.monre.gov.vn/portal/sharing/rest/generateToken";
-const DATA_URL = "https://iot.monre.gov.vn/server/rest/services/Hosted/TNN_BIGDATA_EVENT_NEW/FeatureServer/0/query";
-
-// Bộ lọc đơn vị quản lý
-const PROJECT_FILTER = "(congtrinh='CAPNUOCCAMAU1' OR congtrinh='CONGTYCOPHANCAPNUOCC' OR congtrinh='NHAMAYCAPNUOCSO1' OR congtrinh='CAPNUOCCAMAUSO2')";
-
-// Map công trình theo giấy phép
-const PERMIT_MAPPING = {
-    "393/gp-bnnmt 22/09/2025": ["NHAMAYCAPNUOCSO1"],
-    "391/gp-bnnmt 19/09/2025": ["CONGTYCOPHANCAPNUOCC"],
-    "35/gp-btnmt 15/01/2025": ["CAPNUOCCAMAU1"],
-    "36/gp-btnmt 15/01/2025": ["CAPNUOCCAMAUSO2"]
+// Map trạm/giếng theo giấy phép (dựa trên tên giếng/trạm)
+// Bao gồm cả tên viết tắt và tên đầy đủ trong database
+const STATION_PERMIT_MAPPING = {
+    // Giấy phép 35: 12 trạm
+    "35/gp-btnmt 15/01/2025": [
+        "G1", "GIẾNG SỐ 1", "GIENG SO 1", "TRẠM BƠM 1", "TRẠM BƠM SỐ 1", "TRAM BOM 1", "TRAM BOM SO 1",
+        "G2", "GIẾNG SỐ 2", "GIENG SO 2", "TRẠM BƠM 2", "TRẠM BƠM SỐ 2", "TRAM BOM 2", "TRAM BOM SO 2",
+        "G4", "GIẾNG SỐ 4", "GIENG SO 4", "TRẠM BƠM 4", "TRẠM BƠM SỐ 4", "TRAM BOM 4", "TRAM BOM SO 4",
+        "G12", "GIẾNG SỐ 12", "GIENG SO 12", "TRẠM BƠM 12", "TRẠM BƠM SỐ 12", "TRAM BOM 12", "TRAM BOM SO 12",
+        "G15", "GIẾNG SỐ 15", "GIENG SO 15", "TRẠM BƠM 15", "TRẠM BƠM SỐ 15", "TRAM BOM 15", "TRAM BOM SO 15",
+        "G18", "GIẾNG SỐ 18", "GIENG SO 18", "TRẠM BƠM 18", "TRẠM BƠM SỐ 18", "TRAM BOM 18", "TRAM BOM SO 18",
+        "G20", "GIẾNG SỐ 20", "GIENG SO 20", "TRẠM BƠM 20", "TRẠM BƠM SỐ 20", "TRAM BOM 20", "TRAM BOM SO 20",
+        "G22", "GIẾNG SỐ 22", "GIENG SO 22", "TRẠM BƠM 22", "TRẠM BƠM SỐ 22", "TRAM BOM 22", "TRAM BOM SO 22",
+        "G23", "GIẾNG SỐ 23", "GIENG SO 23", "TRẠM BƠM 23", "TRẠM BƠM SỐ 23", "TRAM BOM 23", "TRAM BOM SO 23",
+        "G24", "GIẾNG SỐ 24", "GIENG SO 24", "TRẠM BƠM 24", "TRẠM BƠM SỐ 24", "TRAM BOM 24", "TRAM BOM SO 24",
+        "G25", "GIẾNG SỐ 25", "GIENG SO 25", "TRẠM BƠM 25", "TRẠM BƠM SỐ 25", "TRAM BOM 25", "TRAM BOM SO 25",
+        "G27", "GIẾNG SỐ 27", "GIENG SO 27", "TRẠM BƠM 27", "TRẠM BƠM SỐ 27", "TRAM BOM 27", "TRAM BOM SO 27"
+    ],
+    // Giấy phép 391: 2 trạm
+    "391/gp-bnnmt 19/09/2025": [
+        "G21", "GIẾNG SỐ 21", "GIENG SO 21", "TRẠM BƠM 21", "TRẠM BƠM SỐ 21", "TRAM BOM 21", "TRAM BOM SO 21",
+        "G26", "GIẾNG SỐ 26", "GIENG SO 26", "TRẠM BƠM 26", "TRẠM BƠM SỐ 26", "TRAM BOM 26", "TRAM BOM SO 26"
+    ],
+    // Giấy phép 393: 5 trạm (Nhà máy số 1)
+    "393/gp-bnnmt 22/09/2025": [
+        "GS1NM1", "GS1_NM1", "NHÀ MÁY SỐ 1 - GIẾNG SỐ 1", "NHA MAY SO 1 - GIENG SO 1", "GIẾNG 1 NHÀ MÁY 1", "GIENG 1 NHA MAY 1",
+        "GS2NM1", "GS2_NM1", "NHÀ MÁY SỐ 1 - GIẾNG SỐ 2", "NHA MAY SO 1 - GIENG SO 2", "GIẾNG 2 NHÀ MÁY 1", "GIENG 2 NHA MAY 1",
+        "GS3NM1", "GS3_NM1", "NHÀ MÁY SỐ 1 - GIẾNG SỐ 3", "NHA MAY SO 1 - GIENG SO 3", "GIẾNG 3 NHÀ MÁY 1", "GIENG 3 NHA MAY 1",
+        "GS4NM1", "GS4_NM1", "NHÀ MÁY SỐ 1 - GIẾNG SỐ 4", "NHA MAY SO 1 - GIENG SO 4", "GIẾNG 4 NHÀ MÁY 1", "GIENG 4 NHA MAY 1",
+        "GS5NM1", "GS5_NM1", "NHÀ MÁY SỐ 1 - GIẾNG SỐ 5", "NHA MAY SO 1 - GIENG SO 5", "GIẾNG 5 NHÀ MÁY 1", "GIENG 5 NHA MAY 1"
+    ],
+    // Giấy phép 36: 4 trạm (Nhà máy số 2)
+    "36/gp-btnmt 15/01/2025": [
+        "GS1NM2", "GS1_NM2", "NHÀ MÁY SỐ 2 - GIẾNG SỐ 1", "NHA MAY SO 2 - GIENG SO 1", "GIẾNG 1 NHÀ MÁY 2", "GIENG 1 NHA MAY 2",
+        "GS2NM2", "GS2_NM2", "NHÀ MÁY SỐ 2 - GIẾNG SỐ 2", "NHA MAY SO 2 - GIENG SO 2", "GIẾNG 2 NHÀ MÁY 2", "GIENG 2 NHA MAY 2",
+        "GS3NM2", "GS3_NM2", "NHÀ MÁY SỐ 2 - GIẾNG SỐ 3", "NHA MAY SO 2 - GIENG SO 3", "GIẾNG 3 NHÀ MÁY 2", "GIENG 3 NHA MAY 2",
+        "GS4NM2", "GS4_NM2", "NHÀ MÁY SỐ 2 - GIẾNG SỐ 4", "NHA MAY SO 2 - GIENG SO 4", "GIẾNG 4 NHÀ MÁY 2", "GIENG 4 NHA MAY 2"
+    ]
 };
 
 /**
- * Kiểm tra xem trạm có phải là trạm quan trắc không
- * Loại trừ các trạm có chứa: QT, Quan trắc, QTNN, etc
+ * Chuẩn hóa tên trạm để so sánh
+ * Loại bỏ khoảng trắng, dấu gạch, dấu tiếng Việt và chuyển thành chữ hoa
  */
-function isMonitoringStation(stationName) {
-    if (!stationName) return false;
+function normalizeStationName(name) {
+    if (!name) return '';
     
-    const name = stationName.toUpperCase();
-    const monitoringKeywords = [
-        'QT',           // Quan trắc (QT1, QT2, QT3, ...)
-        'QUAN TRAC',
-        'QUAN TRẮC',
-        'QUANTRAC',
-        'QTNN',         // Quan trắc nước ngầm
-        'QTNT',         // Quan trắc nước thải
-        'QTMT',         // Quan trắc môi trường
-        'MONITORING'
-    ];
+    // Chuyển thành chữ hoa và loại bỏ khoảng trắng, dấu gạch, dấu chấm
+    let normalized = name.trim().toUpperCase()
+        .replace(/\s+/g, '')
+        .replace(/_/g, '')
+        .replace(/-/g, '')
+        .replace(/\./g, '');
     
-    // Kiểm tra xem có bắt đầu bằng QT hoặc chứa QT ngay sau ký tự đặc biệt
-    if (name.startsWith('QT') || name.includes('_QT') || name.includes(' QT')) {
-        return true;
-    }
+    // Loại bỏ dấu tiếng Việt
+    normalized = normalized
+        .replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, 'A')
+        .replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, 'E')
+        .replace(/Ì|Í|Ị|Ỉ|Ĩ/g, 'I')
+        .replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, 'O')
+        .replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, 'U')
+        .replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, 'Y')
+        .replace(/Đ/g, 'D');
     
-    return monitoringKeywords.some(keyword => name.includes(keyword));
+    return normalized;
 }
 
 /**
- * Kiểm tra xem trạm có phải là Giếng/Trạm bơm không
+ * Tìm giấy phép dựa trên tên trạm
+ * So khớp linh hoạt với nhiều biến thể tên
+ * Ưu tiên khớp chuỗi dài hơn (nhà máy) trước khi khớp số đơn giản
  */
-function isWellOrPumpStation(stationName) {
-    if (!stationName) return false;
+function findPermitByStationName(stationName) {
+    const normalized = normalizeStationName(stationName);
     
-    const name = stationName.toUpperCase();
-    
-    // Các pattern cho Giếng/Trạm bơm
-    // G + số: G1, G2, G12, G26, ...
-    // GS + số: GS1NM1, GS2NM2, ...
-    // CLN + GS: CLNGS4NM2 (Clo dư tại Giếng Số)
-    // GIẾNG, GIENG, TRẠM, TRAM
-    
-    const patterns = [
-        /^G\d+$/,                    // G1, G2, G26, G27, ...
-        /^GS\d+/,                    // GS1NM1, GS2NM2, GS3NM1, ...
-        /^CLN(G|GS)/,                // CLNGS4NM2, CLNGS5NM1
-        /GIENG|GIẾNG/,               // Giếng
-        /TRAM\s*BOM|TRẠM\s*BƠM/,    // Trạm bơm
-        /TRAM(\d+|$)/,               // Trạm 1, Trạm 2, etc hoặc chỉ "Trạm"
-        /WELL|PUMP/                  // Well, Pump (tiếng Anh)
-    ];
-    
-    return patterns.some(pattern => pattern.test(name));
-}
-
-/**
- * Tìm giấy phép theo tên công trình
- */
-function getPermitByProject(projectName) {
-    if (!projectName) return null;
-    
-    for (const [permit, projects] of Object.entries(PERMIT_MAPPING)) {
-        if (projects.some(p => p.trim().toUpperCase() === projectName.trim().toUpperCase())) {
-            return permit;
+    // Thử so khớp chính xác trước
+    for (const [permit, stations] of Object.entries(STATION_PERMIT_MAPPING)) {
+        for (const station of stations) {
+            const normalizedStation = normalizeStationName(station);
+            if (normalized === normalizedStation) {
+                return permit;
+            }
         }
     }
+    
+    // Ưu tiên khớp tên có "NHÀ MÁY" trước (dài hơn, cụ thể hơn)
+    if (normalized.includes('NHAMAY')) {
+        for (const [permit, stations] of Object.entries(STATION_PERMIT_MAPPING)) {
+            for (const station of stations) {
+                const normalizedStation = normalizeStationName(station);
+                
+                // Chỉ khớp với các station cũng có "NHÀ MÁY"
+                if (normalizedStation.includes('NHAMAY')) {
+                    if (normalized.includes(normalizedStation) || normalizedStation.includes(normalized)) {
+                        return permit;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Nếu không khớp chính xác, thử so khớp một phần
+    for (const [permit, stations] of Object.entries(STATION_PERMIT_MAPPING)) {
+        for (const station of stations) {
+            const normalizedStation = normalizeStationName(station);
+            
+            // Bỏ qua nếu station có "NHÀ MÁY" nhưng tên không có (đã check ở trên)
+            if (normalizedStation.includes('NHAMAY') && !normalized.includes('NHAMAY')) {
+                continue;
+            }
+            
+            // So khớp nếu tên trạm chứa tên trong mapping hoặc ngược lại
+            if (normalized.includes(normalizedStation) || normalizedStation.includes(normalized)) {
+                // Kiểm tra thêm để tránh false positive
+                // Ví dụ: "G1" không nên khớp với "G12"
+                const stationNumber = normalizedStation.match(/\d+/g);
+                const nameNumber = normalized.match(/\d+/g);
+                
+                if (stationNumber && nameNumber) {
+                    // Nếu có số, phải khớp ít nhất 1 số
+                    const hasMatchingNumber = stationNumber.some(num => nameNumber.includes(num));
+                    if (hasMatchingNumber) {
+                        return permit;
+                    }
+                } else {
+                    return permit;
+                }
+            }
+        }
+    }
+    
     return null;
 }
 
 /**
- * Lấy Token xác thực từ MONRE
- */
-async function getToken() {
-    try {
-        const params = new URLSearchParams({
-            username: USERNAME,
-            password: PASSWORD,
-            referer: 'https://iot.monre.gov.vn',
-            f: 'json',
-            expiration: 60
-        });
-        
-        const response = await axios.post(PORTAL_URL, params.toString(), { 
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            timeout: 10000
-        });
-        
-        if (response.data && response.data.token) {
-            return response.data.token;
-        }
-        
-        throw new Error('Invalid token response');
-    } catch (error) {
-        console.error("❌ Không thể lấy Token MONRE:", error.message);
-        throw error;
-    }
-}
-
-/**
- * Lấy danh sách tất cả các trạm từ MONRE IoT
+ * Lấy tất cả trạm từ MONRE API
  */
 async function fetchAllStations() {
     try {
-        console.log('🔄 Đang lấy dữ liệu từ MONRE IoT API...\n');
+        console.log('📡 Đang lấy dữ liệu từ MONRE API...');
+        const data = await monreModule.getPermitData(true); // Force refresh
         
-        const token = await getToken();
-        
-        const params = {
-            f: 'json',
-            where: PROJECT_FILTER,
-            outFields: '*',
-            orderByFields: 'thoigiannhan DESC',
-            resultRecordCount: 1500000,
-            token: token
-        };
-        
-        const response = await axios.get(DATA_URL, { 
-            params,
-            timeout: 30000
-        });
-        
-        const features = response.data.features || [];
-        
-        if (features.length === 0) {
-            console.log('⚠️ Không có dữ liệu từ MONRE IoT');
+        if (!data || data.length === 0) {
+            console.log('⚠️ Không có dữ liệu từ MONRE API');
             return [];
         }
         
-        console.log(`📥 Đã nhận ${features.length} records từ MONRE IoT`);
-        
-        // Tạo danh sách trạm với thông tin công trình
-        const stations = [];
-        const seenStations = new Set(); // Để tránh trùng lặp
-        const stationProjects = {}; // Map trạm -> công trình
-        
-        features.forEach(f => {
-            const attr = f.attributes;
-            const stationName = attr.tram;
-            const projectName = attr.congtrinh;
-            
-            if (!stationName) return;
-            
-            // Lưu thông tin công trình của trạm (lần đầu gặp)
-            if (!stationProjects[stationName]) {
-                stationProjects[stationName] = projectName;
+        // Lọc unique stations
+        const stationMap = {};
+        data.forEach(record => {
+            const stationName = record.station;
+            if (stationName && !stationMap[stationName]) {
+                stationMap[stationName] = {
+                    name: stationName,
+                    project: record.project,
+                    originalPermit: record.permit
+                };
             }
-            
-            // Bỏ qua nếu đã xử lý trạm này
-            if (seenStations.has(stationName)) {
-                return;
-            }
-            
-            seenStations.add(stationName);
-            
-            // Bỏ qua các trạm quan trắc
-            if (isMonitoringStation(stationName)) {
-                console.log(`   ⏭️  Bỏ qua trạm quan trắc: ${stationName}`);
-                return;
-            }
-            
-            // Chỉ lấy các Giếng/Trạm bơm
-            if (!isWellOrPumpStation(stationName)) {
-                console.log(`   ⏭️  Bỏ qua (không phải Giếng/Trạm bơm): ${stationName}`);
-                return;
-            }
-            
-            const permit = getPermitByProject(projectName);
-            
-            stations.push({
-                stationName: stationName,
-                projectName: projectName,
-                permit: permit || "Chưa có GP"
-            });
         });
         
-        return stations;
+        const stations = Object.values(stationMap);
+        console.log(`✅ Tìm thấy ${stations.length} trạm từ MONRE`);
         
+        return stations;
     } catch (error) {
-        console.error('❌ Lỗi lấy dữ liệu MONRE:', error.message);
-        throw error;
+        console.error('❌ Lỗi khi lấy dữ liệu trạm:', error.message);
+        return [];
     }
 }
 
@@ -213,569 +183,387 @@ async function fetchAllStations() {
 function groupStationsByPermit(stations) {
     const grouped = {};
     
-    stations.forEach(station => {
-        const permit = station.permit;
-        
-        if (!grouped[permit]) {
-            grouped[permit] = [];
-        }
-        
-        grouped[permit].push(station);
+    // Khởi tạo các nhóm giấy phép
+    Object.keys(STATION_PERMIT_MAPPING).forEach(permit => {
+        grouped[permit] = {
+            permit: permit,
+            stations: [],
+            stationCount: 0
+        };
     });
     
-    // Sắp xếp các trạm trong mỗi nhóm theo tên
-    Object.keys(grouped).forEach(permit => {
-        grouped[permit].sort((a, b) => a.stationName.localeCompare(b.stationName, 'vi'));
+    // Phân nhóm trạm theo giấy phép
+    stations.forEach(station => {
+        const permit = findPermitByStationName(station.name);
+        
+        if (permit && grouped[permit]) {
+            grouped[permit].stations.push(station);
+            grouped[permit].stationCount++;
+        } else {
+            console.log(`⚠️ Không tìm thấy giấy phép cho trạm: ${station.name}`);
+        }
+    });
+    
+    // Log kết quả
+    Object.entries(grouped).forEach(([permit, data]) => {
+        console.log(`📋 ${permit}: ${data.stationCount} trạm`);
     });
     
     return grouped;
 }
 
 /**
- * In ra kết quả
- */
-function printResults(groupedStations) {
-    console.log('═══════════════════════════════════════════════════════════════════');
-    console.log('  DANH SÁCH CÁC GIẾNG/TRẠM BƠM THEO NHÓM GIẤY PHÉP');
-    console.log('═══════════════════════════════════════════════════════════════════\n');
-    
-    // Tính tổng số trạm
-    let totalStations = 0;
-    Object.values(groupedStations).forEach(stations => {
-        totalStations += stations.length;
-    });
-    
-    console.log(`📊 TỔNG QUAN:`);
-    console.log(`   - Số nhóm giấy phép: ${Object.keys(groupedStations).length}`);
-    console.log(`   - Tổng số trạm: ${totalStations}\n`);
-    
-    // Sắp xếp các giấy phép
-    const sortedPermits = Object.keys(groupedStations).sort();
-    
-    sortedPermits.forEach((permit, index) => {
-        const stations = groupedStations[permit];
-        
-        console.log(`\n${'─'.repeat(67)}`);
-        console.log(`📋 NHÓM ${index + 1}: ${permit}`);
-        console.log(`   Số lượng trạm: ${stations.length}`);
-        console.log(`${'─'.repeat(67)}`);
-        
-        stations.forEach((station, idx) => {
-            console.log(`   ${String(idx + 1).padStart(3, ' ')}. ${station.stationName}`);
-            console.log(`        Công trình: ${station.projectName}`);
-        });
-    });
-    
-    console.log(`\n${'═'.repeat(67)}`);
-}
-
-/**
- * Xuất kết quả ra file JSON
- */
-function exportToJSON(groupedStations, filename = 'stations-by-permit.json') {
-    const fs = require('fs');
-    
-    const output = {
-        exportDate: new Date().toISOString(),
-        totalGroups: Object.keys(groupedStations).length,
-        totalStations: Object.values(groupedStations).reduce((sum, arr) => sum + arr.length, 0),
-        data: groupedStations
-    };
-    
-    fs.writeFileSync(filename, JSON.stringify(output, null, 2), 'utf8');
-    console.log(`\n💾 Đã xuất dữ liệu ra file: ${filename}`);
-}
-
-/**
- * Khởi tạo kết nối PostgreSQL
+ * Tạo database pool
  */
 function createDatabasePool() {
     return new Pool({
         connectionString: config.database.url,
-        ssl: config.database.ssl,
-        max: 5,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000
+        ssl: config.database.ssl
     });
 }
 
 /**
- * Lấy dữ liệu "Tổng lưu lượng" từ PostgreSQL cho các trạm trong 30 ngày gần nhất
+ * Lấy tất cả tên trạm unique từ database để debug
  */
-async function getFlowDataLast30Days(pool, stationNames) {
-    const tables = ['tva_data', 'mqtt_data', 'scada_data'];
-    const flowData = {};
-    
-    // Set timezone
-    await pool.query("SET TIMEZONE='Asia/Ho_Chi_Minh'");
-    
-    const now = new Date();
-    
-    // Tháng hiện tại
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    
-    // Tháng trước
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-    
-    console.log(`   📅 Tháng trước: ${lastMonthStart.toISOString()} đến ${lastMonthEnd.toISOString()}`);
-    console.log(`   📅 Tháng hiện tại: ${currentMonthStart.toISOString()} đến ${now.toISOString()}`);
-    
-    for (const table of tables) {
-        try {
-            // Query để lấy dữ liệu từ đầu tháng trước đến hiện tại
-            const query = `
-                SELECT 
-                    station_name,
-                    parameter_name,
-                    value,
-                    unit,
-                    created_at
-                FROM ${table}
-                WHERE 
-                    (
-                        parameter_name ILIKE '%tổng lưu lượng%' 
-                        OR parameter_name ILIKE '%tong luu luong%'
-                        OR parameter_name ILIKE '%total flow%'
-                    )
-                    AND created_at >= $1
-                    AND value IS NOT NULL
-                ORDER BY station_name, created_at ASC
-            `;
-            
-            const result = await pool.query(query, [lastMonthStart]);
-            
-            console.log(`   📊 ${table}: ${result.rows.length} records`);
-            
-            // Nhóm dữ liệu theo trạm
-            result.rows.forEach(row => {
-                const stationName = row.station_name;
-                
-                if (!flowData[stationName]) {
-                    flowData[stationName] = {
-                        stationName: stationName,
-                        lastMonthRecords: [],
-                        currentMonthRecords: [],
-                        unit: row.unit,
-                        source: table.replace('_data', '').toUpperCase()
-                    };
-                }
-                
-                const timestamp = new Date(row.created_at);
-                const record = {
-                    value: parseFloat(row.value) || 0,
-                    timestamp: timestamp,
-                    parameter: row.parameter_name
-                };
-                
-                // Phân loại record vào tháng trước hoặc tháng hiện tại
-                if (timestamp >= lastMonthStart && timestamp <= lastMonthEnd) {
-                    flowData[stationName].lastMonthRecords.push(record);
-                }
-                if (timestamp >= currentMonthStart) {
-                    flowData[stationName].currentMonthRecords.push(record);
-                }
-            });
-            
-        } catch (err) {
-            console.error(`⚠️ Lỗi query ${table}:`, err.message);
-        }
+async function getAllStationNamesFromDB(pool) {
+    try {
+        console.log('🔍 Đang lấy danh sách tất cả trạm từ CẢ 3 BẢNG database...');
+        
+        // Query từ cả 3 bảng và merge lại
+        const query = `
+            SELECT DISTINCT station_name, 'MQTT' as source
+            FROM mqtt_data 
+            WHERE parameter_name ILIKE '%tổng lưu lượng%'
+            UNION
+            SELECT DISTINCT station_name, 'TVA' as source
+            FROM tva_data
+            WHERE parameter_name ILIKE '%tổng lưu lượng%'
+            UNION
+            SELECT DISTINCT station_name, 'SCADA' as source
+            FROM scada_data
+            WHERE parameter_name ILIKE '%tổng lưu lượng%'
+            ORDER BY station_name
+        `;
+        
+        const result = await pool.query(query);
+        const stationNames = result.rows.map(row => row.station_name);
+        
+        console.log(`📋 Tìm thấy ${stationNames.length} trạm unique trong database (từ MQTT, TVA, SCADA):`);
+        result.rows.forEach(row => {
+            const permit = findPermitByStationName(row.station_name);
+            console.log(`   - [${row.source}] ${row.station_name} ${permit ? `→ ${permit}` : '⚠️ KHÔNG KHỚP'}`);
+        });
+        
+        return stationNames;
+    } catch (error) {
+        console.error('❌ Lỗi lấy danh sách trạm:', error.message);
+        return [];
     }
-    
-    // Tính toán công suất cho mỗi trạm
-    Object.keys(flowData).forEach(stationName => {
-        const data = flowData[stationName];
-        
-        // Tính công suất tháng trước (đã hoàn thành)
-        data.lastMonthCapacity = 0;
-        if (data.lastMonthRecords.length > 0) {
-            data.lastMonthRecords.sort((a, b) => a.timestamp - b.timestamp);
-            const firstValue = data.lastMonthRecords[0].value;
-            const lastValue = data.lastMonthRecords[data.lastMonthRecords.length - 1].value;
-            
-            if (lastValue >= firstValue) {
-                data.lastMonthCapacity = lastValue - firstValue;
-            } else {
-                data.lastMonthCapacity = lastValue;
-            }
-        }
-        
-        // Tính công suất tháng hiện tại (từ đầu tháng đến nay)
-        data.currentMonthCapacity = 0;
-        data.latestValue = 0;
-        if (data.currentMonthRecords.length > 0) {
-            data.currentMonthRecords.sort((a, b) => a.timestamp - b.timestamp);
-            const firstValue = data.currentMonthRecords[0].value;
-            const lastValue = data.currentMonthRecords[data.currentMonthRecords.length - 1].value;
-            
-            data.latestValue = lastValue;
-            
-            if (lastValue >= firstValue) {
-                data.currentMonthCapacity = lastValue - firstValue;
-            } else {
-                data.currentMonthCapacity = lastValue;
-            }
-        }
-        
-        // Làm tròn 2 chữ số thập phân
-        data.lastMonthCapacity = Math.round(data.lastMonthCapacity * 100) / 100;
-        data.currentMonthCapacity = Math.round(data.currentMonthCapacity * 100) / 100;
-        data.latestValue = Math.round(data.latestValue * 100) / 100;
-        
-        // Giữ lại thuộc tính cũ để tương thích
-        data.totalFlow = data.currentMonthCapacity;
-        data.recordCount = data.currentMonthRecords.length + data.lastMonthRecords.length;
-    });
-    
-    return flowData;
 }
 
 /**
- * Phân loại trạm theo giấy phép dựa trên tên
+ * Lấy dữ liệu lưu lượng từ database (30 ngày gần nhất)
+ * Query từ CẢ 3 BẢNG: mqtt_data, tva_data, scada_data
+ * Trả về: { stationName: [{ measurementTime, value, unit, ... }] }
  * 
- * PHÂN BỔ GIẤY PHÉP:
- * - Giấy phép 35: 12 giếng (G1, G2, G4, G12, G15, G18, G20, G22, G23, G24, G25, G27)
- * - Giấy phép 36: 4 giếng/trạm Nhà máy số 2 (NM2)
- * - Giấy phép 391: 2 trạm bơm (21 và 26)
- * - Giấy phép 393: 5 giếng/trạm bơm Nhà máy số 1 (NM1)
- * TỔNG: 23 giếng/trạm
+ * QUAN TRỌNG: Đồng bộ timezone khi truy vấn
+ * - Set session timezone = 'Asia/Ho_Chi_Minh'
+ * - Chuyển created_at về GMT+7 khi query
+ * - PostgreSQL TIMESTAMPTZ tự động chuyển đổi theo session timezone
  */
-function classifyStationByName(stationName) {
-    if (!stationName) return null;
-    
-    const name = stationName.toUpperCase();
-    
-    // QUAN TRỌNG: Thứ tự kiểm tra từ cụ thể đến chung
-    // Check NM1/NM2 trước để tránh nhầm với các giếng G1-G27
-    
-    // 36/gp-btnmt 15/01/2025: CAPNUOCCAMAUSO2 - Nhà máy số 2 (4 giếng/trạm)
-    // Pattern: NM2, NHA MAY SO 2, GS1NM2, GS2NM2, GS3NM2, GS4NM2, GIẾNG X NM2
-    if (name.includes('NM2') || 
-        name.includes('NHÀ MÁY SỐ 2') || 
-        name.includes('NHA MAY SO 2') ||
-        name.includes('NHÀ MÁY 2') ||
-        name.includes('NHA MAY 2') ||
-        /GS\d*NM2/.test(name) || // GS1NM2, GS2NM2, GS3NM2, GS4NM2, GSNM2
-        /GIẾNG\s*\d*\s*NM2/.test(name) || // GIẾNG 1 NM2, GIẾNG NM2
-        /GIENG\s*\d*\s*NM2/.test(name)) { // GIENG 1 NM2, GIENG NM2
-        return '36/gp-btnmt 15/01/2025';
-    }
-    
-    // 393/gp-bnnmt 22/09/2025: NHAMAYCAPNUOCSO1 - Nhà máy số 1 (5 giếng/trạm bơm)
-    // Pattern: NM1, NHA MAY SO 1, GS1NM1, GS2NM1, GS3NM1, GS4NM1, GS5NM1, GIẾNG X NM1
-    if (name.includes('NM1') || 
-        name.includes('NHÀ MÁY SỐ 1') || 
-        name.includes('NHA MAY SO 1') ||
-        name.includes('NHÀ MÁY 1') ||
-        name.includes('NHA MAY 1') ||
-        /GS\d*NM1/.test(name) || // GS1NM1, GS2NM1, GS3NM1, GS4NM1, GS5NM1, GSNM1
-        /GIẾNG\s*\d*\s*NM1/.test(name) || // GIẾNG 1 NM1, GIẾNG NM1
-        /GIENG\s*\d*\s*NM1/.test(name)) { // GIENG 1 NM1, GIENG NM1
-        return '393/gp-bnnmt 22/09/2025';
-    }
-    
-    // 391/gp-bnnmt 19/09/2025: CONGTYCOPHANCAPNUOCC - Trạm bơm 21 và 26 (2 trạm)
-    if (name.includes('21') && (name.includes('TRẠM BƠM') || name.includes('TRAM BOM'))) {
-        return '391/gp-bnnmt 19/09/2025';
-    }
-    if (name.includes('26') && (name.includes('TRẠM BƠM') || name.includes('TRAM BOM'))) {
-        return '391/gp-bnnmt 19/09/2025';
-    }
-    
-    // 35/gp-btnmt 15/01/2025: CAPNUOCCAMAU1 - CHỈ 12 giếng cụ thể
-    // DANH SÁCH CHÍNH THỨC: G1, G2, G4, G12, G15, G18, G20, G22, G23, G24, G25, G27
-    // LOẠI TRỪ: Số 16 (KHÔNG thuộc giấy phép 35)
-    const permit35Numbers = ['1', '2', '4', '12', '15', '18', '20', '22', '23', '24', '25', '27'];
-    const excludedNumbers = ['16']; // Số bị loại trừ khỏi giấy phép 35
-    
-    // Kiểm tra nếu trạm bị loại trừ (số 16)
-    for (const excludedNum of excludedNumbers) {
-        if (name === `G${excludedNum}` || name === `G ${excludedNum}` ||
-            name === `GIẾNG ${excludedNum}` || name === `GIENG ${excludedNum}` ||
-            name === `GIẾNG${excludedNum}` || name === `GIENG${excludedNum}` ||
-            name.startsWith(`G${excludedNum} `) || name.startsWith(`G ${excludedNum} `) ||
-            name.startsWith(`GIẾNG ${excludedNum} `) || name.startsWith(`GIENG ${excludedNum} `) ||
-            (name.includes(`TRẠM`) && name.includes(excludedNum))) {
-            return null; // Trả về null để không phân loại vào giấy phép nào
-        }
-    }
-    
-    // Kiểm tra từng số giếng trong danh sách giấy phép 35
-    for (const num of permit35Numbers) {
-        // Pattern 1: G + số (G1, G2, G4, G12, G15, G18, G20, G22, G23, G24, G25, G27)
-        if (name === `G${num}` || name === `G ${num}`) {
-            return '35/gp-btnmt 15/01/2025';
-        }
+async function getFlowDataLast30Days(pool, stationNames = null) {
+    try {
+        // Set timezone cho session này về GMT+7
+        await pool.query("SET TIMEZONE='Asia/Ho_Chi_Minh'");
         
-        // Pattern 2: GIẾNG + số (GIẾNG 1, GIẾNG 2, GIẾNG 4, GIẾNG 12, ...)
-        if (name === `GIẾNG ${num}` || name === `GIENG ${num}` ||
-            name === `GIẾNG${num}` || name === `GIENG${num}`) {
-            return '35/gp-btnmt 15/01/2025';
-        }
+        // Tính 30 ngày trước theo timezone Việt Nam
+        const thirtyDaysAgo = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000));
         
-        // Pattern 3: GIẾNG SỐ + số (GIẾNG SỐ 1, GIẾNG SỐ 15, GIẾNG SỐ 18, ...)
-        if (name === `GIẾNG SỐ ${num}` || name === `GIENG SO ${num}` ||
-            name === `GIẾNG SỐ${num}` || name === `GIENG SO${num}`) {
-            return '35/gp-btnmt 15/01/2025';
-        }
+        console.log('🔍 Đang truy vấn dữ liệu "Tổng lưu lượng" từ CẢ 3 BẢNG...');
+        console.log(`📅 Từ ngày: ${thirtyDaysAgo.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
         
-        // Pattern 4: TRẠM BƠM + số (TRẠM BƠM 1, TRẠM BƠM 2, TRẠM BƠM 4, ...)
-        // (Loại trừ số 21 và 26 vì đã check ở trên)
-        if (num !== '21' && num !== '26') {
-            if ((name === `TRẠM BƠM ${num}` || name === `TRAM BOM ${num}` ||
-                 name === `TRẠM BƠM SỐ ${num}` || name === `TRAM BOM SO ${num}`) ||
-                (name.includes(`TRẠM BƠM ${num}`) || name.includes(`TRAM BOM ${num}`))) {
-                return '35/gp-btnmt 15/01/2025';
+        // Query UNION từ cả 3 bảng
+        // QUAN TRỌNG: Sử dụng AT TIME ZONE để đảm bảo chuyển đổi đúng
+        let unionQuery = `
+            SELECT 
+                station_name,
+                parameter_name,
+                value,
+                unit,
+                created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as created_at,
+                'MQTT' as source
+            FROM mqtt_data
+            WHERE parameter_name ILIKE '%tổng lưu lượng%'
+                AND created_at >= $1
+            
+            UNION ALL
+            
+            SELECT 
+                station_name,
+                parameter_name,
+                value,
+                unit,
+                created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as created_at,
+                'TVA' as source
+            FROM tva_data
+            WHERE parameter_name ILIKE '%tổng lưu lượng%'
+                AND created_at >= $1
+            
+            UNION ALL
+            
+            SELECT 
+                station_name,
+                parameter_name,
+                value,
+                unit,
+                created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as created_at,
+                'SCADA' as source
+            FROM scada_data
+            WHERE parameter_name ILIKE '%tổng lưu lượng%'
+                AND created_at >= $1
+            
+            ORDER BY created_at DESC
+        `;
+        
+        const result = await pool.query(unionQuery, [thirtyDaysAgo]);
+        
+        console.log(`📊 Query trả về ${result.rows.length} records từ cả 3 bảng`);
+        
+        // Organize data by station
+        const flowData = {};
+        const sourceCounts = { MQTT: 0, TVA: 0, SCADA: 0 };
+        
+        result.rows.forEach(row => {
+            const stationName = row.station_name;
+            if (!flowData[stationName]) {
+                flowData[stationName] = [];
             }
-        }
+            flowData[stationName].push({
+                measurementTime: new Date(row.created_at).toISOString(),
+                value: parseFloat(row.value) || 0,
+                unit: row.unit || 'm³',
+                parameter: row.parameter_name,
+                source: row.source
+            });
+            sourceCounts[row.source]++;
+        });
         
-        // Pattern 5: Có text thêm phía sau (G1 CLO, GIẾNG 12 TẦN, GIẾNG SỐ 15 ABC, ...)
-        if (name.startsWith(`G${num} `) || name.startsWith(`G ${num} `) ||
-            name.startsWith(`GIẾNG ${num} `) || name.startsWith(`GIENG ${num} `) ||
-            name.startsWith(`GIẾNG${num} `) || name.startsWith(`GIENG${num} `) ||
-            name.startsWith(`GIẾNG SỐ ${num} `) || name.startsWith(`GIENG SO ${num} `)) {
-            return '35/gp-btnmt 15/01/2025';
-        }
+        console.log(`✅ Tìm thấy dữ liệu lưu lượng cho ${Object.keys(flowData).length} trạm`);
+        console.log(`   📡 MQTT: ${sourceCounts.MQTT} records`);
+        console.log(`   📡 TVA: ${sourceCounts.TVA} records`);
+        console.log(`   📡 SCADA: ${sourceCounts.SCADA} records`);
+        
+        return flowData;
+    } catch (error) {
+        console.error('❌ Lỗi truy vấn database:', error.message);
+        console.error('Stack:', error.stack);
+        return {};
     }
-    
-    // Không khớp với bất kỳ giấy phép nào
-    return null;
 }
 
 /**
- * Tính công suất hoạt động theo giấy phép từ dữ liệu PostgreSQL
+ * Tính công suất theo giấy phép từ dữ liệu database
+ * 
+ * QUAN TRỌNG: Đồng bộ timezone để tính toán đúng
+ * - Tạo ranh giới tháng theo GMT+7
+ * - So sánh timestamp đã được chuẩn hóa về GMT+7 từ query
  */
 function calculateCapacityByPermitFromDB(flowData) {
     const capacityByPermit = {};
     
-    // Khởi tạo các giấy phép
-    const allPermits = [
-        '35/gp-btnmt 15/01/2025',
-        '36/gp-btnmt 15/01/2025',
-        '391/gp-bnnmt 19/09/2025',
-        '393/gp-bnnmt 22/09/2025'
-    ];
+    // Hàm helper: Tạo Date theo timezone Việt Nam
+    function createVietnamDate(year, month, day, hour = 0, minute = 0, second = 0, ms = 0) {
+        // Tạo date string theo format ISO với timezone GMT+7
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}.${String(ms).padStart(3, '0')}+07:00`;
+        return new Date(dateStr);
+    }
     
-    allPermits.forEach(permit => {
+    // Get current time in Vietnam timezone (GMT+7)
+    const now = new Date();
+    const vietnamNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    const currentYear = vietnamNow.getFullYear();
+    const currentMonth = vietnamNow.getMonth() + 1; // 1-12
+    const currentDay = vietnamNow.getDate();
+    
+    // Last month boundaries (theo GMT+7)
+    const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+    const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+    const lastMonthDays = new Date(lastMonthYear, lastMonth, 0).getDate();
+    
+    const lastMonthStart = createVietnamDate(lastMonthYear, lastMonth, 1, 0, 0, 0, 0);
+    const lastMonthEnd = createVietnamDate(lastMonthYear, lastMonth, lastMonthDays, 23, 59, 59, 999);
+    
+    // Current month boundaries (theo GMT+7)
+    const currentMonthStart = createVietnamDate(currentYear, currentMonth, 1, 0, 0, 0, 0);
+    const currentMonthEnd = now; // Thời điểm hiện tại
+    
+    // Yesterday boundaries (theo GMT+7)
+    const yesterdayDate = new Date(vietnamNow);
+    yesterdayDate.setDate(currentDay - 1);
+    const yesterdayYear = yesterdayDate.getFullYear();
+    const yesterdayMonth = yesterdayDate.getMonth() + 1;
+    const yesterdayDay = yesterdayDate.getDate();
+    const yesterdayStart = createVietnamDate(yesterdayYear, yesterdayMonth, yesterdayDay, 0, 0, 0, 0);
+    const yesterdayEnd = createVietnamDate(yesterdayYear, yesterdayMonth, yesterdayDay, 23, 59, 59, 999);
+    
+    // Today boundaries (theo GMT+7)
+    const todayStart = createVietnamDate(currentYear, currentMonth, currentDay, 0, 0, 0, 0);
+    const todayEnd = now;
+    
+    console.log(`📅 Tháng trước (GMT+7): ${lastMonthStart.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} - ${lastMonthEnd.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
+    console.log(`📅 Tháng hiện tại (GMT+7): ${currentMonthStart.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} - ${currentMonthEnd.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
+    console.log(`📅 Hôm qua (GMT+7): ${yesterdayStart.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} - ${yesterdayEnd.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
+    console.log(`📅 Hôm nay (GMT+7): ${todayStart.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} - ${todayEnd.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
+    
+    // Initialize permit groups
+    Object.keys(STATION_PERMIT_MAPPING).forEach(permit => {
         capacityByPermit[permit] = {
             permit: permit,
-            totalStations: 0,
-            stationsWithData: 0,
+            lastMonthCapacity: 0,
+            currentMonthCapacity: 0,
             totalCapacity: 0,
-            unit: 'm³',
-            stationDetails: []
+            stationDetails: [],
+            stationsWithData: 0
         };
     });
     
-    // Phân loại từng trạm theo giấy phép
-    Object.keys(flowData).forEach(stationName => {
-        const data = flowData[stationName];
+    // Process each station in flow data
+    for (const [stationName, records] of Object.entries(flowData)) {
+        const permit = findPermitByStationName(stationName);
         
-        // Bỏ qua trạm quan trắc
-        if (isMonitoringStation(stationName)) {
-            return;
+        if (!permit || !capacityByPermit[permit]) {
+            console.log(`⚠️ Bỏ qua trạm không thuộc giấy phép nào: ${stationName}`);
+            continue;
         }
         
-        // Phân loại theo giấy phép
-        const permit = classifyStationByName(stationName);
+        let lastMonthMax = 0;
+        let currentMonthMax = 0;
+        let lastMonthRecords = 0;
+        let currentMonthRecords = 0;
+        let previousDayMax = 0;
+        let previousDayMin = Infinity;
+        let todayMax = 0;
+        let todayMin = Infinity;
+        let dayBeforeYesterdayMax = 0;
         
-        if (!permit) {
-            console.log(`   ⚠️  Không xác định được giấy phép cho: ${stationName}`);
-            return;
+        // Day before yesterday boundaries (for calculating yesterday's capacity)
+        const dayBeforeYesterday = new Date(yesterdayDate);
+        dayBeforeYesterday.setDate(yesterdayDate.getDate() - 1);
+        const dayBeforeYear = dayBeforeYesterday.getFullYear();
+        const dayBeforeMonth = dayBeforeYesterday.getMonth() + 1;
+        const dayBeforeDay = dayBeforeYesterday.getDate();
+        const dayBeforeStart = createVietnamDate(dayBeforeYear, dayBeforeMonth, dayBeforeDay, 0, 0, 0, 0);
+        const dayBeforeEnd = createVietnamDate(dayBeforeYear, dayBeforeMonth, dayBeforeDay, 23, 59, 59, 999);
+        
+        // Process records for this station
+        records.forEach(record => {
+            // measurementTime đã được chuyển về GMT+7 từ query (có AT TIME ZONE)
+            const recordTime = new Date(record.measurementTime);
+            const value = parseFloat(record.value) || 0;
+            
+            // Check if in last month
+            // So sánh theo timestamp đã chuẩn hóa
+            if (recordTime >= lastMonthStart && recordTime <= lastMonthEnd) {
+                lastMonthMax = Math.max(lastMonthMax, value);
+                lastMonthRecords++;
+            }
+            
+            // Check if in current month
+            if (recordTime >= currentMonthStart && recordTime <= currentMonthEnd) {
+                currentMonthMax = Math.max(currentMonthMax, value);
+                currentMonthRecords++;
+            }
+            
+            // Check if day before yesterday
+            if (recordTime >= dayBeforeStart && recordTime <= dayBeforeEnd) {
+                dayBeforeYesterdayMax = Math.max(dayBeforeYesterdayMax, value);
+            }
+            
+            // Check if yesterday
+            if (recordTime >= yesterdayStart && recordTime <= yesterdayEnd) {
+                previousDayMax = Math.max(previousDayMax, value);
+                previousDayMin = Math.min(previousDayMin, value);
+            }
+            
+            // Check if today
+            if (recordTime >= todayStart && recordTime <= todayEnd) {
+                todayMax = Math.max(todayMax, value);
+                todayMin = Math.min(todayMin, value);
+            }
+        });
+        
+        // Calculate daily capacity as difference (for cumulative meters)
+        // Yesterday's capacity = max value at end of yesterday - max value at end of day before
+        // Today's capacity = max value at end of today - max value at end of yesterday
+        let yesterdayCapacity = 0;
+        let todayCapacity = 0;
+        
+        if (previousDayMax > 0) {
+            // If we have data for day before yesterday, calculate difference
+            if (dayBeforeYesterdayMax > 0) {
+                yesterdayCapacity = previousDayMax - dayBeforeYesterdayMax;
+            } else {
+                // Otherwise use the range within yesterday
+                yesterdayCapacity = previousDayMax - (previousDayMin === Infinity ? 0 : previousDayMin);
+            }
         }
         
-        console.log(`   ✓ ${stationName} → ${permit}`);
+        if (todayMax > 0) {
+            // Calculate today's capacity as difference from yesterday's max
+            if (previousDayMax > 0) {
+                todayCapacity = todayMax - previousDayMax;
+            } else {
+                // If no yesterday data, use today's range
+                todayCapacity = todayMax - (todayMin === Infinity ? 0 : todayMin);
+            }
+        }
         
-        // Thêm trạm vào kết quả (kể cả khi capacity = 0)
-        capacityByPermit[permit].totalCapacity += data.currentMonthCapacity;
+        // Ensure non-negative values
+        yesterdayCapacity = Math.max(0, yesterdayCapacity);
+        todayCapacity = Math.max(0, todayCapacity);
         
-        if (data.currentMonthCapacity > 0 || data.lastMonthCapacity > 0) {
+        // Add to permit totals
+        capacityByPermit[permit].lastMonthCapacity += lastMonthMax;
+        capacityByPermit[permit].currentMonthCapacity += currentMonthMax;
+        capacityByPermit[permit].totalCapacity += currentMonthMax;
+        
+        if (lastMonthRecords > 0 || currentMonthRecords > 0) {
             capacityByPermit[permit].stationsWithData++;
         }
         
-        capacityByPermit[permit].totalStations++;
-        
+        // Add station details
         capacityByPermit[permit].stationDetails.push({
             stationName: stationName,
-            lastMonthCapacity: data.lastMonthCapacity,
-            currentMonthCapacity: data.currentMonthCapacity,
-            unit: data.unit || 'm³',
-            recordCount: data.recordCount,
-            latestValue: data.latestValue,
-            source: data.source
+            lastMonthCapacity: lastMonthMax,
+            currentMonthCapacity: currentMonthMax,
+            previousDayCapacity: yesterdayCapacity,  // Daily consumption for yesterday
+            todayCapacity: todayCapacity,  // Daily consumption for today
+            unit: records[0]?.unit || 'm³',
+            recordCount: records.length,
+            lastMonthRecords: lastMonthRecords,
+            currentMonthRecords: currentMonthRecords,
+            source: records[0]?.source || 'MQTT'
         });
-    });
+        
+        console.log(`  📍 ${stationName}: Tháng trước=${lastMonthMax.toFixed(2)}m³ (${lastMonthRecords} records), Tháng nay=${currentMonthMax.toFixed(2)}m³ (${currentMonthRecords} records), Hôm qua=${yesterdayCapacity.toFixed(2)}m³, Hôm nay=${todayCapacity.toFixed(2)}m³`);
+    }
     
-    // Làm tròn và sắp xếp
-    Object.keys(capacityByPermit).forEach(permit => {
-        capacityByPermit[permit].totalCapacity = Math.round(capacityByPermit[permit].totalCapacity * 100) / 100;
-        capacityByPermit[permit].stationDetails.sort((a, b) => b.currentMonthCapacity - a.currentMonthCapacity);
+    // Log summary
+    Object.entries(capacityByPermit).forEach(([permit, data]) => {
+        console.log(`📊 ${permit}: ${data.stationsWithData} trạm có dữ liệu, Tổng tháng nay: ${data.currentMonthCapacity.toFixed(2)} m³`);
     });
     
     return capacityByPermit;
 }
 
-/**
- * In kết quả công suất hoạt động
- */
-function printCapacityResults(capacityByPermit) {
-    console.log('\n\n═══════════════════════════════════════════════════════════════════');
-    console.log('  CÔNG SUẤT HOẠT ĐỘNG THEO GIẤY PHÉP');
-    console.log('  Tháng trước (đã hoàn thành) và tháng hiện tại (từ đầu tháng)');
-    console.log('  Nguồn: PostgreSQL Database (TVA + MQTT + SCADA)');
-    console.log('═══════════════════════════════════════════════════════════════════\n');
-    
-    // Tính tổng công suất
-    let grandTotal = 0;
-    let totalStationsWithData = 0;
-    Object.values(capacityByPermit).forEach(data => {
-        grandTotal += data.totalCapacity;
-        totalStationsWithData += data.stationsWithData;
-    });
-    
-    console.log(`📊 TỔNG QUAN:`);
-    console.log(`   - Số giấy phép: ${Object.keys(capacityByPermit).length}`);
-    console.log(`   - Tổng số trạm có dữ liệu: ${totalStationsWithData}`);
-    console.log(`   - Tổng công suất: ${grandTotal.toLocaleString('vi-VN')} m³\n`);
-    
-    // Sắp xếp theo công suất giảm dần
-    const sortedPermits = Object.keys(capacityByPermit).sort((a, b) => {
-        return capacityByPermit[b].totalCapacity - capacityByPermit[a].totalCapacity;
-    });
-    
-    sortedPermits.forEach((permit, index) => {
-        const data = capacityByPermit[permit];
-        const percentage = grandTotal > 0 ? ((data.totalCapacity / grandTotal) * 100).toFixed(2) : 0;
-        
-        console.log(`\n${'─'.repeat(67)}`);
-        console.log(`📋 GIẤY PHÉP ${index + 1}: ${permit}`);
-        console.log(`   Số trạm có dữ liệu: ${data.stationsWithData}`);
-        console.log(`   Công suất: ${data.totalCapacity.toLocaleString('vi-VN')} ${data.unit} (${percentage}%)`);
-        console.log(`${'─'.repeat(67)}`);
-        
-        if (data.stationDetails.length > 0) {
-            data.stationDetails.forEach((station, idx) => {
-                const stationPercent = data.totalCapacity > 0 
-                    ? ((station.currentMonthCapacity / data.totalCapacity) * 100).toFixed(1) 
-                    : 0;
-                console.log(`   ${String(idx + 1).padStart(3, ' ')}. ${station.stationName} [${station.source}]`);
-                console.log(`        Tháng trước: ${station.lastMonthCapacity.toLocaleString('vi-VN')} ${station.unit}`);
-                console.log(`        Tháng này: ${station.currentMonthCapacity.toLocaleString('vi-VN')} ${station.unit} (${stationPercent}%)`);
-                console.log(`        Số records: ${station.recordCount} | Giá trị hiện tại: ${station.latestValue.toLocaleString('vi-VN')}`);
-            });
-        } else {
-            console.log(`   ⚠️  Không có dữ liệu "Tổng lưu lượng"`);
-        }
-    });
-    
-    console.log(`\n${'═'.repeat(67)}`);
-}
-
-/**
- * Xuất kết quả công suất ra file JSON
- */
-function exportCapacityToJSON(capacityByPermit, filename = 'capacity-by-permit.json') {
-    const fs = require('fs');
-    
-    let grandTotal = 0;
-    Object.values(capacityByPermit).forEach(data => {
-        grandTotal += data.totalCapacity;
-    });
-    
-    const output = {
-        exportDate: new Date().toISOString(),
-        period: 'Last 30 days',
-        totalPermits: Object.keys(capacityByPermit).length,
-        grandTotalCapacity: grandTotal,
-        unit: 'm³',
-        data: capacityByPermit
-    };
-    
-    fs.writeFileSync(filename, JSON.stringify(output, null, 2), 'utf8');
-    console.log(`\n💾 Đã xuất dữ liệu công suất ra file: ${filename}`);
-}
-
-/**
- * Hàm chính
- */
-async function main() {
-    let pool = null;
-    
-    try {
-        // Lấy danh sách tất cả trạm
-        const stations = await fetchAllStations();
-        
-        if (stations.length === 0) {
-            console.log('⚠️ Không tìm thấy trạm nào phù hợp');
-            return;
-        }
-        
-        console.log(`✅ Tìm thấy ${stations.length} Giếng/Trạm bơm (đã loại các trạm quan trắc)\n`);
-        
-        // Nhóm các trạm theo giấy phép
-        const groupedStations = groupStationsByPermit(stations);
-        
-        // In ra kết quả danh sách trạm
-        printResults(groupedStations);
-        
-        // Xuất ra file JSON
-        exportToJSON(groupedStations);
-        
-        // ========== TÍNH CÔNG SUẤT HOẠT ĐỘNG TỪ POSTGRESQL ==========
-        console.log('\n\n🔄 Đang kết nối PostgreSQL để tính công suất hoạt động...');
-        
-        // Khởi tạo kết nối database
-        pool = createDatabasePool();
-        
-        // Test connection
-        await pool.query('SELECT NOW()');
-        console.log('✅ Đã kết nối PostgreSQL');
-        
-        console.log(`🔍 Đang truy vấn dữ liệu "Tổng lưu lượng" từ database trong 30 ngày qua...`);
-        
-        // Lấy dữ liệu flow từ database (không filter theo tên)
-        const flowData = await getFlowDataLast30Days(pool, null);
-        
-        const stationsWithData = Object.keys(flowData).length;
-        console.log(`✅ Tìm thấy dữ liệu "Tổng lưu lượng" cho ${stationsWithData} trạm từ database`);
-        
-        // Tính công suất theo giấy phép (phân loại dựa trên tên trạm trong database)
-        const capacityByPermit = calculateCapacityByPermitFromDB(flowData);
-        
-        // In kết quả công suất
-        printCapacityResults(capacityByPermit);
-        
-        // Xuất ra file JSON
-        exportCapacityToJSON(capacityByPermit);
-        
-        console.log('\n✅ Hoàn thành!\n');
-        
-    } catch (error) {
-        console.error('\n❌ Lỗi:', error.message);
-        console.error(error.stack);
-        process.exit(1);
-    } finally {
-        // Đóng kết nối database
-        if (pool) {
-            await pool.end();
-            console.log('🔌 Đã đóng kết nối PostgreSQL');
-        }
-    }
-}
-
-// Chạy script
-if (require.main === module) {
-    main();
-}
-
 module.exports = {
+    STATION_PERMIT_MAPPING,
+    normalizeStationName,
+    findPermitByStationName,
     fetchAllStations,
     groupStationsByPermit,
-    isMonitoringStation,
-    isWellOrPumpStation,
-    getPermitByProject,
+    createDatabasePool,
+    getAllStationNamesFromDB,
     getFlowDataLast30Days,
-    calculateCapacityByPermitFromDB,
-    classifyStationByName,
-    createDatabasePool
+    calculateCapacityByPermitFromDB
 };

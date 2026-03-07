@@ -5,7 +5,10 @@
 
 const mqtt = require('mqtt');
 const fs = require('fs');
+const path = require('path');
 const config = require('../../config');
+
+const DATA_MQTT_PATH = path.join(__dirname, '../../data_mqtt.json');
 const { MQTT_STATION_COORDINATES } = require('../../mqtt-coordinates');
 
 // Cache dữ liệu
@@ -189,7 +192,7 @@ function updateStationsFormat() {
     cachedData.stations = stations;
 
     try {
-        fs.writeFileSync('data_mqtt.json', JSON.stringify(cachedData, null, 2), 'utf8');
+        fs.writeFileSync(DATA_MQTT_PATH, JSON.stringify(cachedData, null, 2), 'utf8');
         console.log(`✅ Đã cập nhật ${cachedData.totalStations} trạm MQTT`);
     } catch (error) {
         console.error('⚠️ Lỗi lưu file:', error.message);
@@ -267,9 +270,9 @@ function connectMQTT() {
  * Lấy dữ liệu từ cache
  */
 function getStationsData() {
-    if (fs.existsSync('data_mqtt.json')) {
+    if (fs.existsSync(DATA_MQTT_PATH)) {
         try {
-            const fileData = JSON.parse(fs.readFileSync('data_mqtt.json', 'utf8'));
+            const fileData = JSON.parse(fs.readFileSync(DATA_MQTT_PATH, 'utf8'));
             
             const dataAge = Date.now() - new Date(fileData.timestamp).getTime();
             const tenMinutes = 10 * 60 * 1000;
