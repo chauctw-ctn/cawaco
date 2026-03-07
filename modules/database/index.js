@@ -160,25 +160,34 @@ function initPool() {
     if (pool) return pool;
 
     try {
-        pool = new Pool({
+        const poolConfig = {
             connectionString: config.database.url,
             ssl: config.database.ssl,
-            options: config.database.options,
-            // Tối ưu connection pool
-            max: 20,                    // Số kết nối tối đa
-            min: 5,                     // Số kết nối tối thiểu
-            idleTimeoutMillis: 30000,   // Timeout cho kết nối idle
-            connectionTimeoutMillis: 5000, // Timeout khi tạo kết nối mới
+            // Tối ưu connection pool cho cloud deployment
+            max: 10,                    // Số kết nối tối đa (giảm cho Render free tier)
+            min: 2,                     // Số kết nối tối thiểu
+            idleTimeoutMillis: 30000,   // Timeout cho kết nối idle (30s)
+            connectionTimeoutMillis: 10000, // Timeout khi tạo kết nối mới (10s tăng từ 5s)
             maxUses: 7500,              // Số lần sử dụng tối đa trước khi đóng kết nối
-            allowExitOnIdle: false      // Không thoát khi idle
-        });
+            allowExitOnIdle: false,     // Không thoát khi idle
+            // Thêm query timeout để tránh queries bị treo
+            query_timeout: 60000,       // 60s query timeout
+            statement_timeout: 60000    // 60s statement timeout
+        };
+        
+        // Nếu có options trong config (timezone), thêm vào
+        if (config.database.options) {
+            poolConfig.options = config.database.options;
+        }
+
+        pool = new Pool(poolConfig);
 
         // Set timezone for all connections in the pool
         pool.on('connect', (client) => {
             // Tối ưu performance cho mỗi connection
             client.query(`
                 SET timezone = 'Asia/Ho_Chi_Minh';
-                SET statement_timeout = '30s';
+                SET statement_timeout = '60s';
                 SET work_mem = '32MB';
             `, (err) => {
                 if (err) {
@@ -186,16 +195,31 @@ function initPool() {
                 }
             });
         });
+        
+        // Handle pool errors
+        pool.on('error', (err, client) => {
+            console.error('❌ Unexpected database pool error:', err.message);
+            console.error('Stack:', err.stack);
+        });
 
-        // Test connection
-        pool.query('SELECT NOW()', (err, res) => {
-            if (err) {
-                console.error('❌ Lỗi kết nối PostgreSQL database:', err.message);
-                process.exit(1);
-            } else {
+        // Test connection với timeout
+        const testConnection = async () => {
+            try {
+                const result = await pool.query('SELECT NOW()');
                 console.log('✅ Đã kết nối tới PostgreSQL database');
-                console.log('🇻🇳 Server time (GMT+7):', res.rows[0].now);
+                console.log('🇻🇳 Server time (GMT+7):', result.rows[0].now);
+                return true;
+            } catch (err) {
+                console.error('❌ Lỗi kết nối PostgreSQL database:', err.message);
+                console.error('Connection string format:', config.database.url ? 'present' : 'missing');
+                throw err;
             }
+        };
+        
+        // Test connection asynchronously
+        testConnection().catch(err => {
+            console.error('⚠️ Database connection test failed, but pool is initialized');
+            console.error('Will retry on first query...');
         });
 
         return pool;

@@ -465,13 +465,32 @@ app.get('/api/station-history/:stationName', verifyToken, async (req, res) => {
 
 // Get permit capacity data (stations grouped by permit with capacity calculations)
 app.get('/api/permit-capacity', verifyToken, async (req, res) => {
-    let pool = null;
-    
     try {
         console.log('📊 Fetching permit capacity data...');
         
         // Import the functions from list-stations-by-permit.js
         const permitModule = require('./list-stations-by-permit');
+        
+        // Check if database pool is ready
+        if (!dbModule.pool) {
+            console.error('❌ Database pool not initialized');
+            return res.status(503).json({
+                success: false,
+                message: 'Database chưa sẵn sàng. Vui lòng thử lại sau.'
+            });
+        }
+        
+        // Test database connection
+        try {
+            await dbModule.pool.query('SELECT NOW()');
+            console.log('✅ Database connection OK');
+        } catch (dbError) {
+            console.error('❌ Database connection failed:', dbError.message);
+            return res.status(503).json({
+                success: false,
+                message: 'Không thể kết nối database: ' + dbError.message
+            });
+        }
         
         // Fetch all stations from MONRE API
         const stations = await permitModule.fetchAllStations();
@@ -488,19 +507,12 @@ app.get('/api/permit-capacity', verifyToken, async (req, res) => {
         // Group stations by permit
         const groupedStations = permitModule.groupStationsByPermit(stations);
         
-        // Create database pool
-        pool = permitModule.createDatabasePool();
-        
-        // Test connection
-        await pool.query('SELECT NOW()');
-        console.log('✅ Đã kết nối PostgreSQL');
-        
         // Debug: Get all station names from database to see exact names
-        await permitModule.getAllStationNamesFromDB(pool);
+        await permitModule.getAllStationNamesFromDB(dbModule.pool);
         
         // Get flow data from database (last 30 days)
         console.log('🔍 Đang truy vấn dữ liệu "Tổng lưu lượng" từ database...');
-        const flowData = await permitModule.getFlowDataLast30Days(pool, null);
+        const flowData = await permitModule.getFlowDataLast30Days(dbModule.pool, null);
         
         const stationsWithData = Object.keys(flowData).length;
         console.log(`✅ Tìm thấy dữ liệu cho ${stationsWithData} trạm từ database`);
@@ -560,16 +572,6 @@ app.get('/api/permit-capacity', verifyToken, async (req, res) => {
             message: 'Không thể lấy dữ liệu công suất giấy phép',
             error: error.message
         });
-    } finally {
-        // Close database pool
-        if (pool) {
-            try {
-                await pool.end();
-                console.log('🔌 Đã đóng kết nối PostgreSQL');
-            } catch (err) {
-                console.error('⚠️ Lỗi đóng database pool:', err.message);
-            }
-        }
     }
 });
 
@@ -1022,8 +1024,30 @@ app.post('/api/visitors/unload', (req, res) => {
 // ============================================
 // HEALTH CHECK (Lightweight - dành cho Render)
 // ============================================
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+    const health = {
+        status: 'ok',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+        database: 'unknown',
+        mqtt: mqttModule.getConnectionStatus() ? 'connected' : 'disconnected'
+    };
+    
+    // Check database connectivity
+    try {
+        if (dbModule.pool) {
+            await dbModule.pool.query('SELECT NOW()');
+            health.database = 'connected';
+        } else {
+            health.database = 'not_initialized';
+            health.status = 'degraded';
+        }
+    } catch (error) {
+        health.database = 'error: ' + error.message;
+        health.status = 'degraded';
+    }
+    
+    res.json(health);
 });
 
 /**
@@ -1981,6 +2005,18 @@ app.listen(PORT, async () => {
     console.log('╚═══════════════════════════════════════════════════════════════════════════╝');
     console.log(`\n🚀 Server đang chạy tại: http://localhost:${PORT}`);
     console.log(`📡 API endpoint: http://localhost:${PORT}/api/stations`);
+    
+    // Check environment configuration
+    console.log('\n⚙️  Kiểm tra cấu hình môi trường:');
+    console.log(`   • NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`   • DATABASE_URL: ${process.env.DATABASE_URL ? '✅ Đã cấu hình' : '⚠️ Chưa cấu hình (sử dụng giá trị mặc định)'}`);
+    console.log(`   • JWT_SECRET: ${process.env.JWT_SECRET ? '✅ Đã cấu hình' : '⚠️ Chưa cấu hình (sử dụng giá trị mặc định)'}`);
+    
+    if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
+        console.warn('\n⚠️  CẢNH BÁO: Đang chạy production nhưng DATABASE_URL chưa được đặt!');
+        console.warn('   → Vui lòng đặt DATABASE_URL trong Render Dashboard');
+    }
+    
     console.log(`\n📍 Các API có sẵn:`);
     console.log(`   • GET /api/stations          - Lấy tất cả trạm (TVA + MQTT)`);
     console.log(`   • GET /api/stations/tva      - Lấy chỉ trạm TVA`);

@@ -47,7 +47,20 @@ async function loadCapacityData() {
         console.log('📡 Response status:', response.status, response.statusText);
         
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            // Try to get error details from response
+            let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.message) {
+                    errorMessage = errorData.message;
+                }
+                if (errorData.error) {
+                    errorMessage += ` (${errorData.error})`;
+                }
+            } catch (e) {
+                // Response not JSON or empty
+            }
+            throw new Error(errorMessage);
         }
         
         const result = await response.json();
@@ -64,12 +77,23 @@ async function loadCapacityData() {
             renderCapacityData(capacityData);
             updateLastUpdateTime();
         } else {
-            throw new Error(result.message || 'Không thể tải dữ liệu');
+            const errorMsg = result.message || 'Không thể tải dữ liệu';
+            const errorDetail = result.error ? ` Chi tiết: ${result.error}` : '';
+            throw new Error(errorMsg + errorDetail);
         }
     } catch (error) {
         console.error('❌ Error loading capacity data:', error);
         console.error('Error stack:', error.stack);
-        showError('Không thể tải dữ liệu công suất. Vui lòng thử lại sau.');
+        
+        // Show detailed error message
+        let userMessage = 'Không thể tải dữ liệu công suất. Vui lòng thử lại sau.';
+        if (error.message && !error.message.includes('Failed to fetch')) {
+            userMessage += '\n\nChi tiết lỗi: ' + error.message;
+        } else if (error.message && error.message.includes('Failed to fetch')) {
+            userMessage += '\n\nMất kết nối với máy chủ. Vui lòng kiểm tra kết nối mạng.';
+        }
+        
+        showError(userMessage);
     } finally {
         showLoading(false);
     }
