@@ -492,25 +492,12 @@ app.get('/api/permit-capacity', verifyToken, async (req, res) => {
             });
         }
         
-        // Fetch all stations from MONRE API
-        const stations = await permitModule.fetchAllStations();
-        
-        if (!stations || stations.length === 0) {
-            return res.json({
-                success: false,
-                message: 'Không thể lấy dữ liệu trạm từ MONRE API'
-            });
-        }
-        
-        console.log(`✅ Tìm thấy ${stations.length} Giếng/Trạm bơm`);
-        
-        // Group stations by permit
-        const groupedStations = permitModule.groupStationsByPermit(stations);
-        
-        // Debug: Get all station names from database to see exact names
-        await permitModule.getAllStationNamesFromDB(dbModule.pool);
+        // SKIP MONRE API call - not reliable from Render
+        // Instead, rely on database queries which will find all stations with flow data
+        console.log('ℹ️ Skipping MONRE API call, using database stations only');
         
         // Get flow data from database (last 30 days)
+        // This will automatically discover all stations that have flow data
         console.log('🔍 Đang truy vấn dữ liệu "Tổng lưu lượng" từ database...');
         const flowData = await permitModule.getFlowDataLast30Days(dbModule.pool, null);
         
