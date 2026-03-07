@@ -35,7 +35,7 @@ async function loadCapacityData() {
     hideError();
     
     try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('authToken');
         console.log('📝 Token:', token ? token.substring(0, 30) + '...' : 'NO TOKEN');
         
         const response = await fetch('/api/permit-capacity', {

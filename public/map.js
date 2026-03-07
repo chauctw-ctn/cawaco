@@ -1303,7 +1303,7 @@ async function loadChartData() {
             const response = await fetch(`/api/stats?${params.toString()}`, {
                 cache: 'no-store',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
             });
             
