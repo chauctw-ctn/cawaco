@@ -1,0 +1,709 @@
+/* Permit Capacity Page Styles */
+
+/* Main Container with Scroll */
+main {
+    min-height: calc(100vh - 70px);
+    overflow-x: hidden;
+    transition: margin-left 0.3s ease;
+}
+
+main.with-sidebar {
+    margin-left: 280px;
+}
+
+main.sidebar-hidden {
+    margin-left: 0;
+}
+
+.container {
+    max-width: 100%;
+    padding: 8px 12px;
+    margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+    .container {
+        padding: 12px 16px;
+    }
+}
+
+.page-header {
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.page-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1e3a8a;
+    margin: 0 0 4px 0;
+}
+
+.page-subtitle {
+    font-size: 11px;
+    color: #64748b;
+    margin: 0;
+}
+
+@media (min-width: 768px) {
+    .page-header {
+        margin-bottom: 16px;
+    }
+    .page-title {
+        font-size: 24px;
+        margin: 0 0 6px 0;
+    }
+    .page-subtitle {
+        font-size: 13px;
+    }
+}
+
+/* Summary Cards */
+.summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+@media (min-width: 480px) {
+    .summary-cards {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+    }
+}
+
+@media (min-width: 768px) {
+    .summary-cards {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+}
+
+.summary-card {
+    background: white;
+    border-radius: 8px;
+    padding: 10px 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+    overflow: hidden;
+    min-width: 0;
+}
+
+@media (min-width: 768px) {
+    .summary-card {
+        border-radius: 10px;
+        padding: 14px 16px;
+    }
+}
+
+.summary-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+.summary-card.highlight {
+    background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+    color: white;
+}
+
+.summary-card.highlight .card-value,
+.summary-card.highlight .card-label {
+    color: white;
+}
+
+.card-content {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.card-content > div {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-value {
+    font-size: clamp(20px, 3vw, 32px);
+    font-weight: 800;
+    color: #1e3a8a;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-label {
+    font-size: clamp(14px, 2vw, 16px);
+    color: #475569;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Table Container */
+.table-container {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-height: calc(100vh - 320px);
+    margin-bottom: 8px;
+}
+
+@media (min-width: 768px) {
+    .table-container {
+        border-radius: 10px;
+        max-height: 600px;
+        margin-bottom: 12px;
+    }
+}
+
+/* Capacity Table */
+#capacity-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+@media (min-width: 768px) {
+    #capacity-table {
+        font-size: 14px;
+    }
+}
+
+#capacity-table thead {
+    background: linear-gradient(135deg, #1e3a8a 0%, #0066cc 100%);
+    color: white;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+}
+
+#capacity-table thead::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -2px;
+    height: 2px;
+    background: #0052a3;
+}
+
+#capacity-table th {
+    padding: 8px 6px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    background: linear-gradient(135deg, #1e3a8a 0%, #0066cc 100%);
+}
+
+@media (min-width: 768px) {
+    #capacity-table th {
+        padding: 10px 8px;
+        font-size: 13px;
+        letter-spacing: 0.5px;
+    }
+}
+
+#capacity-table th:first-child {
+    width: 40px;
+    text-align: center;
+}
+
+@media (min-width: 768px) {
+    #capacity-table th:first-child {
+        width: 50px;
+    }
+}
+
+#capacity-table th:nth-child(3),
+#capacity-table th:nth-child(4),
+#capacity-table th:nth-child(5) {
+    text-align: center;
+}
+
+#capacity-table tbody tr {
+    border-bottom: 1px solid #e2e8f0;
+    transition: background-color 0.2s;
+}
+
+#capacity-table tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+#capacity-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+#capacity-table td {
+    padding: 8px 6px;
+    color: #334155;
+    vertical-align: middle;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+    #capacity-table td {
+        padding: 10px 8px;
+        font-size: 14px;
+    }
+}
+
+#capacity-table td:first-child {
+    text-align: center;
+    font-weight: 600;
+    color: #64748b;
+}
+
+#capacity-table td:nth-child(3),
+#capacity-table td:nth-child(4),
+#capacity-table td:nth-child(5) {
+    text-align: center;
+}
+
+#capacity-table .station-name {
+    font-weight: 600;
+    color: #1e3a8a;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+    #capacity-table .station-name {
+        font-size: 14px;
+    }
+}
+
+#capacity-table .capacity-value {
+    font-weight: 600;
+    color: #0066cc;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+    #capacity-table .capacity-value {
+        font-size: 14px;
+    }
+}
+
+/* Permits Container */
+.permits-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-bottom: 20px;
+}
+
+/* Permit Card */
+.permit-card {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+}
+
+.permit-header {
+    background: linear-gradient(135deg, #1e3a8a 0%, #0066cc 100%);
+    color: white;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.permit-title {
+    font-size: 17px;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.3;
+}
+
+.permit-stats {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+}
+
+.permit-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.permit-stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.permit-stat-label {
+    font-size: 11px;
+    opacity: 0.9;
+}
+
+.permit-body {
+    padding: 16px 20px;
+    overflow-x: auto;
+}
+
+.permit-info {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 20px;
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.permit-info-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.permit-info-label {
+    font-size: 14px;
+    color: #64748b;
+}
+
+.permit-info-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e3a8a;
+}
+
+/* Stations Table */
+.stations-table {
+    width: 100%;
+    min-width: 800px;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.stations-table thead {
+    background: #f1f5f9;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.stations-table th {
+    padding: 10px 8px;
+    text-align: left;
+    font-weight: 600;
+    color: #475569;
+    border-bottom: 2px solid #e2e8f0;
+    white-space: nowrap;
+}
+
+.stations-table tbody tr {
+    border-bottom: 1px solid #e2e8f0;
+    transition: background-color 0.2s;
+}
+
+.stations-table tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+.stations-table td {
+    padding: 12px 8px;
+    color: #334155;
+}
+
+.station-name {
+    font-weight: 600;
+    color: #1e3a8a;
+}
+
+.station-source {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.station-source.tva {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.station-source.mqtt {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.station-source.scada {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.flow-value {
+    font-weight: 600;
+    color: #0066cc;
+}
+
+.percentage {
+    color: #64748b;
+    font-size: 13px;
+}
+
+.progress-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.progress-bg {
+    flex: 1;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #0066cc 0%, #0052a3 100%);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    min-width: 45px;
+    text-align: right;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #64748b;
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+.empty-state-text {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+/* Refresh Section */
+.refresh-section {
+    margin-top: 24px;
+    text-align: center;
+    padding-bottom: 20px;
+}
+
+.refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: #0066cc;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.refresh-btn:hover {
+    background: #0052a3;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
+}
+
+.refresh-btn:active {
+    transform: translateY(0);
+}
+
+.refresh-btn svg {
+    transition: transform 0.3s;
+}
+
+.refresh-btn.loading svg {
+    animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.last-update {
+    margin-top: 12px;
+    font-size: 13px;
+    color: #64748b;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    margin: 0 auto 20px;
+    border: 4px solid #e2e8f0;
+    border-top-color: #0066cc;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Error Message */
+.error-message {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+    padding: 16px;
+    border-radius: 8px;
+    margin: 20px 0;
+    text-align: center;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    main.with-sidebar {
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 12px 16px;
+    }
+
+    .summary-cards {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .summary-card {
+        padding: 16px;
+    }
+
+    .card-icon {
+        font-size: 36px;
+    }
+
+    .card-value {
+        font-size: 24px;
+    }
+
+    .permit-header {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 14px 16px;
+    }
+
+    .permit-stats {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .permit-info {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .permit-body {
+        padding: 12px 16px;
+    }
+
+    .stations-table {
+        font-size: 12px;
+        min-width: 700px;
+    }
+
+    .stations-table th,
+    .stations-table td {
+        padding: 8px 6px;
+    }
+
+    .page-title {
+        font-size: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 10px 12px;
+    }
+
+    .page-header {
+        margin-bottom: 16px;
+    }
+
+    .page-title {
+        font-size: 18px;
+    }
+
+    .summary-card {
+        padding: 14px;
+    }
+
+    .card-icon {
+        font-size: 32px;
+    }
+
+    .card-value {
+        font-size: 20px;
+    }
+
+    .permit-header {
+        padding: 12px 14px;
+    }
+
+    .permit-title {
+        font-size: 15px;
+    }
+
+    .permit-body {
+        padding: 10px 14px;
+    }
+
+    .stations-table {
+        font-size: 11px;
+        min-width: 600px;
+    }
+
+    .stations-table th,
+    .stations-table td {
+        padding: 6px 4px;
+    }
+}

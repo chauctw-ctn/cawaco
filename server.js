@@ -448,6 +448,115 @@ app.get('/api/station-history/:stationName', verifyToken, async (req, res) => {
 });
 
 // ============================================
+// PERMIT CAPACITY API
+// ============================================
+
+// Get permit capacity data (stations grouped by permit with capacity calculations)
+app.get('/api/permit-capacity', verifyToken, async (req, res) => {
+    let pool = null;
+    
+    try {
+        console.log('📊 Fetching permit capacity data...');
+        
+        // Import the functions from list-stations-by-permit.js
+        const permitModule = require('./list-stations-by-permit');
+        
+        // Fetch all stations from MONRE API
+        const stations = await permitModule.fetchAllStations();
+        
+        if (!stations || stations.length === 0) {
+            return res.json({
+                success: false,
+                message: 'Không thể lấy dữ liệu trạm từ MONRE API'
+            });
+        }
+        
+        console.log(`✅ Tìm thấy ${stations.length} Giếng/Trạm bơm`);
+        
+        // Group stations by permit
+        const groupedStations = permitModule.groupStationsByPermit(stations);
+        
+        // Create database pool
+        pool = permitModule.createDatabasePool();
+        
+        // Test connection
+        await pool.query('SELECT NOW()');
+        console.log('✅ Đã kết nối PostgreSQL');
+        
+        // Get flow data from database (last 30 days)
+        console.log('🔍 Đang truy vấn dữ liệu "Tổng lưu lượng" từ database...');
+        const flowData = await permitModule.getFlowDataLast30Days(pool, null);
+        
+        const stationsWithData = Object.keys(flowData).length;
+        console.log(`✅ Tìm thấy dữ liệu cho ${stationsWithData} trạm từ database`);
+        
+        // Calculate capacity from flow data
+        const capacityByPermit = permitModule.calculateCapacityByPermitFromDB(flowData);
+        
+        // Calculate grand total and flatten data for table view
+        let grandTotalCapacity = 0;
+        const tableData = [];
+        let rowNumber = 1;
+        let totalStationsWithData = 0;
+        
+        // Sort permits for consistent display
+        const sortedPermits = ['35/gp-btnmt 15/01/2025', '36/gp-btnmt 15/01/2025', '391/gp-bnnmt 19/09/2025', '393/gp-bnnmt 22/09/2025'];
+        
+        sortedPermits.forEach(permitNumber => {
+            const permitData = capacityByPermit[permitNumber];
+            if (!permitData) return;
+            
+            grandTotalCapacity += permitData.totalCapacity;
+            totalStationsWithData += permitData.stationsWithData;
+            
+            // Add each station as a row in the table
+            permitData.stationDetails.forEach(station => {
+                tableData.push({
+                    stt: rowNumber++,
+                    stationName: station.stationName,
+                    permit: permitNumber,
+                    monthlyCapacity: Math.round(station.lastMonthCapacity * 100) / 100, // Tháng trước đã hoàn thành
+                    currentCapacity: Math.round(station.currentMonthCapacity * 100) / 100, // Tháng hiện tại (từ đầu tháng đến nay)
+                    unit: station.unit || 'm³',
+                    recordCount: station.recordCount,
+                    source: station.source
+                });
+            });
+        });
+        
+        console.log(`📊 Kết quả: ${totalStationsWithData} trạm có dữ liệu thuộc ${Object.keys(capacityByPermit).length} giấy phép`);
+        
+        res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            totalStations: totalStationsWithData, // Số trạm thực tế có dữ liệu
+            totalPermits: Object.keys(capacityByPermit).length,
+            grandTotalCapacity: Math.round(grandTotalCapacity * 100) / 100,
+            tableData: tableData,
+            data: capacityByPermit // Keep original format for reference
+        });
+    } catch (error) {
+        console.error('❌ Error fetching permit capacity:', error.message);
+        console.error(error.stack);
+        res.status(500).json({
+            success: false,
+            message: 'Không thể lấy dữ liệu công suất giấy phép',
+            error: error.message
+        });
+    } finally {
+        // Close database pool
+        if (pool) {
+            try {
+                await pool.end();
+                console.log('🔌 Đã đóng kết nối PostgreSQL');
+            } catch (err) {
+                console.error('⚠️ Lỗi đóng database pool:', err.message);
+            }
+        }
+    }
+});
+
+// ============================================
 // TELEGRAM ALERT API
 // ============================================
 

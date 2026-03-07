@@ -1,0 +1,140 @@
+{
+  "exportDate": "2026-03-07T03:19:49.383Z",
+  "totalGroups": 4,
+  "totalStations": 25,
+  "data": {
+    "393/gp-bnnmt 22/09/2025": [
+      {
+        "stationName": "CLNGS5NM1",
+        "projectName": "NHAMAYCAPNUOCSO1",
+        "permit": "393/gp-bnnmt 22/09/2025"
+      },
+      {
+        "stationName": "GS1NM1",
+        "projectName": "NHAMAYCAPNUOCSO1",
+        "permit": "393/gp-bnnmt 22/09/2025"
+      },
+      {
+        "stationName": "GS2NM1",
+        "projectName": "NHAMAYCAPNUOCSO1",
+        "permit": "393/gp-bnnmt 22/09/2025"
+      },
+      {
+        "stationName": "GS3NM1",
+        "projectName": "NHAMAYCAPNUOCSO1",
+        "permit": "393/gp-bnnmt 22/09/2025"
+      },
+      {
+        "stationName": "GS4NM1",
+        "projectName": "NHAMAYCAPNUOCSO1",
+        "permit": "393/gp-bnnmt 22/09/2025"
+      },
+      {
+        "stationName": "GS5NM1",
+        "projectName": "NHAMAYCAPNUOCSO1",
+        "permit": "393/gp-bnnmt 22/09/2025"
+      }
+    ],
+    "35/gp-btnmt 15/01/2025": [
+      {
+        "stationName": "G1",
+        "projectName": "CAPNUOCCAMAU1",
+        "permit": "35/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "G12",
+        "projectName": "CAPNUOCCAMAU1",
+        "permit": "35/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "G15",
+        "projectName": "CAPNUOCCAMAU1",
+        "permit": "35/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "G18",
+        "projectName": "CAPNUOCCAMAU1",
+        "permit": "35/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "G2",
+        "projectName": "CAPNUOCCAMAU1",
+        "permit": "35/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "G20",
+        "projectName": "CAPNUOCCAMAU1",
+        "permit": "35/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "G22",
+        "projectName": "CAPNUOCCAMAU1",
+        "permit": "35/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "G23",
+        "projectName": "CAPNUOCCAMAU1",
+        "permit": "35/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "G24",
+        "projectName": "CAPNUOCCAMAU1",
+        "permit": "35/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "G25",
+        "projectName": "CAPNUOCCAMAU1",
+        "permit": "35/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "G27",
+        "projectName": "CAPNUOCCAMAU1",
+        "permit": "35/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "G4",
+        "projectName": "CAPNUOCCAMAU1",
+        "permit": "35/gp-btnmt 15/01/2025"
+      }
+    ],
+    "36/gp-btnmt 15/01/2025": [
+      {
+        "stationName": "CLNGS4NM2",
+        "projectName": "CAPNUOCCAMAUSO2",
+        "permit": "36/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "GS1NM2",
+        "projectName": "CAPNUOCCAMAUSO2",
+        "permit": "36/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "GS2NM2",
+        "projectName": "CAPNUOCCAMAUSO2",
+        "permit": "36/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "GS3NM2",
+        "projectName": "CAPNUOCCAMAUSO2",
+        "permit": "36/gp-btnmt 15/01/2025"
+      },
+      {
+        "stationName": "GS4NM2",
+        "projectName": "CAPNUOCCAMAUSO2",
+        "permit": "36/gp-btnmt 15/01/2025"
+      }
+    ],
+    "391/gp-bnnmt 19/09/2025": [
+      {
+        "stationName": "G21",
+        "projectName": "CONGTYCOPHANCAPNUOCC",
+        "permit": "391/gp-bnnmt 19/09/2025"
+      },
+      {
+        "stationName": "G26",
+        "projectName": "CONGTYCOPHANCAPNUOCC",
+        "permit": "391/gp-bnnmt 19/09/2025"
+      }
+    ]
+  }
+}

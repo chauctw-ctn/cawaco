@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Permit Capacity API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .error {
+            color: red;
+        }
+        .success {
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Permit Capacity API</h1>
+    
+    <button onclick="testLogin()">1. Login</button>
+    <button onclick="testPermitCapacity()">2. Test /api/permit-capacity</button>
+    <button onclick="clearResult()">Clear</button>
+    
+    <div id="result"></div>
+
+    <script>
+        let token = localStorage.getItem('token');
+        
+        function log(message, type = 'info') {
+            const result = document.getElementById('result');
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : '📝';
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
+            result.innerHTML += `<div class="${className}">[${timestamp}] ${prefix} ${message}</div>`;
+            result.scrollTop = result.scrollHeight;
+        }
+        
+        function clearResult() {
+            document.getElementById('result').innerHTML = '';
+        }
+        
+        async function testLogin() {
+            try {
+                log('Starting login test...');
+                
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'admin',
+                        password: 'admin123'
+                    })
+                });
+                
+                const data = await response.json();
+                log('Login response: ' + JSON.stringify(data, null, 2));
+                
+                if (data.success && data.token) {
+                    token = data.token;
+                    localStorage.setItem('token', token);
+                    log('Login successful! Token saved.', 'success');
+                    log('Token: ' + token.substring(0, 30) + '...');
+                } else {
+                    log('Login failed: ' + (data.message || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                log('Login error: ' + error.message, 'error');
+                console.error(error);
+            }
+        }
+        
+        async function testPermitCapacity() {
+            try {
+                if (!token) {
+                    log('No token found. Please login first!', 'error');
+                    return;
+                }
+                
+                log('Testing /api/permit-capacity...');
+                log('Using token: ' + token.substring(0, 30) + '...');
+                
+                const startTime = Date.now();
+                
+                const response = await fetch('/api/permit-capacity', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const duration = Date.now() - startTime;
+                log(`Response received in ${duration}ms`);
+                log(`Status: ${response.status} ${response.statusText}`);
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    log('API call successful!', 'success');
+                    log('─'.repeat(60));
+                    log('📊 Summary:');
+                    log(`   Total Permits: ${data.totalPermits}`);
+                    log(`   Total Stations: ${data.totalStations}`);
+                    log(`   Grand Total Capacity: ${data.grandTotalCapacity} m³`);
+                    log(`   Timestamp: ${data.timestamp}`);
+                    log('─'.repeat(60));
+                    
+                    if (data.data) {
+                        log('\n📋 Permit Details:');
+                        Object.keys(data.data).forEach(permit => {
+                            const permitData = data.data[permit];
+                            log(`\n${permit}:`);
+                            log(`   Stations with data: ${permitData.stationsWithData}`);
+                            log(`   Total capacity: ${permitData.totalCapacity} ${permitData.unit}`);
+                            
+                            if (permitData.stationDetails && permitData.stationDetails.length > 0) {
+                                log(`   Stations:`);
+                                permitData.stationDetails.forEach((station, idx) => {
+                                    log(`      ${idx + 1}. ${station.stationName} [${station.source}]: ${station.totalFlow} ${station.unit}`);
+                                });
+                            }
+                        });
+                    }
+                    
+                    log('\n✅ Test PASSED!', 'success');
+                } else {
+                    log('API returned error: ' + data.message, 'error');
+                    if (data.error) {
+                        log('Error details: ' + data.error, 'error');
+                    }
+                }
+                
+            } catch (error) {
+                log('Test failed: ' + error.message, 'error');
+                console.error(error);
+            }
+        }
+        
+        // Check token on load
+        if (token) {
+            log('Found existing token: ' + token.substring(0, 30) + '...');
+        } else {
+            log('No token found. Please login first.');
+        }
+    </script>
+</body>
+</html>

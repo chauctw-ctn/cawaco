@@ -61,6 +61,8 @@ function setActiveMenuItem() {
             databtnMenuExpandable.classList.add('expanded');
             databtnFilterContent.classList.add('active');
         }
+    } else if (currentPage === 'permit-capacity.html') {
+        activeMenuItem = document.getElementById('permit-capacity-btn');
     }
     
     if (activeMenuItem) {

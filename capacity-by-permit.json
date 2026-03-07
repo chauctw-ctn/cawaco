@@ -1,0 +1,252 @@
+{
+  "exportDate": "2026-03-07T03:20:02.332Z",
+  "period": "Last 30 days",
+  "totalPermits": 4,
+  "grandTotalCapacity": 136875.19,
+  "unit": "m³",
+  "data": {
+    "35/gp-btnmt 15/01/2025": {
+      "permit": "35/gp-btnmt 15/01/2025",
+      "totalStations": 12,
+      "stationsWithData": 11,
+      "totalCapacity": 65546.75,
+      "unit": "m³",
+      "stationDetails": [
+        {
+          "stationName": "TRẠM BƠM SỐ 1",
+          "lastMonthCapacity": 17587,
+          "currentMonthCapacity": 10953,
+          "unit": "m³",
+          "recordCount": 3995,
+          "latestValue": 983351,
+          "source": "SCADA"
+        },
+        {
+          "stationName": "TRẠM BƠM 22",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 9035,
+          "unit": "m3",
+          "recordCount": 1431,
+          "latestValue": 4245506.5,
+          "source": "TVA"
+        },
+        {
+          "stationName": "TRẠM BƠM 4",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 7975.25,
+          "unit": "m3",
+          "recordCount": 1431,
+          "latestValue": 4169107.75,
+          "source": "TVA"
+        },
+        {
+          "stationName": "TRẠM BƠM 23",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 7703.75,
+          "unit": "m3",
+          "recordCount": 1429,
+          "latestValue": 3685253.5,
+          "source": "TVA"
+        },
+        {
+          "stationName": "TRẠM BƠM 12",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 6771,
+          "unit": "m3",
+          "recordCount": 1429,
+          "latestValue": 180485,
+          "source": "TVA"
+        },
+        {
+          "stationName": "TRẠM BƠM 24",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 6437.75,
+          "unit": "m3",
+          "recordCount": 1425,
+          "latestValue": 862673.75,
+          "source": "TVA"
+        },
+        {
+          "stationName": "TRẠM BƠM 20",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 6039.75,
+          "unit": "m3",
+          "recordCount": 1430,
+          "latestValue": 3107208,
+          "source": "TVA"
+        },
+        {
+          "stationName": "TRẠM BƠM 25",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 6033,
+          "unit": "m3",
+          "recordCount": 1426,
+          "latestValue": 872557,
+          "source": "TVA"
+        },
+        {
+          "stationName": "TRẠM BƠM 2",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 2177.25,
+          "unit": "m3",
+          "recordCount": 1426,
+          "latestValue": 571832.56,
+          "source": "TVA"
+        },
+        {
+          "stationName": "GIẾNG SỐ 15",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 1254,
+          "unit": "m³",
+          "recordCount": 2925,
+          "latestValue": 461532,
+          "source": "MQTT"
+        },
+        {
+          "stationName": "GIẾNG SỐ 18",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 1167,
+          "unit": "m³",
+          "recordCount": 2948,
+          "latestValue": 346837,
+          "source": "MQTT"
+        },
+        {
+          "stationName": "TRẠM BƠM 27",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 0,
+          "unit": "m3",
+          "recordCount": 1426,
+          "latestValue": 0,
+          "source": "TVA"
+        }
+      ]
+    },
+    "36/gp-btnmt 15/01/2025": {
+      "permit": "36/gp-btnmt 15/01/2025",
+      "totalStations": 4,
+      "stationsWithData": 4,
+      "totalCapacity": 23660.75,
+      "unit": "m³",
+      "stationDetails": [
+        {
+          "stationName": "GIẾNG 4 NHÀ MÁY 2",
+          "lastMonthCapacity": 14461,
+          "currentMonthCapacity": 8840,
+          "unit": "m³",
+          "recordCount": 4004,
+          "latestValue": 749439,
+          "source": "SCADA"
+        },
+        {
+          "stationName": "NHÀ MÁY SỐ 2 - GIẾNG SỐ 3",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 6540.5,
+          "unit": "m3",
+          "recordCount": 1430,
+          "latestValue": 3849835.75,
+          "source": "TVA"
+        },
+        {
+          "stationName": "NHÀ MÁY SỐ 2 - GIẾNG SỐ 2",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 5749.25,
+          "unit": "m3",
+          "recordCount": 1425,
+          "latestValue": 1299964,
+          "source": "TVA"
+        },
+        {
+          "stationName": "NHÀ MÁY SỐ 2 - GIẾNG SỐ 1",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 2531,
+          "unit": "m³",
+          "recordCount": 2958,
+          "latestValue": 1018289,
+          "source": "MQTT"
+        }
+      ]
+    },
+    "391/gp-bnnmt 19/09/2025": {
+      "permit": "391/gp-bnnmt 19/09/2025",
+      "totalStations": 2,
+      "stationsWithData": 2,
+      "totalCapacity": 14724.06,
+      "unit": "m³",
+      "stationDetails": [
+        {
+          "stationName": "TRẠM BƠM 21",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 7846.25,
+          "unit": "m3",
+          "recordCount": 1429,
+          "latestValue": 3514075.5,
+          "source": "TVA"
+        },
+        {
+          "stationName": "TRẠM BƠM 26",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 6877.81,
+          "unit": "m3",
+          "recordCount": 1431,
+          "latestValue": 585845.25,
+          "source": "TVA"
+        }
+      ]
+    },
+    "393/gp-bnnmt 22/09/2025": {
+      "permit": "393/gp-bnnmt 22/09/2025",
+      "totalStations": 5,
+      "stationsWithData": 5,
+      "totalCapacity": 32943.63,
+      "unit": "m³",
+      "stationDetails": [
+        {
+          "stationName": "GIẾNG 4 NHÀ MÁY 1",
+          "lastMonthCapacity": 16048,
+          "currentMonthCapacity": 8838,
+          "unit": "m³",
+          "recordCount": 4002,
+          "latestValue": 681816,
+          "source": "SCADA"
+        },
+        {
+          "stationName": "GIẾNG 5 NHÀ MÁY 1",
+          "lastMonthCapacity": 13343,
+          "currentMonthCapacity": 8670,
+          "unit": "m³",
+          "recordCount": 4003,
+          "latestValue": 868454,
+          "source": "SCADA"
+        },
+        {
+          "stationName": "NHÀ MÁY SỐ 1 - GIẾNG SỐ 3",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 6518.63,
+          "unit": "m3",
+          "recordCount": 1425,
+          "latestValue": 1209716.38,
+          "source": "TVA"
+        },
+        {
+          "stationName": "NHÀ MÁY SỐ 1 - GIẾNG SỐ 1",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 6149,
+          "unit": "m3",
+          "recordCount": 1432,
+          "latestValue": 3620737.5,
+          "source": "TVA"
+        },
+        {
+          "stationName": "NHÀ MÁY SỐ 1 - GIẾNG SỐ 2",
+          "lastMonthCapacity": 0,
+          "currentMonthCapacity": 2768,
+          "unit": "m³",
+          "recordCount": 2958,
+          "latestValue": 98417,
+          "source": "MQTT"
+        }
+      ]
+    }
+  }
+}

@@ -35,42 +35,26 @@
                 <span>Thống kê dữ liệu</span>
             </a>
             
-            <!-- Dữ liệu Giấy phép with Filter Dropdown -->
-            <div class="menu-item-expandable" id="databtn-menu-expandable">
-                <a href="databtn.html" class="menu-item" id="databtn-btn">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <line x1="16" y1="13" x2="8" y2="13"/>
-                        <line x1="16" y1="17" x2="8" y2="17"/>
-                        <polyline points="10 9 9 9 8 9"/>
-                    </svg>
-                    <span>Dữ liệu Giấy phép</span>
-                    <span class="expand-arrow" id="databtn-expand-arrow">▼</span>
-                </a>
-                <div class="menu-item-content" id="databtn-filter-content">
-                    <div class="sidebar-filter-section">
-                        <div class="sidebar-filter-group">
-                            <div class="permit-checkboxes" id="permit-checkboxes">
-                                <label class="checkbox-item">
-                                    <input type="checkbox" id="permit-all" value="all" checked>
-                                    <span>Tất cả</span>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <div class="sidebar-filter-divider"></div>
-                        
-                        <div class="sidebar-filter-group">
-                            <div class="sidebar-filter-title">Trạng thái</div>
-                            <label class="checkbox-item">
-                                <input type="checkbox" id="filter-offline" value="offline">
-                                <span>Các trạm offline / Mất kết nối</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <!-- Dữ liệu Giấy phép -->
+            <a href="databtn.html" class="menu-item" id="databtn-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                <span>Dữ liệu Giấy phép</span>
+            </a>
+            
+            <a href="permit-capacity.html" class="menu-item" id="permit-capacity-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                    <line x1="12" y1="22.08" x2="12" y2="12"/>
+                </svg>
+                <span>Công suất theo Giấy phép</span>
+            </a>
         </div>
         
         <!-- Visitor Statistics Section -->

@@ -798,10 +798,12 @@ async function fetchData() {
         
         currentData = data.data || [];
         lastUpdateTime = Date.now();
-        hasLoadedDataOnce = true;
         
-        // Extract unique permits for filter
+        // Extract unique permits for filter (MUST be called before setting hasLoadedDataOnce)
         extractPermits();
+        
+        // Mark as loaded after extractPermits so initialization logic works correctly
+        hasLoadedDataOnce = true;
         
         console.log(`📊 Fetched ${currentData.length} data points`);
         
@@ -838,15 +840,14 @@ function extractPermits() {
     allPermits = Array.from(permitSet).sort();
     allStations = Array.from(stationSet).sort();
     
-    // Initialize selections if empty
-    if (selectedStations.size === 0) {
-        selectedStations = new Set(allStations);
+    // Initialize selections ONLY on first load (when hasLoadedDataOnce is false)
+    // This allows user to deselect all items without auto-resetting
+    if (!hasLoadedDataOnce) {
+        // No longer filtering by station - removed selectedStations initialization
+        if (selectedPermits.size === 0) {
+            selectedPermits = new Set(allPermits);
+        }
     }
-    if (selectedPermits.size === 0) {
-        selectedPermits = new Set(allPermits);
-    }
-    
-    updatePermitFilter();
 }
 
 /**
@@ -859,17 +860,7 @@ function createTableHeader() {
     thead.innerHTML = `
         <tr>
             <th>STT</th>
-            <th>
-                <div class="th-filter-container">
-                    <span>TÊN TRẠM</span>
-                    <button class="th-filter-button" data-filter="station" title="Lọc tên trạm">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="th-filter-dropdown" data-filter="station"></div>
-            </th>
+            <th>TÊN TRẠM</th>
             <th>THÔNG SỐ ĐO</th>
             <th>GIÁ TRỊ</th>
             <th>ĐƠN VỊ</th>
@@ -908,9 +899,6 @@ function createTableHeader() {
  * Setup header filter dropdowns
  */
 function setupHeaderFilters() {
-    // Station filter
-    setupFilterDropdown('station', allStations, selectedStations);
-    
     // Status filter
     setupFilterDropdown('status', ['online', 'offline'], selectedStatuses, (value) => {
         return value === 'online' ? '✅ Bình thường' : '❌ Chưa gửi dữ liệu';
@@ -932,8 +920,8 @@ function setupFilterDropdown(filterType, items, selectedItems, labelFormatter = 
     // Create dropdown content
     let dropdownHTML = '';
     
-    // Add search box for station and permit filters
-    if (filterType === 'station' || filterType === 'permit') {
+    // Add search box for permit filter
+    if (filterType === 'permit') {
         dropdownHTML += `
             <input type="text" class="th-filter-search" placeholder="Tìm kiếm..." data-filter="${filterType}">
         `;
@@ -975,20 +963,20 @@ function setupFilterDropdown(filterType, items, selectedItems, labelFormatter = 
     // Toggle dropdown on button click
     button.addEventListener('click', (e) => {
         e.stopPropagation();
+        
+        // Check if THIS dropdown is currently open BEFORE any modifications
         const isOpen = dropdown.classList.contains('show');
         
-        // Check if any other dropdown is open before closing
+        // Check if any other dropdown is open
         const otherDropdownWasOpen = Array.from(document.querySelectorAll('.th-filter-dropdown.show'))
             .some(d => d !== dropdown);
         
-        // Close all other dropdowns
+        // Close all dropdowns
         document.querySelectorAll('.th-filter-dropdown.show').forEach(d => {
-            if (d !== dropdown) {
-                d.classList.remove('show');
-            }
+            d.classList.remove('show');
         });
         document.querySelectorAll('.th-filter-button.active').forEach(b => {
-            if (b !== button) b.classList.remove('active');
+            b.classList.remove('active');
         });
         
         // Re-render if closing another dropdown to apply its filters
@@ -996,13 +984,12 @@ function setupFilterDropdown(filterType, items, selectedItems, labelFormatter = 
             renderTable();
         }
         
-        // Toggle current dropdown
+        // Toggle current dropdown - if it was already open, keep it closed
         if (isOpen) {
-            dropdown.classList.remove('show');
-            button.classList.remove('active');
-            // Re-render table when closing dropdown
+            // Already open, so just keep it closed (already closed above)
             renderTable();
         } else {
+            // Not open, so open it
             // Calculate position for fixed dropdown
             const buttonRect = button.getBoundingClientRect();
             const dropdownWidth = 250; // min-width from CSS
@@ -1079,7 +1066,13 @@ function setupFilterDropdown(filterType, items, selectedItems, labelFormatter = 
     const selectAllBtn = dropdown.querySelector('.th-filter-btn-select-all');
     if (selectAllBtn) {
         selectAllBtn.addEventListener('click', () => {
-            checkboxes.forEach(cb => {
+            // Get visible checkboxes (after search filter)
+            const visibleCheckboxes = Array.from(checkboxes).filter(cb => {
+                const option = cb.closest('.th-filter-option');
+                return option && option.style.display !== 'none';
+            });
+            
+            visibleCheckboxes.forEach(cb => {
                 cb.checked = true;
                 selectedItems.add(cb.value);
             });
@@ -1092,6 +1085,7 @@ function setupFilterDropdown(filterType, items, selectedItems, labelFormatter = 
     const clearBtn = dropdown.querySelector('.th-filter-btn-clear');
     if (clearBtn) {
         clearBtn.addEventListener('click', () => {
+            // Clear ALL items, not just visible ones
             checkboxes.forEach(cb => {
                 cb.checked = false;
                 selectedItems.delete(cb.value);
@@ -1199,139 +1193,28 @@ function closeAllDropdowns() {
 }
 
 /**
- * Update permit filter checkboxes
- */
-function updatePermitFilter() {
-    const permitCheckboxes = document.getElementById('permit-checkboxes');
-    if (!permitCheckboxes) return;
-    
-    // Keep "Tất cả" checkbox
-    const allCheckbox = permitCheckboxes.querySelector('#permit-all');
-    const allCheckboxHTML = allCheckbox ? allCheckbox.parentElement.outerHTML : '';
-    
-    // Clear and rebuild
-    permitCheckboxes.innerHTML = allCheckboxHTML;
-    
-    // Add permit checkboxes
-    allPermits.forEach(permit => {
-        const label = document.createElement('label');
-        label.className = 'checkbox-item';
-        
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.className = 'permit-checkbox';
-        checkbox.value = permit;
-        checkbox.checked = true; // Default all checked
-        
-        const span = document.createElement('span');
-        span.textContent = permit;
-        
-        label.appendChild(checkbox);
-        label.appendChild(span);
-        permitCheckboxes.appendChild(label);
-    });
-    
-    // Attach event listeners
-    attachFilterListeners();
-}
-
-/**
- * Attach event listeners to filter checkboxes
- */
-function attachFilterListeners() {
-    const permitCheckboxes = document.getElementById('permit-checkboxes');
-    if (!permitCheckboxes) return;
-    
-    const allCheckbox = document.getElementById('permit-all');
-    const permitCheckboxList = permitCheckboxes.querySelectorAll('.permit-checkbox');
-    const offlineCheckbox = document.getElementById('filter-offline');
-    
-    // "Tất cả" checkbox handler
-    if (allCheckbox) {
-        allCheckbox.addEventListener('change', function() {
-            permitCheckboxList.forEach(cb => {
-                cb.checked = this.checked;
-            });
-            renderTable();
-        });
-    }
-    
-    // Individual permit checkboxes handler
-    permitCheckboxList.forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            // Update "Tất cả" checkbox state
-            if (allCheckbox) {
-                const allChecked = Array.from(permitCheckboxList).every(cb => cb.checked);
-                allCheckbox.checked = allChecked;
-            }
-            renderTable();
-        });
-    });
-    
-    // Offline filter checkbox handler
-    if (offlineCheckbox) {
-        offlineCheckbox.addEventListener('change', function() {
-            renderTable();
-        });
-    }
-}
-
-/**
  * Filter data by selected permits and offline status
  */
 function getFilteredData() {
-    const permitCheckboxes = document.getElementById('permit-checkboxes');
-    const offlineCheckbox = document.getElementById('filter-offline');
-    
     let filteredData = currentData;
     
-    // Filter by header filters first (station, permit, status)
+    // ONLY use header dropdown filters (permit, status)
+    // If selectedItems.size === 0, show nothing
     filteredData = filteredData.filter(row => {
-        // Filter by station
-        if (!selectedStations.has(row.station)) {
+        // Filter by permit - if none selected, show nothing
+        if (selectedPermits.size === 0 || !selectedPermits.has(row.permit)) {
             return false;
         }
         
-        // Filter by permit
-        if (!selectedPermits.has(row.permit)) {
-            return false;
-        }
-        
-        // Filter by status (dùng độ trễ hiệu dụng theo thời gian đo → hiện tại)
+        // Filter by status - if none selected, show nothing
         const delayMinutes = getEffectiveDelayMinutes(row);
         const status = delayMinutes <= delayThresholdMinutes ? 'online' : 'offline';
-        if (!selectedStatuses.has(status)) {
+        if (selectedStatuses.size === 0 || !selectedStatuses.has(status)) {
             return false;
         }
         
         return true;
     });
-    
-    // Also apply sidebar filters if they exist (for backwards compatibility)
-    if (permitCheckboxes) {
-        // Filter by offline status from sidebar
-        if (offlineCheckbox && offlineCheckbox.checked) {
-            filteredData = filteredData.filter(row => {
-                const delayMinutes = getEffectiveDelayMinutes(row);
-                return delayMinutes > delayThresholdMinutes;
-            });
-        }
-        
-        const allCheckbox = document.getElementById('permit-all');
-        
-        // If "Tất cả" is not checked in sidebar, filter by sidebar permit selection
-        if (allCheckbox && !allCheckbox.checked) {
-            const sidebarSelectedPermits = [];
-            const permitCheckboxList = permitCheckboxes.querySelectorAll('.permit-checkbox:checked');
-            permitCheckboxList.forEach(cb => {
-                sidebarSelectedPermits.push(cb.value);
-            });
-            
-            if (sidebarSelectedPermits.length > 0) {
-                filteredData = filteredData.filter(row => sidebarSelectedPermits.includes(row.permit));
-            }
-        }
-    }
     
     return filteredData;
 }
@@ -1433,60 +1316,6 @@ async function initializePage() {
     
     // Fetch Telegram configuration first (this loads all settings)
     await fetchTelegramConfig();
-    
-    console.log('⚙️ Setting up sidebar filter expandable menu...');
-    
-    // Setup sidebar filter expandable menu
-    const databtnMenuExpandable = document.getElementById('databtn-menu-expandable');
-    const databtnBtn = document.getElementById('databtn-btn');
-    const databtnExpandArrow = document.getElementById('databtn-expand-arrow');
-    const databtnFilterContent = document.getElementById('databtn-filter-content');
-    
-    if (databtnMenuExpandable && databtnBtn && databtnFilterContent) {
-        console.log('Setting up dropdown toggle...');
-        
-        // Expand filter on databtn page by default
-        databtnMenuExpandable.classList.add('expanded');
-        databtnFilterContent.classList.add('active');
-        
-        // Toggle filter dropdown when clicking the menu item
-        const toggleDropdown = function(e) {
-            console.log('Dropdown clicked!');
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // Toggle expanded state
-            const isExpanded = databtnMenuExpandable.classList.contains('expanded');
-            console.log('Current state:', isExpanded ? 'expanded' : 'collapsed');
-            
-            if (isExpanded) {
-                databtnMenuExpandable.classList.remove('expanded');
-                databtnFilterContent.classList.remove('active');
-                console.log('Collapsing dropdown');
-            } else {
-                databtnMenuExpandable.classList.add('expanded');
-                databtnFilterContent.classList.add('active');
-                console.log('Expanding dropdown');
-            }
-        };
-        
-        databtnBtn.addEventListener('click', toggleDropdown);
-        
-        // Also allow clicking on the arrow or the entire expandable area
-        if (databtnExpandArrow) {
-            databtnExpandArrow.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleDropdown(e);
-            });
-        }
-    } else {
-        console.error('Dropdown elements not found:', {
-            databtnMenuExpandable: !!databtnMenuExpandable,
-            databtnBtn: !!databtnBtn,
-            databtnFilterContent: !!databtnFilterContent
-        });
-    }
     
     // Setup scroll and resize handlers for dropdowns
     const tableContainer = document.querySelector('.table-container');
