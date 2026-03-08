@@ -1013,3 +1013,98 @@ body {
     }
 }
 
+/* Telegram Config Modal - Mobile Responsive Styles */
+@media (max-width: 768px) {
+    #telegram-config-modal .modal-content {
+        width: 95%;
+        margin: 3% auto;
+        max-height: 94vh;
+        overflow-y: auto;
+    }
+    
+    #telegram-config-modal .modal-header {
+        padding: 16px 20px;
+    }
+    
+    #telegram-config-modal .modal-header h2 {
+        font-size: 18px;
+    }
+    
+    #telegram-config-modal form {
+        padding: 20px;
+    }
+    
+    #telegram-config-modal .form-group {
+        margin-bottom: 16px;
+    }
+    
+    #telegram-config-modal .modal-footer {
+        padding: 16px 20px;
+        flex-direction: column-reverse;
+    }
+    
+    #telegram-config-modal .modal-footer button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    #telegram-config-modal .modal-content {
+        width: 100%;
+        height: 100vh;
+        max-height: 100vh;
+        margin: 0;
+        border-radius: 0;
+    }
+    
+    #telegram-config-modal .modal-header {
+        padding: 12px 16px;
+    }
+    
+    #telegram-config-modal .modal-header h2 {
+        font-size: 16px;
+    }
+    
+    #telegram-config-modal .modal-close {
+        width: 28px;
+        height: 28px;
+        font-size: 24px;
+    }
+    
+    #telegram-config-modal form {
+        padding: 16px;
+    }
+    
+    #telegram-config-modal .form-group {
+        margin-bottom: 14px;
+    }
+    
+    #telegram-config-modal .form-group label {
+        font-size: 13px;
+        margin-bottom: 6px;
+    }
+    
+    #telegram-config-modal .form-group input,
+    #telegram-config-modal .form-group select {
+        padding: 8px 10px;
+        font-size: 13px;
+    }
+    
+    #telegram-config-modal .form-group small {
+        font-size: 11px;
+        line-height: 1.4;
+    }
+    
+    #telegram-config-modal .modal-footer {
+        padding: 12px 16px;
+    }
+    
+    #telegram-config-modal .modal-footer button {
+        padding: 10px 16px;
+        font-size: 13px;
+    }
+    
+    #telegram-config-modal .form-divider {
+        margin: 16px 0;
+    }
+}

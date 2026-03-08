@@ -655,8 +655,8 @@ async function getStatsData(options) {
                     parameter_name,
                     value,
                     unit,
-                    created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as created_at,
-                    FLOOR(EXTRACT(EPOCH FROM created_at) / (${interval} * 60)) as time_bucket
+                    created_at,
+                    FLOOR(EXTRACT(EPOCH FROM created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') / (${interval} * 60)) as time_bucket
                 FROM ${table}
                 ${whereClause}
                 ORDER BY created_at DESC
@@ -668,7 +668,7 @@ async function getStatsData(options) {
                 parameter_name,
                 value,
                 unit,
-                created_at
+                (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::timestamp as created_at
             FROM time_bucketed
             ORDER BY station_id, parameter_name, time_bucket DESC, created_at DESC
             LIMIT $${paramIndex}

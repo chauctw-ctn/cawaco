@@ -13,9 +13,17 @@ const config = require('./config');
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const TELEGRAM_CONFIG_FILE = path.join(DATA_DIR, 'telegram-config.json');
 
+// Log DATA_DIR location for debugging
+console.log('📂 DATA_DIR for telegram config:', DATA_DIR);
+if (process.env.NODE_ENV === 'production' && !process.env.DATA_DIR) {
+    console.warn('⚠️  CẢNH BÁO: DATA_DIR chưa được set! Config telegram sẽ bị mất khi restart.');
+    console.warn('   → Vui lòng mount persistent disk và set DATA_DIR=/var/data trong Render');
+}
+
 // Load Telegram config from file
 function loadTelegramConfig() {
     try {
+        console.log('📥 Loading telegram config from:', TELEGRAM_CONFIG_FILE);
         if (fs.existsSync(TELEGRAM_CONFIG_FILE)) {
             const data = fs.readFileSync(TELEGRAM_CONFIG_FILE, 'utf8');
             const savedConfig = JSON.parse(data);
@@ -792,6 +800,57 @@ app.get('/api/telegram/config', verifyToken, async (req, res) => {
             success: false, 
             message: 'Không thể lấy cấu hình Telegram',
             error: error.message 
+        });
+    }
+});
+
+// Health check endpoint for telegram alerts (no auth required for monitoring)
+app.get('/api/telegram/health', async (req, res) => {
+    try {
+        const health = {
+            configLoaded: !!config.telegram,
+            enabled: config.telegram?.enabled || false,
+            botTokenSet: !!(config.telegram?.botToken),
+            chatIdSet: !!(config.telegram?.chatId),
+            intervalActive: !!telegramAlertInterval,
+            initialized: telegramAlertInitialized,
+            configFile: TELEGRAM_CONFIG_FILE,
+            configFileExists: fs.existsSync(TELEGRAM_CONFIG_FILE),
+            dataDir: DATA_DIR,
+            dataDirSet: !!process.env.DATA_DIR,
+            alertHistory: serverAlertHistory.size,
+            settings: {
+                refreshInterval: config.telegram?.refreshInterval || 15,
+                delayThreshold: config.telegram?.delayThreshold || 60,
+                alertRepeatInterval: config.telegram?.alertRepeatInterval || 1
+            }
+        };
+        
+        // Overall status
+        const isHealthy = health.enabled && 
+                         health.botTokenSet && 
+                         health.chatIdSet && 
+                         health.intervalActive;
+        
+        res.json({
+            success: true,
+            status: isHealthy ? 'healthy' : 'unhealthy',
+            ...health,
+            warnings: [
+                !health.dataDirSet && process.env.NODE_ENV === 'production' 
+                    ? 'DATA_DIR not set - config may be lost on restart' 
+                    : null,
+                !health.enabled ? 'Telegram alerts disabled' : null,
+                !health.botTokenSet ? 'Bot token not configured' : null,
+                !health.chatIdSet ? 'Chat ID not configured' : null,
+                !health.intervalActive ? 'Alert interval not running' : null
+            ].filter(Boolean)
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            status: 'error',
+            error: error.message
         });
     }
 });
@@ -1966,21 +2025,44 @@ async function checkAndSendTelegramAlerts() {
 }
 
 function startTelegramAlertInterval() {
+    console.log('\n🔔 [TELEGRAM] Attempting to start alert interval...');
+    console.log('   • Enabled:', config.telegram.enabled);
+    console.log('   • Bot Token:', config.telegram.botToken ? '***set***' : '❌ MISSING');
+    console.log('   • Chat ID:', config.telegram.chatId || '❌ MISSING');
+    console.log('   • Refresh Interval:', config.telegram.refreshInterval || 15, 'minutes');
+    console.log('   • Delay Threshold:', config.telegram.delayThreshold || 60, 'minutes');
+    console.log('   • Alert Repeat:', config.telegram.alertRepeatInterval || 1, 'minutes');
+    
     if (telegramAlertInterval) {
         clearInterval(telegramAlertInterval);
         telegramAlertInterval = null;
+        console.log('   ↳ Cleared existing interval');
     }
-    if (!config.telegram.enabled || !config.telegram.botToken || !config.telegram.chatId) {
-        console.log('ℹ️ [TELEGRAM] Cảnh báo định kỳ chưa bật (thiếu botToken/chatId hoặc disabled)');
+    
+    if (!config.telegram.enabled) {
+        console.log('   ⚠️  Telegram alerts DISABLED in config');
         return;
     }
+    
+    if (!config.telegram.botToken) {
+        console.log('   ❌ Cannot start: Bot Token is missing');
+        console.log('   → Please configure via Settings > Telegram Config');
+        return;
+    }
+    
+    if (!config.telegram.chatId) {
+        console.log('   ❌ Cannot start: Chat ID is missing');
+        console.log('   → Please configure via Settings > Telegram Config');
+        return;
+    }
+    
     // Reset state so next run re-initializes snapshot
     telegramAlertInitialized = false;
     // Use refreshInterval as the check cycle; alertRepeatInterval only guards
     // how often a repeat reminder is sent inside checkAndSendTelegramAlerts.
     const intervalMs = Math.max(1, config.telegram.refreshInterval || 15) * 60 * 1000;
     telegramAlertInterval = setInterval(checkAndSendTelegramAlerts, intervalMs);
-    console.log(`🔔 [TELEGRAM] Đã khởi động cảnh báo định kỳ mỗi ${config.telegram.refreshInterval || 15} phút (nhắc lại offline mỗi ${config.telegram.alertRepeatInterval || 1} phút)`);
+    console.log(`   ✅ Alert interval STARTED: check every ${config.telegram.refreshInterval || 15} min, repeat offline alerts every ${config.telegram.alertRepeatInterval || 1} min`);
     // Run once immediately on start (will take snapshot, not alert)
     checkAndSendTelegramAlerts();
 }
@@ -2121,7 +2203,9 @@ app.listen(PORT, async () => {
     // CẢNH BÁO TELEGRAM ĐỊNH KỲ (Server-side)
     // =================================================
     // Khởi động sau 30 giây để DB có dữ liệu trước
+    console.log('\n⏱️  Scheduling telegram alert check in 30 seconds...');
     setTimeout(() => {
+        console.log('\n🚀 30 seconds elapsed, starting telegram alert system...');
         startTelegramAlertInterval();
     }, 30000);
     
