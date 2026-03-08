@@ -67,12 +67,14 @@ function initializeHeader() {
     function updateTime() {
         const now = new Date();
         const timeString = now.toLocaleString('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
             hour: '2-digit',
             minute: '2-digit',
             second: '2-digit',
             day: '2-digit',
             month: '2-digit',
-            year: 'numeric'
+            year: 'numeric',
+            hour12: false
         });
         const timeElement = document.getElementById('current-time');
         if (timeElement) {

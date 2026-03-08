@@ -62,7 +62,7 @@ async function runTest() {
                         tableData.push({
                             "Trạm": station.station,
                             "Device": station.deviceName,
-                            "Cập nhật": new Date(station.updateTime).toLocaleString('vi-VN'),
+                            "Cập nhật": new Date(station.updateTime).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
                             "Thông số": item.name,
                             "Giá trị": item.value,
                             "Đơn vị": item.unit

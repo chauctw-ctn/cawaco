@@ -25,23 +25,25 @@ let isStatusCheckRunning = false; // Prevent overlapping status checks
 const ALERT_HISTORY_KEY = 'telegram_alert_history'; // localStorage key for alert history
 
 /**
- * Format timestamp to Vietnamese date/time
+ * Format timestamp to Vietnamese date/time (Vietnam timezone)
  */
 function formatDateTime(timestamp) {
     if (!timestamp) return 'N/A';
     const date = new Date(timestamp);
     return date.toLocaleString('vi-VN', {
+        timeZone: 'Asia/Ho_Chi_Minh',
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit'
+        second: '2-digit',
+        hour12: false
     });
 }
 
 /**
- * Format value to dd/MM/yyyy HH:mm:ss for history popup.
+ * Format value to dd/MM/yyyy HH:mm:ss for history popup (Vietnam timezone).
  */
 function formatHistoryPopupDateTime(value) {
     if (!value) return 'N/A';
@@ -70,14 +72,17 @@ function formatHistoryPopupDateTime(value) {
         return 'N/A';
     }
 
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hour = String(date.getHours()).padStart(2, '0');
-    const minute = String(date.getMinutes()).padStart(2, '0');
-    const second = String(date.getSeconds()).padStart(2, '0');
-
-    return `${day}/${month}/${year} ${hour}:${minute}:${second}`;
+    // Format theo múi giờ Việt Nam (UTC+7)
+    return date.toLocaleString('vi-VN', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    }).replace(/\//g, '/').replace(',', '');
 }
 
 /**
@@ -248,23 +253,45 @@ function getMeasurementTimestampMs(value) {
 
 /**
  * Lưu snapshot trạng thái hiện tại để tránh spam cảnh báo ở lần kiểm tra đầu tiên.
+ * - Lưu/cập nhật alert history cho các trạm ONLINE
+ * - KHÔNG đụng vào alert history của trạm OFFLINE (giữ nguyên nếu có từ session trước)
+ * Điều này đảm bảo:
+ * - Trạm offline mới (chưa có history) => gửi alert ngay
+ * - Trạm offline đã gửi alert gần đây (có history) => không spam khi reload page
  */
 function snapshotInitialAlertState(stationData) {
     const history = getAlertHistory();
     const now = Date.now();
+    let onlineCount = 0;
+    let offlineCount = 0;
+    let offlineWithHistoryCount = 0;
 
     Object.values(stationData).forEach(data => {
         const currentStatus = data.delayMinutes <= delayThresholdMinutes ? 'online' : 'offline';
 
+        // Luôn lưu status vào map để theo dõi
         stationStatusMap[data.station] = currentStatus;
-        history[data.station] = {
-            lastAlertTime: now,
-            lastAlertStatus: currentStatus
-        };
+        
+        if (currentStatus === 'online') {
+            // Lưu/cập nhật alert history cho trạm online
+            history[data.station] = {
+                lastAlertTime: now,
+                lastAlertStatus: currentStatus
+            };
+            onlineCount++;
+        } else {
+            // KHÔNG đụng vào alert history của trạm offline
+            // Nếu có history từ trước => giữ nguyên (tránh spam khi reload)
+            // Nếu không có history => sẽ gửi alert ở lần check tiếp theo
+            if (history[data.station]) {
+                offlineWithHistoryCount++;
+            }
+            offlineCount++;
+        }
     });
 
     saveAlertHistory(history);
-    console.log(`🛡️ Initial alert snapshot saved for ${Object.keys(stationData).length} stations`);
+    console.log(`🛡️ Initial snapshot: ${onlineCount} online, ${offlineCount} offline (${offlineWithHistoryCount} with history, ${offlineCount - offlineWithHistoryCount} will alert next check)`);
 }
 
 /**
@@ -487,7 +514,7 @@ function viewAlertHistory(stationName = null) {
             const minutesAgo = (Date.now() - info.lastAlertTime) / (1000 * 60);
             console.log(`📊 Alert history for ${stationName}:`, {
                 lastAlertStatus: info.lastAlertStatus,
-                lastAlertTime: lastAlertTime.toLocaleString('vi-VN'),
+                lastAlertTime: lastAlertTime.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
                 minutesAgo: minutesAgo.toFixed(2) + ' minutes ago',
                 nextAlertAfter: alertRepeatIntervalMinutes + ' minutes from last alert',
                 canSendNow: minutesAgo >= alertRepeatIntervalMinutes
@@ -524,8 +551,14 @@ function shouldSendAlert(station, newStatus, delayMinutes) {
         configuredInterval: alertRepeatIntervalMinutes + ' minutes'
     });
     
-    // First time seeing this station - send alert
+    // First time seeing this station - check if already severely delayed
     if (!stationHistory) {
+        // Nếu trạm offline và delay > ngưỡng cảnh báo (delayThresholdMinutes), gửi ngay
+        // Điều này đảm bảo trạm đã offline lâu sẽ được cảnh báo ngay sau khi load page
+        if (newStatus === 'offline') {
+            console.log(`✅ ${station}: First alert for offline station (delay: ${delayMinutes} min > threshold: ${delayThresholdMinutes} min)`);
+            return { shouldSend: true, reason: 'first_alert_offline' };
+        }
         console.log(`✅ ${station}: First alert (no history)`);
         return { shouldSend: true, reason: 'first_alert' };
     }
@@ -666,7 +699,7 @@ async function sendTelegramAlert(station, status, measurementTime, delayMinutes,
  * This recalculates delays based on current time
  */
 async function checkStationStatusChanges() {
-    console.log(`\n🔔 ===== checkStationStatusChanges called at ${new Date().toLocaleString('vi-VN')} =====`);
+    console.log(`\n🔔 ===== checkStationStatusChanges called at ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} =====`);
     console.log(`Telegram config:`, { 
         hasConfig: !!telegramConfig, 
         enabled: telegramConfig?.enabled,
@@ -828,14 +861,14 @@ function setupStatusCheckInterval() {
     
     // Set new interval for status checks (convert minutes to milliseconds)
     statusCheckInterval = setInterval(() => {
-        console.log('⏰ Periodic status check triggered at', new Date().toLocaleString('vi-VN'));
+        console.log('⏰ Periodic status check triggered at', new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }));
         console.log('   Current data length:', currentData?.length || 0);
         console.log('   Has loaded data once:', hasLoadedDataOnce);
         void checkStationStatusChanges();
     }, intervalMs);
     
     console.log(`✅ Status check interval set to ${CHECK_INTERVAL_MINUTES} minute(s)`);
-    console.log(`📅 Next check will run at: ${new Date(Date.now() + intervalMs).toLocaleString('vi-VN')}`);
+    console.log(`📅 Next check will run at: ${new Date(Date.now() + intervalMs).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
     
     // Run first check immediately after 5 seconds (give time for data to load)
     console.log('⏱️ First status check will run in 5 seconds...');

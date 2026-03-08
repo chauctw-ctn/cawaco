@@ -135,7 +135,7 @@ async function fetchAndProcessData() {
                     "Chỉ số": iName,
                     "Giá trị": attr.giatri,
                     "Đơn vị": attr.donvido,
-                    "Thời gian đo": new Date(attr.thoigiando).toLocaleString('vi-VN'),
+                    "Thời gian đo": new Date(attr.thoigiando).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
                     "Độ trễ (P)": diffMinutes,
                     "Trạng thái": diffMinutes > 60 ? "❌ Mất kết nối" : "✅ Online"
                 };
@@ -145,7 +145,7 @@ async function fetchAndProcessData() {
         // HIỂN THỊ KẾT QUẢ THEO NHÓM GIẤY PHÉP
         console.clear();
         console.log("=================================================================================");
-        console.log(`📊 BÁO CÁO GIÁM SÁT TRẠM QUAN TRẮC - [${new Date().toLocaleString('vi-VN')}]`);
+        console.log(`📊 BÁO CÁO GIÁM SÁT TRẠM QUAN TRẮC - [${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}]`);
         console.log(`🏠 Đơn vị: Cấp Nước Cà Mau`);
         console.log(`📈 Tổng số trạm phát hiện: ${stationsOnServer.length}`);
         console.log("=================================================================================\n");

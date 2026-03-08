@@ -225,26 +225,13 @@ async function getStationHistory(stationName, days = 30) {
             const projectName = attr.congtrinh;
             const permit = getPermitByProject(projectName) || "Chưa có GP";
             
-            // Convert timestamp to Date object
-            const measurementDate = new Date(attr.thoigiando);
-            const formattedTime = measurementDate.toLocaleString('vi-VN', {
-                timeZone: 'Asia/Ho_Chi_Minh',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-            });
-            
             return {
                 station_name: attr.tram,
                 parameter_name: attr.chiso,
                 value: attr.giatri,
                 unit: attr.donvido,
-                timestamp: attr.thoigiando,
-                time: formattedTime,
+                timestamp: attr.thoigiando, // Giữ nguyên timestamp gốc để client tự format
+                measurementTime: attr.thoigiando, // Thêm field này để tương thích
                 project: projectName,
                 permit: permit
             };
