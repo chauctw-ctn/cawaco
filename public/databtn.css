@@ -412,6 +412,7 @@ main.sidebar-hidden {
     z-index: 30;
 }
 
+/* Sticky columns: STT and Tên Trạm */
 #data-table th {
     padding: 8px 6px;
     text-align: center;
@@ -429,7 +430,8 @@ main.sidebar-hidden {
     width: 60px;
     position: sticky;
     left: 0;
-    z-index: 21;
+    z-index: 31;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
 }
 
 #data-table th:nth-child(2) {
@@ -437,7 +439,8 @@ main.sidebar-hidden {
     min-width: 180px;
     position: sticky;
     left: 60px;
-    z-index: 21;
+    z-index: 31;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
 }
 
 #data-table td {
@@ -455,7 +458,9 @@ main.sidebar-hidden {
     color: #6b7280;
     position: sticky;
     left: 0;
-    z-index: 10;
+    z-index: 20;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+    background: inherit;
 }
 
 #data-table td:nth-child(2) {
@@ -463,15 +468,34 @@ main.sidebar-hidden {
     min-width: 180px;
     position: sticky;
     left: 60px;
-    z-index: 10;
+    z-index: 20;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+    background: inherit;
 }
 
 #data-table tbody tr:nth-child(even) {
     background-color: #f8f9fa;
 }
 
+/* Default background for sticky columns to prevent transparency */
+#data-table tbody tr:nth-child(even) td:first-child,
+#data-table tbody tr:nth-child(even) td:nth-child(2) {
+    background-color: #f8f9fa;
+}
+
+#data-table tbody tr:nth-child(odd) td:first-child,
+#data-table tbody tr:nth-child(odd) td:nth-child(2) {
+    background-color: white;
+}
+
 #data-table tbody tr:hover td {
     background-color: #e3f2fd;
+}
+
+/* Ensure sticky columns maintain background on hover */
+#data-table tbody tr:hover td:first-child,
+#data-table tbody tr:hover td:nth-child(2) {
+    background-color: #e3f2fd !important;
 }
 
 /* Alternating station colors - High contrast */
@@ -482,6 +506,18 @@ main.sidebar-hidden {
 #data-table tbody tr.station-group-0 td:first-child,
 #data-table tbody tr.station-group-0 td:nth-child(2) {
     background: #e0f2fe !important;
+    position: sticky;
+    z-index: 20;
+}
+
+#data-table tbody tr.station-group-0 td:first-child {
+    left: 0;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+#data-table tbody tr.station-group-0 td:nth-child(2) {
+    left: 60px;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
 }
 
 #data-table tbody tr.station-group-1 {
@@ -491,6 +527,18 @@ main.sidebar-hidden {
 #data-table tbody tr.station-group-1 td:first-child,
 #data-table tbody tr.station-group-1 td:nth-child(2) {
     background: #fef3c7 !important;
+    position: sticky;
+    z-index: 20;
+}
+
+#data-table tbody tr.station-group-1 td:first-child {
+    left: 0;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+#data-table tbody tr.station-group-1 td:nth-child(2) {
+    left: 60px;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
 }
 
 #data-table tbody tr.station-group-2 {
@@ -500,6 +548,18 @@ main.sidebar-hidden {
 #data-table tbody tr.station-group-2 td:first-child,
 #data-table tbody tr.station-group-2 td:nth-child(2) {
     background: #dcfce7 !important;
+    position: sticky;
+    z-index: 20;
+}
+
+#data-table tbody tr.station-group-2 td:first-child {
+    left: 0;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+#data-table tbody tr.station-group-2 td:nth-child(2) {
+    left: 60px;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
 }
 
 #data-table tbody tr.station-group-3 {
@@ -509,6 +569,18 @@ main.sidebar-hidden {
 #data-table tbody tr.station-group-3 td:first-child,
 #data-table tbody tr.station-group-3 td:nth-child(2) {
     background: #fce7f3 !important;
+    position: sticky;
+    z-index: 20;
+}
+
+#data-table tbody tr.station-group-3 td:first-child {
+    left: 0;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+#data-table tbody tr.station-group-3 td:nth-child(2) {
+    left: 60px;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
 }
 
 #data-table tbody tr.station-group-4 {
@@ -518,6 +590,18 @@ main.sidebar-hidden {
 #data-table tbody tr.station-group-4 td:first-child,
 #data-table tbody tr.station-group-4 td:nth-child(2) {
     background: #f3e8ff !important;
+    position: sticky;
+    z-index: 20;
+}
+
+#data-table tbody tr.station-group-4 td:first-child {
+    left: 0;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+#data-table tbody tr.station-group-4 td:nth-child(2) {
+    left: 60px;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
 }
 
 #data-table tbody tr.station-group-5 {
@@ -527,6 +611,18 @@ main.sidebar-hidden {
 #data-table tbody tr.station-group-5 td:first-child,
 #data-table tbody tr.station-group-5 td:nth-child(2) {
     background: #ffedd5 !important;
+    position: sticky;
+    z-index: 20;
+}
+
+#data-table tbody tr.station-group-5 td:first-child {
+    left: 0;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+#data-table tbody tr.station-group-5 td:nth-child(2) {
+    left: 60px;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
 }
 
 #data-table tbody tr.station-group-6 {
@@ -536,6 +632,18 @@ main.sidebar-hidden {
 #data-table tbody tr.station-group-6 td:first-child,
 #data-table tbody tr.station-group-6 td:nth-child(2) {
     background: #dbeafe !important;
+    position: sticky;
+    z-index: 20;
+}
+
+#data-table tbody tr.station-group-6 td:first-child {
+    left: 0;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+#data-table tbody tr.station-group-6 td:nth-child(2) {
+    left: 60px;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
 }
 
 #data-table tbody tr.station-group-7 {
@@ -545,6 +653,18 @@ main.sidebar-hidden {
 #data-table tbody tr.station-group-7 td:first-child,
 #data-table tbody tr.station-group-7 td:nth-child(2) {
     background: #fae8ff !important;
+    position: sticky;
+    z-index: 20;
+}
+
+#data-table tbody tr.station-group-7 td:first-child {
+    left: 0;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+#data-table tbody tr.station-group-7 td:nth-child(2) {
+    left: 60px;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
 }
 
 #data-table tbody tr.station-group-0:hover td,
@@ -556,6 +676,35 @@ main.sidebar-hidden {
 #data-table tbody tr.station-group-6:hover td,
 #data-table tbody tr.station-group-7:hover td {
     background-color: #e3f2fd !important;
+}
+
+/* Maintain sticky positioning and shadow on hover for all station groups */
+#data-table tbody tr.station-group-0:hover td:first-child,
+#data-table tbody tr.station-group-1:hover td:first-child,
+#data-table tbody tr.station-group-2:hover td:first-child,
+#data-table tbody tr.station-group-3:hover td:first-child,
+#data-table tbody tr.station-group-4:hover td:first-child,
+#data-table tbody tr.station-group-5:hover td:first-child,
+#data-table tbody tr.station-group-6:hover td:first-child,
+#data-table tbody tr.station-group-7:hover td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 20;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+#data-table tbody tr.station-group-0:hover td:nth-child(2),
+#data-table tbody tr.station-group-1:hover td:nth-child(2),
+#data-table tbody tr.station-group-2:hover td:nth-child(2),
+#data-table tbody tr.station-group-3:hover td:nth-child(2),
+#data-table tbody tr.station-group-4:hover td:nth-child(2),
+#data-table tbody tr.station-group-5:hover td:nth-child(2),
+#data-table tbody tr.station-group-6:hover td:nth-child(2),
+#data-table tbody tr.station-group-7:hover td:nth-child(2) {
+    position: sticky;
+    left: 60px;
+    z-index: 20;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
 }
 
 /* Status Badge */

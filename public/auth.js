@@ -594,7 +594,7 @@ async function loadTelegramConfigToModal() {
                 if (chatIdInput) chatIdInput.value = data.config.chatId || '';
                 if (refreshIntervalInput) refreshIntervalInput.value = data.config.refreshInterval || 15;
                 if (delayThresholdInput) delayThresholdInput.value = data.config.delayThreshold || 60;
-                if (alertRepeatInput) alertRepeatInput.value = data.config.alertRepeatInterval || 1;
+                if (alertRepeatInput) alertRepeatInput.value = data.config.alertRepeatInterval || 60;
 
                 // Update the getUpdates link dynamically
                 const getChatIdLink = document.getElementById('get-chat-id-link');

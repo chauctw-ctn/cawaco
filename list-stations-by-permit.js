@@ -268,7 +268,7 @@ async function getAllStationNamesFromDB(pool) {
  * 
  * QUAN TRỌNG: Đồng bộ timezone khi truy vấn
  * - Set session timezone = 'Asia/Ho_Chi_Minh'
- * - Chuyển created_at về GMT+7 khi query
+ * - Chuyển timestamp về GMT+7 khi query
  * - PostgreSQL TIMESTAMPTZ tự động chuyển đổi theo session timezone
  */
 async function getFlowDataLast30Days(pool, stationNames = null) {
@@ -290,11 +290,11 @@ async function getFlowDataLast30Days(pool, stationNames = null) {
                 parameter_name,
                 value,
                 unit,
-                created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as created_at,
+                timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh' as timestamp,
                 'MQTT' as source
             FROM mqtt_data
             WHERE parameter_name ILIKE '%tổng lưu lượng%'
-                AND created_at >= $1
+                AND timestamp >= $1
             
             UNION ALL
             
@@ -303,11 +303,11 @@ async function getFlowDataLast30Days(pool, stationNames = null) {
                 parameter_name,
                 value,
                 unit,
-                created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as created_at,
+                timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh' as timestamp,
                 'TVA' as source
             FROM tva_data
             WHERE parameter_name ILIKE '%tổng lưu lượng%'
-                AND created_at >= $1
+                AND timestamp >= $1
             
             UNION ALL
             
@@ -316,13 +316,13 @@ async function getFlowDataLast30Days(pool, stationNames = null) {
                 parameter_name,
                 value,
                 unit,
-                created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as created_at,
+                timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh' as timestamp,
                 'SCADA' as source
             FROM scada_data
             WHERE parameter_name ILIKE '%tổng lưu lượng%'
-                AND created_at >= $1
+                AND timestamp >= $1
             
-            ORDER BY created_at DESC
+            ORDER BY timestamp DESC
         `;
         
         const result = await pool.query(unionQuery, [thirtyDaysAgo]);
@@ -339,7 +339,7 @@ async function getFlowDataLast30Days(pool, stationNames = null) {
                 flowData[stationName] = [];
             }
             flowData[stationName].push({
-                measurementTime: new Date(row.created_at).toISOString(),
+                measurementTime: new Date(row.timestamp).toISOString(),
                 value: parseFloat(row.value) || 0,
                 unit: row.unit || 'm³',
                 parameter: row.parameter_name,
@@ -437,7 +437,9 @@ function calculateCapacityByPermitFromDB(flowData) {
         }
         
         let lastMonthMax = 0;
+        let lastMonthMin = Infinity;
         let currentMonthMax = 0;
+        let currentMonthMin = Infinity;
         let lastMonthRecords = 0;
         let currentMonthRecords = 0;
         let previousDayMax = 0;
@@ -445,6 +447,7 @@ function calculateCapacityByPermitFromDB(flowData) {
         let todayMax = 0;
         let todayMin = Infinity;
         let dayBeforeYesterdayMax = 0;
+        let lastMonthEndValue = 0; // Giá trị cuối tháng trước
         
         // Day before yesterday boundaries (for calculating yesterday's capacity)
         const dayBeforeYesterday = new Date(yesterdayDate);
@@ -465,12 +468,16 @@ function calculateCapacityByPermitFromDB(flowData) {
             // So sánh theo timestamp đã chuẩn hóa
             if (recordTime >= lastMonthStart && recordTime <= lastMonthEnd) {
                 lastMonthMax = Math.max(lastMonthMax, value);
+                lastMonthMin = Math.min(lastMonthMin, value);
                 lastMonthRecords++;
+                // Lưu giá trị cuối tháng (gần cuối tháng nhất)
+                lastMonthEndValue = lastMonthMax;
             }
             
             // Check if in current month
             if (recordTime >= currentMonthStart && recordTime <= currentMonthEnd) {
                 currentMonthMax = Math.max(currentMonthMax, value);
+                currentMonthMin = Math.min(currentMonthMin, value);
                 currentMonthRecords++;
             }
             
@@ -522,10 +529,30 @@ function calculateCapacityByPermitFromDB(flowData) {
         yesterdayCapacity = Math.max(0, yesterdayCapacity);
         todayCapacity = Math.max(0, todayCapacity);
         
-        // Add to permit totals
-        capacityByPermit[permit].lastMonthCapacity += lastMonthMax;
-        capacityByPermit[permit].currentMonthCapacity += currentMonthMax;
-        capacityByPermit[permit].totalCapacity += currentMonthMax;
+        // Công suất tháng = chênh lệch giữa MAX và MIN trong tháng (cho cumulative counter)
+        // Nếu là counter tích luỹ, công suất tháng = MAX cuối tháng - MIN đầu tháng
+        let lastMonthCapacity = 0;
+        if (lastMonthRecords > 0) {
+            lastMonthCapacity = lastMonthMax - (lastMonthMin === Infinity ? 0 : lastMonthMin);
+            lastMonthCapacity = Math.max(0, lastMonthCapacity);
+        }
+        
+        let currentMonthCapacity = 0;
+        if (currentMonthRecords > 0) {
+            // Nếu có dữ liệu tháng trước, dùng giá trị cuối tháng trước làm baseline
+            if (lastMonthEndValue > 0) {
+                currentMonthCapacity = currentMonthMax - lastMonthEndValue;
+            } else {
+                // Nếu không có tháng trước, dùng chênh lệch trong tháng hiện tại
+                currentMonthCapacity = currentMonthMax - (currentMonthMin === Infinity ? 0 : currentMonthMin);
+            }
+            currentMonthCapacity = Math.max(0, currentMonthCapacity);
+        }
+        
+        // Add to permit totals - Cộng các CAPACITY đã tính, KHÔNG cộng MAX values
+        capacityByPermit[permit].lastMonthCapacity += lastMonthCapacity;
+        capacityByPermit[permit].currentMonthCapacity += currentMonthCapacity;
+        capacityByPermit[permit].totalCapacity += currentMonthCapacity;
         
         if (lastMonthRecords > 0 || currentMonthRecords > 0) {
             capacityByPermit[permit].stationsWithData++;
@@ -534,8 +561,8 @@ function calculateCapacityByPermitFromDB(flowData) {
         // Add station details
         capacityByPermit[permit].stationDetails.push({
             stationName: stationName,
-            lastMonthCapacity: lastMonthMax,
-            currentMonthCapacity: currentMonthMax,
+            lastMonthCapacity: lastMonthCapacity,
+            currentMonthCapacity: currentMonthCapacity,
             previousDayCapacity: yesterdayCapacity,  // Daily consumption for yesterday
             todayCapacity: todayCapacity,  // Daily consumption for today
             unit: records[0]?.unit || 'm³',
@@ -545,7 +572,7 @@ function calculateCapacityByPermitFromDB(flowData) {
             source: records[0]?.source || 'MQTT'
         });
         
-        console.log(`  📍 ${stationName}: Tháng trước=${lastMonthMax.toFixed(2)}m³ (${lastMonthRecords} records), Tháng nay=${currentMonthMax.toFixed(2)}m³ (${currentMonthRecords} records), Hôm qua=${yesterdayCapacity.toFixed(2)}m³, Hôm nay=${todayCapacity.toFixed(2)}m³`);
+        console.log(`  📍 ${stationName}: Tháng trước=${lastMonthCapacity.toFixed(2)}m³ (${lastMonthRecords} records), Tháng nay=${currentMonthCapacity.toFixed(2)}m³ (${currentMonthRecords} records), Hôm qua=${yesterdayCapacity.toFixed(2)}m³, Hôm nay=${todayCapacity.toFixed(2)}m³`);
     }
     
     // Log summary

@@ -5,7 +5,10 @@ main {
     margin-top: 66px;
     min-height: calc(100vh - 66px);
     overflow-x: hidden;
+    overflow-y: auto;
     transition: margin-left 0.3s ease;
+    /* Enable smooth scrolling on mobile */
+    -webkit-overflow-scrolling: touch;
 }
 
 main.with-sidebar {
@@ -20,6 +23,13 @@ main.sidebar-hidden {
     max-width: 100%;
     padding: 6px 10px;
     margin: 0 auto;
+    overflow-x: hidden;
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 6px 8px;
+    }
 }
 
 @media (min-width: 768px) {
@@ -34,7 +44,7 @@ main.sidebar-hidden {
 }
 
 .page-title {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 700;
     color: #1e3a8a;
     margin: 0 0 2px 0;
@@ -44,6 +54,18 @@ main.sidebar-hidden {
     font-size: 11px;
     color: #64748b;
     margin: 0;
+}
+
+@media (max-width: 768px) {
+    .page-header {
+        margin-bottom: 8px;
+    }
+    .page-title {
+        font-size: 16px;
+    }
+    .page-subtitle {
+        font-size: 10px;
+    }
 }
 
 @media (min-width: 768px) {
@@ -65,8 +87,17 @@ main.sidebar-hidden {
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     border: 1px solid #e5e7eb;
-    overflow: hidden;
+    overflow: visible;
     padding: 12px;
+    margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+    .data-wrapper {
+        padding: 10px;
+        border-radius: 10px;
+        margin-bottom: 16px;
+    }
 }
 
 @media (min-width: 768px) {
@@ -167,8 +198,17 @@ main.sidebar-hidden {
     background: white;
     border-radius: 8px;
     overflow-y: auto;
-    overflow-x: hidden;
-    max-height: calc(100vh - 300px);
+    overflow-x: auto;
+    max-height: calc(100vh - 420px);
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+    .table-container {
+        max-height: none;
+        overflow-x: auto;
+        overflow-y: visible;
+    }
 }
 
 @media (min-width: 768px) {
@@ -183,6 +223,14 @@ main.sidebar-hidden {
     width: 100%;
     border-collapse: collapse;
     font-size: 12px;
+    min-width: 100%;
+}
+
+@media (max-width: 768px) {
+    #capacity-table {
+        font-size: 11px;
+        min-width: 800px;
+    }
 }
 
 @media (min-width: 768px) {

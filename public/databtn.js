@@ -7,7 +7,7 @@ let autoRefreshInterval = null; // Auto refresh timer
 let statusCheckInterval = null; // Status check timer for periodic alerts
 let refreshIntervalMinutes = 15; // Default 15 minutes (from Telegram config)
 let delayThresholdMinutes = 60; // Default 60 minutes (from Telegram config)
-let alertRepeatIntervalMinutes = 1; // Default 1 minute - repeat offline alerts
+let alertRepeatIntervalMinutes = 60; // Default 60 minutes - repeat offline alerts (changed from 1 to 60)
 let hasLoadedDataOnce = false; // Đánh dấu đã tải dữ liệu từ API ít nhất 1 lần
 
 // Table header filters
@@ -399,14 +399,19 @@ async function fetchTelegramConfig() {
                 }
                 if (telegramConfig.alertRepeatInterval) {
                     alertRepeatIntervalMinutes = Math.max(1, parseInt(telegramConfig.alertRepeatInterval));
+                    console.log(`🔔 Alert repeat interval updated to: ${alertRepeatIntervalMinutes} minutes`);
                 }
                 
                 console.log('✅ Telegram config loaded:', {
                     enabled: telegramConfig.enabled,
-                    refreshInterval: refreshIntervalMinutes,
-                    delayThreshold: delayThresholdMinutes,
-                    alertRepeatInterval: alertRepeatIntervalMinutes
+                    refreshInterval: refreshIntervalMinutes + ' min',
+                    delayThreshold: delayThresholdMinutes + ' min',
+                    alertRepeatInterval: alertRepeatIntervalMinutes + ' min'
                 });
+                
+                // Log current alert history size
+                const history = getAlertHistory();
+                console.log(`📝 Current alert history: ${Object.keys(history).length} stations tracked`);
             }
         }
     } catch (error) {
@@ -442,6 +447,67 @@ function saveAlertHistory(history) {
 }
 
 /**
+ * Clear alert history for a specific station or all stations
+ * Usage from browser console:
+ *   - clearAlertHistory('QT1NM2') - clear for specific station
+ *   - clearAlertHistory() - clear all
+ */
+function clearAlertHistory(stationName = null) {
+    try {
+        if (stationName) {
+            const history = getAlertHistory();
+            if (history[stationName]) {
+                delete history[stationName];
+                saveAlertHistory(history);
+                console.log(`✅ Cleared alert history for station: ${stationName}`);
+                console.log(`   ℹ️  Next check will immediately send alert if station is offline`);
+            } else {
+                console.log(`⚠️  No alert history found for station: ${stationName}`);
+            }
+        } else {
+            localStorage.removeItem(ALERT_HISTORY_KEY);
+            console.log('✅ Cleared all alert history');
+            console.log(`   ℹ️  Next check will treat all stations as new and send alerts for offline stations`);
+        }
+    } catch (error) {
+        console.error('❌ Error clearing alert history:', error);
+    }
+}
+
+/**
+ * View alert history from console
+ * Usage: viewAlertHistory() or viewAlertHistory('QT1NM2')
+ */
+function viewAlertHistory(stationName = null) {
+    const history = getAlertHistory();
+    if (stationName) {
+        if (history[stationName]) {
+            const info = history[stationName];
+            const lastAlertTime = new Date(info.lastAlertTime);
+            const minutesAgo = (Date.now() - info.lastAlertTime) / (1000 * 60);
+            console.log(`📊 Alert history for ${stationName}:`, {
+                lastAlertStatus: info.lastAlertStatus,
+                lastAlertTime: lastAlertTime.toLocaleString('vi-VN'),
+                minutesAgo: minutesAgo.toFixed(2) + ' minutes ago',
+                nextAlertAfter: alertRepeatIntervalMinutes + ' minutes from last alert',
+                canSendNow: minutesAgo >= alertRepeatIntervalMinutes
+            });
+        } else {
+            console.log(`ℹ️  No alert history for station: ${stationName}`);
+        }
+    } else {
+        console.log(`📚 Alert history (${Object.keys(history).length} stations):`, history);
+        console.log(`\n💡 TIP: Use viewAlertHistory('STATION_NAME') to see details for specific station`);
+        console.log(`💡 TIP: Use clearAlertHistory('STATION_NAME') to reset a station's alert timer`);
+        console.log(`💡 TIP: Use clearAlertHistory() to reset all alert timers`);
+    }
+}
+
+// Make functions available globally for console access
+window.clearAlertHistory = clearAlertHistory;
+window.viewAlertHistory = viewAlertHistory;
+
+/**
  * Check if should send alert for station
  * Returns: { shouldSend: boolean, reason: string }
  */
@@ -454,7 +520,8 @@ function shouldSendAlert(station, newStatus, delayMinutes) {
         newStatus,
         delayMinutes,
         hasHistory: !!stationHistory,
-        alertRepeatIntervalMinutes
+        alertRepeatIntervalMinutes,
+        configuredInterval: alertRepeatIntervalMinutes + ' minutes'
     });
     
     // First time seeing this station - send alert
@@ -475,8 +542,9 @@ function shouldSendAlert(station, newStatus, delayMinutes) {
     
     console.log(`📊 ${station} alert history:`, {
         lastAlertStatus,
-        minutesSinceLastAlert: minutesSinceLastAlert.toFixed(2),
-        threshold: alertRepeatIntervalMinutes
+        minutesSinceLastAlert: minutesSinceLastAlert.toFixed(2) + ' min',
+        threshold: alertRepeatIntervalMinutes + ' min',
+        willSendIfOffline: minutesSinceLastAlert >= alertRepeatIntervalMinutes
     });
     
     // Status changed - always send alert
@@ -494,6 +562,7 @@ function shouldSendAlert(station, newStatus, delayMinutes) {
     // Otherwise, don't send
     if (newStatus === 'offline') {
         console.log(`⏳ ${station}: Too soon for periodic alert (${minutesSinceLastAlert.toFixed(2)} min < ${alertRepeatIntervalMinutes} min)`);
+        console.log(`   ⏱️  Will send next alert after ${(alertRepeatIntervalMinutes - minutesSinceLastAlert).toFixed(2)} more minutes`);
     } else {
         console.log(`ℹ️ ${station}: Online and no change, no alert needed`);
     }

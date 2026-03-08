@@ -228,6 +228,7 @@ async function getStationHistory(stationName, days = 30) {
             // Convert timestamp to Date object
             const measurementDate = new Date(attr.thoigiando);
             const formattedTime = measurementDate.toLocaleString('vi-VN', {
+                timeZone: 'Asia/Ho_Chi_Minh',
                 year: 'numeric',
                 month: '2-digit',
                 day: '2-digit',

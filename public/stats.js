@@ -776,7 +776,17 @@ function processStatsData(rawData, selectedStations, selectedParameters, interva
         parameterNames.includes(record.parameter_name)
     );
     
+    // Ensure station_id exists in records (fallback if not provided by API)
+    filteredByParameter.forEach(record => {
+        if (!record.station_id && record.station_name && record.type) {
+            record.station_id = `${record.type.toLowerCase()}_${record.station_name.replace(/\s+/g, '_')}`;
+        }
+    });
+    
     console.log(`🔽 Filtered by parameter: ${filteredByParameter.length} records (from ${normalizedData.length})`);
+    if (filteredByParameter.length > 0) {
+        console.log('Sample filtered record:', filteredByParameter[0]);
+    }
     
     // Apply sampling interval filter
     const intervalMinutes = parseInt(interval);
@@ -787,6 +797,9 @@ function processStatsData(rawData, selectedStations, selectedParameters, interva
     
     filteredByInterval.forEach(record => {
         const timestamp = new Date(record.timestamp);
+        
+        // Ensure station_id exists (fallback)
+        const stationId = record.station_id || `${record.type.toLowerCase()}_${record.station_name.replace(/\s+/g, '_')}`;
         
         // Align timestamp to interval for display (căn chỉnh để hiển thị)
         const minutes = timestamp.getMinutes();
@@ -810,7 +823,7 @@ function processStatsData(rawData, selectedStations, selectedParameters, interva
         }
         
         // Store value by station and parameter (use normalized name)
-        const cellKey = `${record.station_id}_${record.parameter_name}`;
+        const cellKey = `${stationId}_${record.parameter_name}`;
         groupedByTime[key].values[cellKey] = record.value;
     });
     
@@ -959,7 +972,9 @@ function applySamplingInterval(rawData, intervalMinutes) {
     const groupedByStationParam = {};
     
     rawData.forEach(record => {
-        const key = `${record.station_id}_${record.parameter_name}`;
+        // Ensure station_id exists (fallback)
+        const stationId = record.station_id || `${record.type.toLowerCase()}_${record.station_name.replace(/\s+/g, '_')}`;
+        const key = `${stationId}_${record.parameter_name}`;
         if (!groupedByStationParam[key]) {
             groupedByStationParam[key] = [];
         }

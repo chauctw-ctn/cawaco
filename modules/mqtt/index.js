@@ -119,7 +119,16 @@ function processMessage(message) {
             // Cập nhật parameter
             cachedData.deviceGroups[deviceCode].parameters[parameterType] = {
                 name: config.mqtt.parameterNameMap[parameterType] || parameterType,
-                time: new Date(timestamp).toLocaleString('vi-VN'),
+                time: new Date(timestamp).toLocaleString('vi-VN', {
+                    timeZone: 'Asia/Ho_Chi_Minh',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                }),
                 value: value,
                 unit: getUnit(parameterType),
                 rawType: parameterType,

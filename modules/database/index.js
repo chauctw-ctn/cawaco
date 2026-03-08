@@ -244,21 +244,50 @@ async function initDatabase() {
             CREATE TABLE IF NOT EXISTS tva_data (
                 id SERIAL PRIMARY KEY,
                 station_name TEXT NOT NULL,
-                station_id TEXT NOT NULL,
                 parameter_name TEXT NOT NULL,
                 value REAL,
                 unit TEXT,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )
         `);
         console.log('✅ Bảng tva_data đã sẵn sàng');
         
+        // Migration: Rename created_at to timestamp if it exists
+        await client.query(`
+            DO $$ 
+            BEGIN
+                IF EXISTS(SELECT 1 FROM information_schema.columns 
+                          WHERE table_name='tva_data' AND column_name='created_at') THEN
+                    ALTER TABLE tva_data RENAME COLUMN created_at TO timestamp;
+                END IF;
+            END $$;
+        `);
+        
+        // Migration: Add timestamp column if it doesn't exist
+        await client.query(`
+            DO $$ 
+            BEGIN
+                IF NOT EXISTS(SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='tva_data' AND column_name='timestamp') THEN
+                    ALTER TABLE tva_data ADD COLUMN timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+                END IF;
+            END $$;
+        `);
+        
+        // Drop old columns if they exist (migration to simplified schema)
+        await client.query(`
+            ALTER TABLE tva_data 
+            DROP COLUMN IF EXISTS station_id,
+            DROP COLUMN IF EXISTS device_name,
+            DROP COLUMN IF EXISTS data_timestamp
+        `);
+        
         // Composite indexes cho tva_data - tối ưu cho query patterns thường dùng
-        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_station_time ON tva_data(station_name, created_at DESC)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_param_time ON tva_data(parameter_name, created_at DESC)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_station_param_time ON tva_data(station_name, parameter_name, created_at DESC)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_time ON tva_data(created_at DESC)');
-        // Drop old single-column indexes if they exist (replaced by composite)
+        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_station_time ON tva_data(station_name, timestamp DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_param_time ON tva_data(parameter_name, timestamp DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_station_param_time ON tva_data(station_name, parameter_name, timestamp DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_tva_time ON tva_data(timestamp DESC)');
+        // Drop old indexes
         await client.query('DROP INDEX IF EXISTS idx_tva_station');
         await client.query('DROP INDEX IF EXISTS idx_tva_created_at');
         await client.query('DROP INDEX IF EXISTS idx_tva_parameter');
@@ -268,22 +297,50 @@ async function initDatabase() {
             CREATE TABLE IF NOT EXISTS mqtt_data (
                 id SERIAL PRIMARY KEY,
                 station_name TEXT NOT NULL,
-                station_id TEXT NOT NULL,
-                device_name TEXT,
                 parameter_name TEXT NOT NULL,
                 value REAL,
                 unit TEXT,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )
         `);
         console.log('✅ Bảng mqtt_data đã sẵn sàng');
         
+        // Migration: Rename created_at to timestamp if it exists
+        await client.query(`
+            DO $$ 
+            BEGIN
+                IF EXISTS(SELECT 1 FROM information_schema.columns 
+                          WHERE table_name='mqtt_data' AND column_name='created_at') THEN
+                    ALTER TABLE mqtt_data RENAME COLUMN created_at TO timestamp;
+                END IF;
+            END $$;
+        `);
+        
+        // Migration: Add timestamp column if it doesn't exist
+        await client.query(`
+            DO $$ 
+            BEGIN
+                IF NOT EXISTS(SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='mqtt_data' AND column_name='timestamp') THEN
+                    ALTER TABLE mqtt_data ADD COLUMN timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+                END IF;
+            END $$;
+        `);
+        
+        // Drop old columns if they exist (migration to simplified schema)
+        await client.query(`
+            ALTER TABLE mqtt_data 
+            DROP COLUMN IF EXISTS station_id,
+            DROP COLUMN IF EXISTS device_name,
+            DROP COLUMN IF EXISTS data_timestamp
+        `);
+        
         // Composite indexes cho mqtt_data
-        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_station_time ON mqtt_data(station_name, created_at DESC)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_param_time ON mqtt_data(parameter_name, created_at DESC)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_station_param_time ON mqtt_data(station_name, parameter_name, created_at DESC)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_time ON mqtt_data(created_at DESC)');
-        // Drop old single-column indexes
+        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_station_time ON mqtt_data(station_name, timestamp DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_param_time ON mqtt_data(parameter_name, timestamp DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_station_param_time ON mqtt_data(station_name, parameter_name, timestamp DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_mqtt_time ON mqtt_data(timestamp DESC)');
+        // Drop old indexes
         await client.query('DROP INDEX IF EXISTS idx_mqtt_station');
         await client.query('DROP INDEX IF EXISTS idx_mqtt_created_at');
         await client.query('DROP INDEX IF EXISTS idx_mqtt_parameter');
@@ -293,21 +350,50 @@ async function initDatabase() {
             CREATE TABLE IF NOT EXISTS scada_data (
                 id SERIAL PRIMARY KEY,
                 station_name TEXT NOT NULL,
-                station_id TEXT NOT NULL,
                 parameter_name TEXT NOT NULL,
                 value REAL,
                 unit TEXT,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )
         `);
         console.log('✅ Bảng scada_data đã sẵn sàng');
         
+        // Migration: Rename created_at to timestamp if it exists
+        await client.query(`
+            DO $$ 
+            BEGIN
+                IF EXISTS(SELECT 1 FROM information_schema.columns 
+                          WHERE table_name='scada_data' AND column_name='created_at') THEN
+                    ALTER TABLE scada_data RENAME COLUMN created_at TO timestamp;
+                END IF;
+            END $$;
+        `);
+        
+        // Migration: Add timestamp column if it doesn't exist
+        await client.query(`
+            DO $$ 
+            BEGIN
+                IF NOT EXISTS(SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='scada_data' AND column_name='timestamp') THEN
+                    ALTER TABLE scada_data ADD COLUMN timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+                END IF;
+            END $$;
+        `);
+        
+        // Drop old columns if they exist (migration to simplified schema)
+        await client.query(`
+            ALTER TABLE scada_data 
+            DROP COLUMN IF EXISTS station_id,
+            DROP COLUMN IF EXISTS device_name,
+            DROP COLUMN IF EXISTS data_timestamp
+        `);
+        
         // Composite indexes cho scada_data
-        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_station_time ON scada_data(station_name, created_at DESC)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_param_time ON scada_data(parameter_name, created_at DESC)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_station_param_time ON scada_data(station_name, parameter_name, created_at DESC)');
-        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_time ON scada_data(created_at DESC)');
-        // Drop old single-column indexes
+        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_station_time ON scada_data(station_name, timestamp DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_param_time ON scada_data(parameter_name, timestamp DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_station_param_time ON scada_data(station_name, parameter_name, timestamp DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_scada_time ON scada_data(timestamp DESC)');
+        // Drop old indexes
         await client.query('DROP INDEX IF EXISTS idx_scada_station');
         await client.query('DROP INDEX IF EXISTS idx_scada_created_at');
         await client.query('DROP INDEX IF EXISTS idx_scada_parameter');
@@ -381,7 +467,7 @@ async function cleanupOldRecords(tableName, maxRecords) {
             DELETE FROM ${tableName}
             WHERE id IN (
                 SELECT id FROM ${tableName}
-                ORDER BY created_at ASC
+                ORDER BY timestamp ASC
                 LIMIT $1
             )
         `;
@@ -450,11 +536,11 @@ async function saveTVAData(stations) {
                     try {
                         const cleanValue = parseNumericValue(param.value);
                         const normalizedParamName = normalizeParameterNameByValue(param.name, cleanValue, param.unit);
-                        const timestamp = getVietnamTimestamp();
+                        
                         await client.query(
-                            `INSERT INTO tva_data (station_name, station_id, parameter_name, value, unit, created_at)
-                             VALUES ($1, $2, $3, $4, $5, $6)`,
-                            [station.station, stationId, normalizedParamName, cleanValue, param.unit, timestamp]
+                            `INSERT INTO tva_data (station_name, parameter_name, value, unit)
+                             VALUES ($1, $2, $3, $4)`,
+                            [station.station, normalizedParamName, cleanValue, param.unit]
                         );
                         savedCount++;
                     } catch (err) {
@@ -500,11 +586,11 @@ async function saveMQTTData(stations) {
                     try {
                         const cleanValue = parseNumericValue(param.value);
                         const normalizedParamName = normalizeParameterNameByValue(param.name, cleanValue, param.unit);
-                        const timestamp = getVietnamTimestamp();
+                        
                         await client.query(
-                            `INSERT INTO mqtt_data (station_name, station_id, device_name, parameter_name, value, unit, created_at)
-                             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                            [station.station, stationId, station.deviceName || '', normalizedParamName, cleanValue, param.unit, timestamp]
+                            `INSERT INTO mqtt_data (station_name, parameter_name, value, unit)
+                             VALUES ($1, $2, $3, $4)`,
+                            [station.station, normalizedParamName, cleanValue, param.unit]
                         );
                         savedCount++;
                     } catch (err) {
@@ -558,12 +644,12 @@ async function saveSCADAData(stationsGrouped) {
                     try {
                         const paramName = param.parameterName || param.parameter;
                         const normalizedParamName = normalizeParameterNameByValue(paramName, numericValue, param.unit);
-                        const timestamp = getVietnamTimestamp();
+                        
                         await client.query(
-                            `INSERT INTO scada_data (station_name, station_id, parameter_name, value, unit, created_at)
-                             VALUES ($1, $2, $3, $4, $5, $6)`,
-                            [station.stationName || station.station, stationId, normalizedParamName, 
-                             isNaN(numericValue) ? null : numericValue, param.unit || '', timestamp]
+                            `INSERT INTO scada_data (station_name, parameter_name, value, unit)
+                             VALUES ($1, $2, $3, $4)`,
+                            [station.stationName || station.station, normalizedParamName, 
+                             isNaN(numericValue) ? null : numericValue, param.unit || '']
                         );
                         savedCount++;
                     } catch (err) {
@@ -615,11 +701,16 @@ async function getStatsData(options) {
         const params = [];
         let paramIndex = 1;
 
-        // Filter by station IDs if provided
+        // Filter by station names if provided (convert station IDs to names)
         if (stationIds && stationIds.length > 0) {
-            const stationConditions = stationIds.map(id => `station_id = $${paramIndex++}`).join(' OR ');
+            // Extract station names from IDs (e.g., "tva_Gieng_1" -> "Gieng 1")
+            const stationNames = stationIds.map(id => {
+                // Remove prefix like 'tva_', 'mqtt_', 'scada_' and replace underscores with spaces
+                return id.replace(/^(tva|mqtt|scada)_/, '').replace(/_/g, ' ');
+            });
+            const stationConditions = stationNames.map(name => `station_name ILIKE $${paramIndex++}`).join(' OR ');
             conditions.push(`(${stationConditions})`);
-            params.push(...stationIds);
+            params.push(...stationNames);
         }
 
         // Filter by parameter name if not 'all'
@@ -632,14 +723,14 @@ async function getStatsData(options) {
         if (startDate) {
             // Parse as Vietnam time (GMT+7) - start of day 00:00:00
             const startDateTime = `${startDate}T00:00:00+07:00`;
-            conditions.push(`created_at >= $${paramIndex++}::timestamptz`);
+            conditions.push(`timestamp >= $${paramIndex++}::timestamptz`);
             params.push(startDateTime);
         }
 
         if (endDate) {
             // Parse as Vietnam time (GMT+7) - end of day 23:59:59
             const endDateTime = `${endDate}T23:59:59+07:00`;
-            conditions.push(`created_at <= $${paramIndex++}::timestamptz`);
+            conditions.push(`timestamp <= $${paramIndex++}::timestamptz`);
             params.push(endDateTime);
         }
 
@@ -651,26 +742,24 @@ async function getStatsData(options) {
             WITH time_bucketed AS (
                 SELECT 
                     station_name,
-                    station_id,
                     parameter_name,
                     value,
                     unit,
-                    created_at,
-                    FLOOR(EXTRACT(EPOCH FROM created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') / (${interval} * 60)) as time_bucket
+                    timestamp,
+                    FLOOR(EXTRACT(EPOCH FROM timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh') / (${interval} * 60)) as time_bucket
                 FROM ${table}
                 ${whereClause}
-                ORDER BY created_at DESC
+                ORDER BY timestamp DESC
                 LIMIT ${limit * 2}
             )
-            SELECT DISTINCT ON (station_id, parameter_name, time_bucket)
+            SELECT DISTINCT ON (station_name, parameter_name, time_bucket)
                 station_name,
-                station_id,
                 parameter_name,
                 value,
                 unit,
-                (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::timestamp as created_at
+                (timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh')::timestamp as timestamp
             FROM time_bucketed
-            ORDER BY station_id, parameter_name, time_bucket DESC, created_at DESC
+            ORDER BY station_name, parameter_name, time_bucket DESC, timestamp DESC
             LIMIT $${paramIndex}
         `;
         params.push(limit);
@@ -681,10 +770,13 @@ async function getStatsData(options) {
             // Add table type to each row
             const type = table.replace('_data', '').toUpperCase();
             allData.push(...result.rows.map(row => {
-                // Ensure created_at is properly formatted for Vietnam timezone
+                // Generate station_id from station_name and type
+                const stationId = `${type.toLowerCase()}_${row.station_name.replace(/\s+/g, '_')}`;
+                
+                // Ensure timestamp is properly formatted for Vietnam timezone
                 let formattedTime = '';
-                if (row.created_at) {
-                    const date = new Date(row.created_at);
+                if (row.timestamp) {
+                    const date = new Date(row.timestamp);
                     // Format: dd/mm/yyyy HH:mm:ss in Vietnam timezone
                     formattedTime = date.toLocaleString('vi-VN', {
                         timeZone: 'Asia/Ho_Chi_Minh',
@@ -700,8 +792,8 @@ async function getStatsData(options) {
                 
                 return {
                     ...row,
+                    station_id: stationId,
                     type: type,
-                    timestamp: row.created_at,
                     time: formattedTime
                 };
             }));
@@ -710,7 +802,7 @@ async function getStatsData(options) {
         }
     }
 
-    // Sort all data by created_at descending
+    // Sort all data by timestamp descending
     allData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     
     // Limit total results
@@ -770,7 +862,7 @@ async function cleanOldData(daysToKeep = 90) {
     
     for (const table of tables) {
         const result = await pool.query(
-            `DELETE FROM ${table} WHERE created_at < $1`,
+            `DELETE FROM ${table} WHERE timestamp < $1`,
             [cutoffDate]
         );
         totalDeleted += result.rowCount;
@@ -821,28 +913,28 @@ async function checkStationsValueChanges(timeoutMinutes = 60) {
         const query = `
             SELECT DISTINCT ON (station_name)
                 station_name,
-                created_at
+                timestamp
             FROM ${table.name}
-            ORDER BY station_name, created_at DESC
+            ORDER BY station_name, timestamp DESC
         `;
 
         const result = await pool.query(query);
         
         for (const row of result.rows) {
             const stationName = row.station_name;
-            const lastUpdate = new Date(row.created_at);
+            const lastUpdate = new Date(row.timestamp);
             const timeDiffMinutes = Math.floor((now - lastUpdate.getTime()) / (60 * 1000));
             
             // Trạm ONLINE nếu có dữ liệu trong khoảng timeout
             const isOnline = lastUpdate > cutoffTime;
             const status = isOnline ? 'online' : 'offline';
             
-            // Chỉ update nếu chưa có hoặc created_at mới hơn
+            // Chỉ update nếu chưa có hoặc timestamp mới hơn
             if (!statusMap[stationName] || new Date(statusMap[stationName].lastUpdate) < lastUpdate) {
                 statusMap[stationName] = {
                     status: status,
                     hasChange: isOnline,  // Giữ lại để tương thích ngược
-                    lastUpdate: row.created_at,
+                    lastUpdate: row.timestamp,
                     lastUpdateDate: lastUpdate.toISOString(),
                     timeSinceUpdate: timeDiffMinutes,
                     type: table.type
@@ -873,9 +965,9 @@ async function getStationLastUpdates() {
         const result = await pool.query(`
             SELECT DISTINCT ON (station_name)
                 station_name,
-                created_at
+                timestamp
             FROM ${table}
-            ORDER BY station_name, created_at DESC
+            ORDER BY station_name, timestamp DESC
         `);
 
         for (const row of result.rows) {
@@ -883,8 +975,8 @@ async function getStationLastUpdates() {
                 updates[row.station_name] = {};
             }
             updates[row.station_name][type] = {
-                timestamp: row.created_at,
-                updateTime: row.created_at
+                timestamp: row.timestamp,
+                updateTime: row.timestamp
             };
         }
     }
@@ -906,23 +998,22 @@ async function getLatestStationsData() {
         const result = await pool.query(`
             SELECT DISTINCT ON (station_name, parameter_name)
                 station_name,
-                station_id,
                 parameter_name,
                 value,
                 unit,
-                created_at AT TIME ZONE 'Asia/Ho_Chi_Minh' as created_at
+                timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh' as timestamp
             FROM ${table}
-            WHERE created_at > NOW() - INTERVAL '24 hours'
-            ORDER BY station_name, parameter_name, created_at DESC
+            WHERE timestamp > NOW() - INTERVAL '24 hours'
+            ORDER BY station_name, parameter_name, timestamp DESC
         `);
 
         for (const row of result.rows) {
             const stationName = row.station_name;
             
-            // Format created_at for consistency
+            // Format timestamp for consistency
             let formattedTime = '';
-            if (row.created_at) {
-                const date = new Date(row.created_at);
+            if (row.timestamp) {
+                const date = new Date(row.timestamp);
                 formattedTime = date.toLocaleString('vi-VN', {
                     timeZone: 'Asia/Ho_Chi_Minh',
                     year: 'numeric',
@@ -939,9 +1030,8 @@ async function getLatestStationsData() {
             if (!stationsData[stationName]) {
                 stationsData[stationName] = {
                     stationName: stationName,
-                    stationId: row.station_id,
                     type: type,
-                    timestamp: row.created_at,  // ISO timestamp for client processing
+                    timestamp: row.timestamp,  // ISO timestamp for client processing
                     updateTime: formattedTime,  // Formatted time for display
                     data: []
                 };

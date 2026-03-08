@@ -55,7 +55,7 @@ function saveTelegramConfig() {
             chatId: config.telegram.chatId,
             refreshInterval: config.telegram.refreshInterval || 15,
             delayThreshold: config.telegram.delayThreshold || 60,
-            alertRepeatInterval: config.telegram.alertRepeatInterval || 1
+            alertRepeatInterval: config.telegram.alertRepeatInterval || 60
         };
         fs.writeFileSync(TELEGRAM_CONFIG_FILE, JSON.stringify(configToSave, null, 2), 'utf8');
         console.log('💾 Saved Telegram config to file');
@@ -791,7 +791,7 @@ app.get('/api/telegram/config', verifyToken, async (req, res) => {
                 chatId: config.telegram.chatId,
                 refreshInterval: config.telegram.refreshInterval || 15,
                 delayThreshold: config.telegram.delayThreshold || 60,
-                alertRepeatInterval: config.telegram.alertRepeatInterval || 1
+                alertRepeatInterval: config.telegram.alertRepeatInterval || 60
             }
         });
     } catch (error) {
@@ -822,7 +822,7 @@ app.get('/api/telegram/health', async (req, res) => {
             settings: {
                 refreshInterval: config.telegram?.refreshInterval || 15,
                 delayThreshold: config.telegram?.delayThreshold || 60,
-                alertRepeatInterval: config.telegram?.alertRepeatInterval || 1
+                alertRepeatInterval: config.telegram?.alertRepeatInterval || 60
             }
         };
         
@@ -922,7 +922,7 @@ app.post('/api/telegram/config', verifyToken, async (req, res) => {
                 chatId: config.telegram.chatId,
                 refreshInterval: config.telegram.refreshInterval || 15,
                 delayThreshold: config.telegram.delayThreshold || 60,
-                alertRepeatInterval: config.telegram.alertRepeatInterval || 1
+                alertRepeatInterval: config.telegram.alertRepeatInterval || 60
             }
         });
         
@@ -1855,13 +1855,12 @@ app.get('/api/scada/cached', async (req, res) => {
         const result = await dbModule.pool.query(`
             SELECT DISTINCT ON (station_name, parameter_name)
                 station_name,
-                station_id,
                 parameter_name,
                 value,
                 unit,
-                created_at
+                timestamp
             FROM scada_data
-            ORDER BY station_name, parameter_name, created_at DESC
+            ORDER BY station_name, parameter_name, timestamp DESC
         `);
         
         // Group data by station
@@ -1869,7 +1868,8 @@ app.get('/api/scada/cached', async (req, res) => {
         let latestTimestamp = null;
         
         for (const row of result.rows) {
-            const stationId = row.station_id.replace('scada_', '');
+            // Generate station ID from station name
+            const stationId = row.station_name.replace(/\s+/g, '_');
             
             if (!stationsGrouped[stationId]) {
                 stationsGrouped[stationId] = {
@@ -1886,12 +1886,12 @@ app.get('/api/scada/cached', async (req, res) => {
                 value: parseFloat(row.value) || 0,
                 displayText: row.value !== null ? String(row.value) : '--',
                 unit: row.unit || '',
-                created_at: row.created_at
+                timestamp: row.timestamp
             });
             
             // Track the most recent timestamp
-            if (!latestTimestamp || new Date(row.created_at) > new Date(latestTimestamp)) {
-                latestTimestamp = row.created_at;
+            if (!latestTimestamp || new Date(row.timestamp) > new Date(latestTimestamp)) {
+                latestTimestamp = row.timestamp;
             }
         }
         
@@ -1977,13 +1977,22 @@ async function sendServerTelegramMessage(text) {
 
 async function checkAndSendTelegramAlerts() {
     try {
-        if (!config.telegram.enabled || !config.telegram.botToken || !config.telegram.chatId) return;
+        console.log(`\n🔍 [TELEGRAM] Running periodic check at ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
+        
+        if (!config.telegram.enabled || !config.telegram.botToken || !config.telegram.chatId) {
+            console.log('⚠️ [TELEGRAM] Skipping: Telegram not properly configured');
+            return;
+        }
 
         const delayThreshold = config.telegram.delayThreshold || 60;
-        const alertRepeatInterval = config.telegram.alertRepeatInterval || 1;
+        const alertRepeatInterval = config.telegram.alertRepeatInterval || 60; // Changed default from 1 to 60 minutes
         const now = Date.now();
 
         const stationStatus = await dbModule.checkStationsValueChanges(delayThreshold);
+        const totalStations = Object.keys(stationStatus).length;
+        const offlineStations = Object.values(stationStatus).filter(s => s.status === 'offline').length;
+        
+        console.log(`   • Total stations: ${totalStations}, Offline: ${offlineStations}`);
 
         // First run: just snapshot all current statuses, don't send any alerts
         if (!telegramAlertInitialized) {
@@ -1994,7 +2003,8 @@ async function checkAndSendTelegramAlerts() {
                 });
             }
             telegramAlertInitialized = true;
-            console.log(`🛡️ [TELEGRAM] Snapshot khởi tạo: ${Object.keys(stationStatus).length} trạm`);
+            console.log(`🛡️ [TELEGRAM] Snapshot initialized: ${totalStations} stations (${offlineStations} offline)`);
+            console.log('   ℹ️  Next check will start sending alerts for status changes');
             return;
         }
 
@@ -2046,13 +2056,15 @@ async function checkAndSendTelegramAlerts() {
             try {
                 await sendServerTelegramMessage(message);
                 serverAlertHistory.set(stationName, { lastAlertTime: now, lastAlertStatus: currentStatus });
-                console.log(`✅ [TELEGRAM] Đã gửi: ${stationName} → ${currentStatus} (${reason})`);
+                console.log(`✅ [TELEGRAM] Sent alert: ${stationName} → ${currentStatus} (${reason})`);
             } catch (err) {
-                console.error(`❌ [TELEGRAM] Lỗi gửi cho ${stationName}:`, err.message);
+                console.error(`❌ [TELEGRAM] Failed to send for ${stationName}:`, err.message);
             }
         }
+        
+        console.log(`✓ [TELEGRAM] Check completed`);
     } catch (error) {
-        console.error('❌ [TELEGRAM] Lỗi kiểm tra định kỳ:', error.message);
+        console.error('❌ [TELEGRAM] Error during periodic check:', error.message);
     }
 }
 
@@ -2063,7 +2075,7 @@ function startTelegramAlertInterval() {
     console.log('   • Chat ID:', config.telegram.chatId || '❌ MISSING');
     console.log('   • Refresh Interval:', config.telegram.refreshInterval || 15, 'minutes');
     console.log('   • Delay Threshold:', config.telegram.delayThreshold || 60, 'minutes');
-    console.log('   • Alert Repeat:', config.telegram.alertRepeatInterval || 1, 'minutes');
+    console.log('   • Alert Repeat:', config.telegram.alertRepeatInterval || 60, 'minutes');
     
     if (telegramAlertInterval) {
         clearInterval(telegramAlertInterval);
@@ -2090,11 +2102,18 @@ function startTelegramAlertInterval() {
     
     // Reset state so next run re-initializes snapshot
     telegramAlertInitialized = false;
-    // Use refreshInterval as the check cycle; alertRepeatInterval only guards
-    // how often a repeat reminder is sent inside checkAndSendTelegramAlerts.
-    const intervalMs = Math.max(1, config.telegram.refreshInterval || 15) * 60 * 1000;
+    
+    // FIX: Use the SMALLER of refreshInterval and alertRepeatInterval as the check interval
+    // This ensures we check frequently enough to respect the repeat interval
+    const refreshMinutes = Math.max(1, config.telegram.refreshInterval || 15);
+    const repeatMinutes = Math.max(1, config.telegram.alertRepeatInterval || 60);
+    const checkIntervalMinutes = Math.min(refreshMinutes, repeatMinutes);
+    const intervalMs = checkIntervalMinutes * 60 * 1000;
+    
     telegramAlertInterval = setInterval(checkAndSendTelegramAlerts, intervalMs);
-    console.log(`   ✅ Alert interval STARTED: check every ${config.telegram.refreshInterval || 15} min, repeat offline alerts every ${config.telegram.alertRepeatInterval || 1} min`);
+    console.log(`   ✅ Alert interval STARTED: check every ${checkIntervalMinutes} min (refresh: ${refreshMinutes} min, repeat: ${repeatMinutes} min)`);
+    console.log(`   ℹ️  First run will take snapshot only, alerts start after ${checkIntervalMinutes} minutes`);
+    
     // Run once immediately on start (will take snapshot, not alert)
     checkAndSendTelegramAlerts();
 }
