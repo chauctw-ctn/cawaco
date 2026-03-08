@@ -738,6 +738,7 @@ async function getStatsData(options) {
 
         // Optimized query using time-bucketing and DISTINCT ON
         // Much faster than ROW_NUMBER() window function for large datasets
+        // Return timestamp as epoch milliseconds for accurate timezone handling
         const query = `
             WITH time_bucketed AS (
                 SELECT 
@@ -757,7 +758,7 @@ async function getStatsData(options) {
                 parameter_name,
                 value,
                 unit,
-                (timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh')::timestamp as timestamp
+                EXTRACT(EPOCH FROM timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh')::bigint * 1000 as timestamp
             FROM time_bucketed
             ORDER BY station_name, parameter_name, time_bucket DESC, timestamp DESC
             LIMIT $${paramIndex}
@@ -773,28 +774,16 @@ async function getStatsData(options) {
                 // Generate station_id from station_name and type
                 const stationId = `${type.toLowerCase()}_${row.station_name.replace(/\s+/g, '_')}`;
                 
-                // Ensure timestamp is properly formatted for Vietnam timezone
-                let formattedTime = '';
-                if (row.timestamp) {
-                    const date = new Date(row.timestamp);
-                    // Format: dd/mm/yyyy HH:mm:ss in Vietnam timezone
-                    formattedTime = date.toLocaleString('vi-VN', {
-                        timeZone: 'Asia/Ho_Chi_Minh',
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: false
-                    });
-                }
-                
+                // Timestamp is already in epoch milliseconds (from timezone Asia/Ho_Chi_Minh)
+                // JavaScript Date constructor will interpret it correctly
                 return {
-                    ...row,
+                    station_name: row.station_name,
+                    parameter_name: row.parameter_name,
+                    value: row.value,
+                    unit: row.unit,
+                    timestamp: parseInt(row.timestamp),  // Epoch milliseconds for Vietnam timezone
                     station_id: stationId,
-                    type: type,
-                    time: formattedTime
+                    type: type
                 };
             }));
         } catch (err) {
