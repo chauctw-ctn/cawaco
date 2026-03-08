@@ -40,6 +40,12 @@ function loadTelegramConfig() {
             console.log('✅ Loaded Telegram config:', { ...config.telegram, botToken: config.telegram.botToken ? '***set***' : '(empty)' });
         } else {
             console.log('ℹ️ No saved Telegram config found, using defaults');
+            // Auto-enable if bot token and chat ID are set via environment variables
+            if (config.telegram.botToken && config.telegram.chatId && !config.telegram.enabled) {
+                config.telegram.enabled = true;
+                console.log('✅ Auto-enabled Telegram alerts (bot token & chat ID set via env vars)');
+                saveTelegramConfig();
+            }
         }
     } catch (error) {
         console.error('❌ Error loading Telegram config:', error.message);
@@ -1125,6 +1131,25 @@ app.get('/health', async (req, res) => {
         health.status = 'degraded';
     }
     
+    // Trigger Telegram alert check if enough time has passed (for cron-job.org support)
+    // This ensures alerts fire even if setInterval died (Render free plan restarts)
+    if (config.telegram.enabled && config.telegram.botToken && config.telegram.chatId) {
+        const refreshMs = (config.telegram.refreshInterval || 15) * 60 * 1000;
+        const repeatMs = (config.telegram.alertRepeatInterval || 60) * 60 * 1000;
+        const checkIntervalMs = Math.min(refreshMs, repeatMs);
+        const timeSinceLastCheck = Date.now() - lastTelegramCheckTime;
+        
+        if (timeSinceLastCheck >= checkIntervalMs - 30000) { // 30s tolerance
+            health.telegramCheckTriggered = true;
+            // Run async - don't block health response
+            checkAndSendTelegramAlerts().catch(err => {
+                console.error('❌ [HEALTH] Telegram check error:', err.message);
+            });
+        } else {
+            health.telegramNextCheckIn = Math.ceil((checkIntervalMs - timeSinceLastCheck) / 1000) + 's';
+        }
+    }
+    
     res.json(health);
 });
 
@@ -1943,10 +1968,52 @@ app.get('/api/scada/cached', async (req, res) => {
 // SERVER-SIDE TELEGRAM PERIODIC ALERTS
 // ============================================
 
+// Persistent alert history file (survives restarts on Render)
+const ALERT_HISTORY_FILE = path.join(DATA_DIR, 'telegram-alert-history.json');
+
 // In-memory alert history: stationName -> { lastAlertTime, lastAlertStatus }
 const serverAlertHistory = new Map();
 let telegramAlertInterval = null;
 let telegramAlertInitialized = false; // First run: snapshot only, don't alert
+let lastTelegramCheckTime = 0; // Track last check time for rate limiting
+
+// Load alert history from persistent file (survive Render restarts)
+function loadAlertHistory() {
+    try {
+        if (fs.existsSync(ALERT_HISTORY_FILE)) {
+            const data = JSON.parse(fs.readFileSync(ALERT_HISTORY_FILE, 'utf8'));
+            if (data.history && typeof data.history === 'object') {
+                for (const [key, val] of Object.entries(data.history)) {
+                    serverAlertHistory.set(key, val);
+                }
+            }
+            if (data.lastCheckTime) {
+                lastTelegramCheckTime = data.lastCheckTime;
+            }
+            // If we loaded history, skip the snapshot phase
+            if (serverAlertHistory.size > 0) {
+                telegramAlertInitialized = true;
+                console.log(`\u2705 [TELEGRAM] Loaded alert history: ${serverAlertHistory.size} stations (skip snapshot)`);
+            }
+        }
+    } catch (err) {
+        console.error('\u26a0\ufe0f [TELEGRAM] Error loading alert history:', err.message);
+    }
+}
+
+// Save alert history to persistent file
+function saveAlertHistory() {
+    try {
+        const data = {
+            history: Object.fromEntries(serverAlertHistory),
+            lastCheckTime: lastTelegramCheckTime,
+            savedAt: new Date().toISOString()
+        };
+        fs.writeFileSync(ALERT_HISTORY_FILE, JSON.stringify(data), 'utf8');
+    } catch (err) {
+        console.error('\u26a0\ufe0f [TELEGRAM] Error saving alert history:', err.message);
+    }
+}
 
 function formatDelayStr(delayMinutes) {
     if (!delayMinutes && delayMinutes !== 0) return 'N/A';
@@ -1985,8 +2052,9 @@ async function checkAndSendTelegramAlerts() {
         }
 
         const delayThreshold = config.telegram.delayThreshold || 60;
-        const alertRepeatInterval = config.telegram.alertRepeatInterval || 60; // Changed default from 1 to 60 minutes
+        const alertRepeatInterval = config.telegram.alertRepeatInterval || 60;
         const now = Date.now();
+        lastTelegramCheckTime = now;
 
         const stationStatus = await dbModule.checkStationsValueChanges(delayThreshold);
         const totalStations = Object.keys(stationStatus).length;
@@ -2003,6 +2071,7 @@ async function checkAndSendTelegramAlerts() {
                 });
             }
             telegramAlertInitialized = true;
+            saveAlertHistory();
             console.log(`🛡️ [TELEGRAM] Snapshot initialized: ${totalStations} stations (${offlineStations} offline)`);
             console.log('   ℹ️  Next check will start sending alerts for status changes');
             return;
@@ -2017,7 +2086,6 @@ async function checkAndSendTelegramAlerts() {
             let reason = '';
 
             if (!history) {
-                // New station appeared after init — send if offline
                 if (currentStatus === 'offline') {
                     shouldSend = true;
                     reason = 'new_station_offline';
@@ -2062,6 +2130,8 @@ async function checkAndSendTelegramAlerts() {
             }
         }
         
+        // Persist alert history after each check
+        saveAlertHistory();
         console.log(`✓ [TELEGRAM] Check completed`);
     } catch (error) {
         console.error('❌ [TELEGRAM] Error during periodic check:', error.message);
@@ -2112,10 +2182,19 @@ function startTelegramAlertInterval() {
     
     telegramAlertInterval = setInterval(checkAndSendTelegramAlerts, intervalMs);
     console.log(`   ✅ Alert interval STARTED: check every ${checkIntervalMinutes} min (refresh: ${refreshMinutes} min, repeat: ${repeatMinutes} min)`);
-    console.log(`   ℹ️  First run will take snapshot only, alerts start after ${checkIntervalMinutes} minutes`);
+    console.log(`   ℹ️  First run will take snapshot only, second check after 2 minutes`);
     
     // Run once immediately on start (will take snapshot, not alert)
     checkAndSendTelegramAlerts();
+    
+    // Schedule a second check after 2 minutes so alerts start quickly after restart/deploy
+    // (instead of waiting the full interval which could be 15+ minutes)
+    setTimeout(() => {
+        if (telegramAlertInitialized) {
+            console.log('🔔 [TELEGRAM] Running early second check (2 min after snapshot)...');
+            checkAndSendTelegramAlerts();
+        }
+    }, 2 * 60 * 1000);
 }
 
 // Khởi động server
@@ -2253,12 +2332,46 @@ app.listen(PORT, async () => {
     // =================================================
     // CẢNH BÁO TELEGRAM ĐỊNH KỲ (Server-side)
     // =================================================
+    // Load alert history from persistent file (survive restarts)
+    loadAlertHistory();
+    
     // Khởi động sau 30 giây để DB có dữ liệu trước
     console.log('\n⏱️  Scheduling telegram alert check in 30 seconds...');
     setTimeout(() => {
         console.log('\n🚀 30 seconds elapsed, starting telegram alert system...');
         startTelegramAlertInterval();
     }, 30000);
+    
+    // =================================================
+    // SELF-PING KEEP-ALIVE (Prevent Render free plan sleep)
+    // =================================================
+    // Resolve keep-alive URL from multiple sources
+    const keepAliveUrl = process.env.KEEP_ALIVE_URL
+        || process.env.RENDER_EXTERNAL_URL
+        || (process.env.RENDER_EXTERNAL_HOSTNAME ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME}` : null);
+    
+    if (keepAliveUrl) {
+        const KEEP_ALIVE_INTERVAL = 5 * 60 * 1000; // 5 minutes
+        
+        const selfPing = async () => {
+            try {
+                const res = await axios.get(`${keepAliveUrl}/health`, { timeout: 15000 });
+                console.log(`🏓 [KEEP-ALIVE] Self-ping OK (status: ${res.data.status}, uptime: ${Math.floor(res.data.uptime)}s)`);
+            } catch (err) {
+                console.warn(`⚠️ [KEEP-ALIVE] Self-ping failed: ${err.message}`);
+            }
+        };
+        
+        setInterval(selfPing, KEEP_ALIVE_INTERVAL);
+        console.log(`🏓 [KEEP-ALIVE] Self-ping enabled: every 5 min → ${keepAliveUrl}/health`);
+        
+        // Verify the URL works on startup (after a short delay so the server is ready)
+        setTimeout(selfPing, 5000);
+    } else if (process.env.NODE_ENV === 'production') {
+        console.warn('⚠️ [KEEP-ALIVE] Không tìm thấy URL keep-alive — server có thể bị sleep trên free plan!');
+        console.warn('   → Cách 1: Set KEEP_ALIVE_URL=https://your-app.onrender.com trong Render Dashboard');
+        console.warn('   → Cách 2: Dùng cron-job.org (miễn phí) ping đến /health mỗi 5 phút');
+    }
     
     console.log('🔄 Tự động lưu dữ liệu vào SQL mỗi 5 phút\n');
 });

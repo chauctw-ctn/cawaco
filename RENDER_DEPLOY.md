@@ -196,17 +196,28 @@ Config sẽ được lưu vào `/var/data/telegram-config.json` (nếu đã moun
 - Kiểm tra `botToken` và `chatId` đã được set
 - Restart service trong Render Dashboard
 
-### Vấn đề: Container bị sleep trên Free plan
+### Vấn đề: Container bị sleep trên Free plan — Telegram không gửi cảnh báo
 
-**Render Free plan** có thể sleep container sau 15 phút không có traffic.
+**Render Free plan** sẽ sleep container sau 15 phút không có traffic → tất cả setInterval chết → Telegram alerts ngưng.
 
-**Giải pháp**:
-1. Nâng cấp lên paid plan (khuyến nghị cho production)
-2. Hoặc dùng external monitoring service để ping app mỗi 10 phút:
-   - [UptimeRobot](https://uptimerobot.com/) (free)
-   - [Cron-job.org](https://cron-job.org/) (free)
-   
-   Ping URL: `https://your-app.onrender.com/api/telegram/health`
+**Giải pháp (chọn 1 trong 3):**
+
+#### Cách 1: Self-ping tích hợp sẵn (Khuyến nghị)
+App đã có sẵn cơ chế self-ping mỗi 5 phút. Chỉ cần set biến môi trường:
+```
+KEEP_ALIVE_URL=https://your-app.onrender.com
+```
+Vào Render Dashboard → Environment → thêm biến trên (thay URL bằng URL thực của app).
+
+#### Cách 2: Dùng dịch vụ ping bên ngoài (miễn phí)
+Tạo tài khoản tại một trong các dịch vụ sau và cấu hình ping mỗi 5 phút:
+- [Cron-job.org](https://cron-job.org/) (free, đáng tin cậy)
+- [UptimeRobot](https://uptimerobot.com/) (free, tối thiểu 5 phút)
+
+Ping URL: `https://your-app.onrender.com/health`
+
+#### Cách 3: Nâng cấp lên Paid plan
+Khuyến nghị cho production — container luôn chạy, không bị sleep.
 
 ---
 

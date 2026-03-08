@@ -40,3 +40,5 @@ services:
         sync: false  # Optional: Set in Render Dashboard
       - key: TELEGRAM_CHAT_ID
         sync: false  # Optional: Set in Render Dashboard
+      - key: KEEP_ALIVE_URL
+        sync: false  # Required for free plan: Set to https://your-app.onrender.com
