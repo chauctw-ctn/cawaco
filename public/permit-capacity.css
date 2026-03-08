@@ -261,11 +261,6 @@ main.sidebar-hidden {
 
 #capacity-table tbody tr {
     border-bottom: 1px solid #e2e8f0;
-    transition: background-color 0.2s;
-}
-
-#capacity-table tbody tr:hover {
-    background-color: #f8fafc;
 }
 
 #capacity-table tbody tr:last-child {
@@ -366,20 +361,12 @@ main.sidebar-hidden {
     background-color: #bae6fd;
 }
 
-#capacity-table tr.permit-35:hover {
-    background-color: #7dd3fc;
-}
-
 #capacity-table tr.permit-35 td.capacity-value {
     text-align: center !important;
 }
 
 #capacity-table tr.permit-36 {
     background-color: #fde68a;
-}
-
-#capacity-table tr.permit-36:hover {
-    background-color: #fcd34d;
 }
 
 #capacity-table tr.permit-36 td.capacity-value {
@@ -390,20 +377,12 @@ main.sidebar-hidden {
     background-color: #e9d5ff;
 }
 
-#capacity-table tr.permit-391:hover {
-    background-color: #d8b4fe;
-}
-
 #capacity-table tr.permit-391 td.capacity-value {
     text-align: center !important;
 }
 
 #capacity-table tr.permit-393 {
     background-color: #fecdd3;
-}
-
-#capacity-table tr.permit-393:hover {
-    background-color: #fda4af;
 }
 
 #capacity-table tr.permit-393 td.capacity-value {

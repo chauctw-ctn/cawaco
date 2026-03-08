@@ -159,6 +159,8 @@ function updateSummaryCards(data) {
     
     let totalMonthly = 0;
     let totalCurrent = 0;
+    let totalDailyPrevious = 0;
+    let totalDailyCurrent = 0;
     
     // Sum up capacities by permit
     data.tableData.forEach(row => {
@@ -169,6 +171,8 @@ function updateSummaryCards(data) {
         }
         totalMonthly += row.monthlyCapacity || 0;
         totalCurrent += row.currentCapacity || 0;
+        totalDailyPrevious += row.previousDayCapacity || 0;
+        totalDailyCurrent += row.todayCapacity || 0;
     });
     
     // Update permit 35
@@ -187,9 +191,13 @@ function updateSummaryCards(data) {
     updateElement('permit-393-monthly', formatNumber(permitTotals['393/gp-bnnmt 22/09/2025'].monthly) + ' m³');
     updateElement('permit-393-current', formatNumber(permitTotals['393/gp-bnnmt 22/09/2025'].current) + ' m³');
     
-    // Update totals
+    // Update monthly totals
     updateElement('total-monthly', formatNumber(totalMonthly) + ' m³');
     updateElement('total-current', formatNumber(totalCurrent) + ' m³');
+    
+    // Update daily totals
+    updateElement('total-daily-previous', formatNumber(totalDailyPrevious) + ' m³');
+    updateElement('total-daily-current', formatNumber(totalDailyCurrent) + ' m³');
 }
 
 /**

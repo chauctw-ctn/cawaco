@@ -965,39 +965,60 @@ async function getLatestStationsData() {
  * Lấy thống kê visitor
  */
 async function getVisitorStats() {
-    const result = await pool.query(`
-        SELECT total_visitors, today_date, today_visitors, created_at,
-               (CURRENT_DATE AT TIME ZONE 'Asia/Ho_Chi_Minh')::date as current_date_vietnam
-        FROM visitor_stats
-        ORDER BY id DESC
-        LIMIT 1
-    `);
+    // Ensure pool is initialized
+    if (!pool) {
+        initPool();
+    }
 
-    if (result.rows.length === 0) {
-        // Get current date in Vietnam timezone
-        const vietnamDate = await pool.query(`SELECT (CURRENT_DATE AT TIME ZONE 'Asia/Ho_Chi_Minh')::date as today`);
+    try {
+        const result = await pool.query(`
+            SELECT total_visitors, today_date, today_visitors, created_at,
+                   (CURRENT_DATE AT TIME ZONE 'Asia/Ho_Chi_Minh')::date as current_date_vietnam
+            FROM visitor_stats
+            ORDER BY id DESC
+            LIMIT 1
+        `);
+
+        if (result.rows.length === 0) {
+            // Get current date in Vietnam timezone
+            const vietnamDate = await pool.query(`SELECT (CURRENT_DATE AT TIME ZONE 'Asia/Ho_Chi_Minh')::date as today`);
+            return {
+                total_visitors: 20102347,
+                today_date: vietnamDate.rows[0].today,
+                today_visitors: 0
+            };
+        }
+
+        return {
+            total_visitors: parseInt(result.rows[0].total_visitors),
+            today_date: result.rows[0].today_date,
+            today_visitors: parseInt(result.rows[0].today_visitors),
+            created_at: result.rows[0].created_at
+        };
+    } catch (error) {
+        console.error('❌ Error in getVisitorStats:', error.message);
+        // Return fallback data if database is unavailable
+        const today = new Date().toISOString().split('T')[0];
         return {
             total_visitors: 20102347,
-            today_date: vietnamDate.rows[0].today,
+            today_date: today,
             today_visitors: 0
         };
     }
-
-    return {
-        total_visitors: parseInt(result.rows[0].total_visitors),
-        today_date: result.rows[0].today_date,
-        today_visitors: parseInt(result.rows[0].today_visitors),
-        created_at: result.rows[0].created_at
-    };
 }
 
 /**
  * Tăng số lượng visitor
  */
 async function incrementVisitorCount() {
-    const client = await pool.connect();
-    
+    // Ensure pool is initialized
+    if (!pool) {
+        initPool();
+    }
+
+    let client;
     try {
+        client = await pool.connect();
         await client.query('BEGIN');
 
         // Get current date in Vietnam timezone (GMT+7)
@@ -1035,11 +1056,19 @@ async function incrementVisitorCount() {
         await client.query('COMMIT');
         return result.rows[0];
     } catch (err) {
-        await client.query('ROLLBACK');
+        if (client) {
+            await client.query('ROLLBACK');
+        }
         console.error('❌ Error incrementing visitor count:', err.message);
-        throw err;
+        // Return fallback data instead of throwing
+        return {
+            total_visitors: 20102347,
+            today_visitors: 0
+        };
     } finally {
-        client.release();
+        if (client) {
+            client.release();
+        }
     }
 }
 

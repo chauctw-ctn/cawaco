@@ -1,282 +1,26 @@
 {
-  "timestamp": "2026-03-08T00:57:30.025Z",
+  "timestamp": "2026-03-08T01:15:30.058Z",
   "totalStations": 11,
   "stations": [
     {
-      "station": "QT2-NM2 (Quan trắc NM2)",
-      "deviceName": "QT2_NM2",
-      "updateTime": "2026-03-08T00:54:52+0000",
-      "lat": 9.203337,
-      "lng": 105.129712,
-      "data": [
-        {
-          "stt": "1",
-          "name": "Nhiệt độ nước",
-          "time": "07:54:52 8/3/2026",
-          "value": "27.52",
-          "unit": "°C",
-          "limit": ""
-        },
-        {
-          "stt": "2",
-          "name": "Mực nước",
-          "time": "07:54:52 8/3/2026",
-          "value": "25.78",
-          "unit": "m",
-          "limit": ""
-        }
-      ]
-    },
-    {
-      "station": "QT2M (36/GP-BTNMT)",
-      "deviceName": "QT2",
-      "updateTime": "2026-03-08T00:57:44+0000",
-      "lat": 9.179219,
-      "lng": 105.139376,
-      "data": [
-        {
-          "stt": "1",
-          "name": "Mực nước",
-          "time": "07:57:44 8/3/2026",
-          "value": "26.62",
-          "unit": "m",
-          "limit": ""
-        },
-        {
-          "stt": "2",
-          "name": "Nhiệt độ nước",
-          "time": "07:57:44 8/3/2026",
-          "value": "30.91",
-          "unit": "°C",
-          "limit": ""
-        }
-      ]
-    },
-    {
-      "station": "GIẾNG SỐ 18",
-      "deviceName": "G18",
-      "updateTime": "2026-03-08T00:55:10+0000",
-      "lat": 9.175669,
-      "lng": 105.170509,
-      "data": [
-        {
-          "stt": "1",
-          "name": "Tổng lưu lượng",
-          "time": "07:55:10 8/3/2026",
-          "value": "347390",
-          "unit": "m³",
-          "limit": ""
-        },
-        {
-          "stt": "2",
-          "name": "Lưu lượng",
-          "time": "07:55:10 8/3/2026",
-          "value": "35",
-          "unit": "m³/h",
-          "limit": ""
-        },
-        {
-          "stt": "3",
-          "name": "Nhiệt độ nước",
-          "time": "07:55:10 8/3/2026",
-          "value": "34.11",
-          "unit": "°C",
-          "limit": ""
-        },
-        {
-          "stt": "4",
-          "name": "Mực nước",
-          "time": "07:55:10 8/3/2026",
-          "value": "31.97",
-          "unit": "m",
-          "limit": ""
-        }
-      ]
-    },
-    {
-      "station": "QT5 (Quan trắc)",
-      "deviceName": "QT5",
-      "updateTime": "2026-03-08T00:57:30Z",
-      "lat": 9.178642307966712,
-      "lng": 105.1542747288355,
-      "data": [
-        {
-          "stt": "1",
-          "name": "Mực nước",
-          "time": "07:57:30 8/3/2026",
-          "value": "21.36",
-          "unit": "m",
-          "limit": ""
-        }
-      ]
-    },
-    {
-      "station": "NHÀ MÁY SỐ 1 - GIẾNG SỐ 2",
-      "deviceName": "GS1_NM2",
-      "updateTime": "2026-03-08T00:57:30Z",
-      "lat": 9.205104,
-      "lng": 105.131994,
-      "data": [
-        {
-          "stt": "1",
-          "name": "Mực nước",
-          "time": "07:57:30 8/3/2026",
-          "value": "29.64",
-          "unit": "m",
-          "limit": ""
-        },
-        {
-          "stt": "2",
-          "name": "Nhiệt độ nước",
-          "time": "07:57:30 8/3/2026",
-          "value": "-191.49",
-          "unit": "°C",
-          "limit": ""
-        },
-        {
-          "stt": "3",
-          "name": "Lưu lượng",
-          "time": "07:57:30 8/3/2026",
-          "value": "74",
-          "unit": "m³/h",
-          "limit": ""
-        },
-        {
-          "stt": "4",
-          "name": "Tổng lưu lượng",
-          "time": "07:57:30 8/3/2026",
-          "value": "99621",
-          "unit": "m³",
-          "limit": ""
-        }
-      ]
-    },
-    {
-      "station": "NHÀ MÁY SỐ 2 - GIẾNG SỐ 1",
-      "deviceName": "GS2_NM1",
-      "updateTime": "2026-03-08T00:57:30Z",
-      "lat": 9.173416,
-      "lng": 105.209793,
-      "data": [
-        {
-          "stt": "1",
-          "name": "Mực nước",
-          "time": "07:57:30 8/3/2026",
-          "value": "30.85",
-          "unit": "m",
-          "limit": ""
-        },
-        {
-          "stt": "2",
-          "name": "Nhiệt độ nước",
-          "time": "07:57:30 8/3/2026",
-          "value": "36.9",
-          "unit": "°C",
-          "limit": ""
-        },
-        {
-          "stt": "3",
-          "name": "Lưu lượng",
-          "time": "07:57:30 8/3/2026",
-          "value": "74",
-          "unit": "m³/h",
-          "limit": ""
-        },
-        {
-          "stt": "4",
-          "name": "Tổng lưu lượng",
-          "time": "07:57:30 8/3/2026",
-          "value": "1019490",
-          "unit": "m³",
-          "limit": ""
-        }
-      ]
-    },
-    {
-      "station": "GIẾNG SỐ 31B",
-      "deviceName": "G31B",
-      "updateTime": "2026-03-08T00:54:33+0000",
-      "lat": 9.206425975447889,
-      "lng": 105.16646383795273,
-      "data": [
-        {
-          "stt": "1",
-          "name": "Mực nước",
-          "time": "07:54:33 8/3/2026",
-          "value": "29.35",
-          "unit": "m",
-          "limit": ""
-        },
-        {
-          "stt": "2",
-          "name": "Lưu lượng",
-          "time": "07:54:33 8/3/2026",
-          "value": "66",
-          "unit": "m³/h",
-          "limit": ""
-        },
-        {
-          "stt": "3",
-          "name": "Tổng lưu lượng",
-          "time": "07:54:33 8/3/2026",
-          "value": "270526",
-          "unit": "m³",
-          "limit": ""
-        }
-      ]
-    },
-    {
-      "station": "GIẾNG TẮC VẠN",
-      "deviceName": "GTACVAN",
-      "updateTime": "2026-03-08T00:57:29+0000",
-      "lat": 9.163367389961877,
-      "lng": 105.25151245767171,
-      "data": [
-        {
-          "stt": "1",
-          "name": "Mực nước",
-          "time": "07:57:29 8/3/2026",
-          "value": "29.59",
-          "unit": "m",
-          "limit": ""
-        },
-        {
-          "stt": "2",
-          "name": "Lưu lượng",
-          "time": "07:57:29 8/3/2026",
-          "value": "107",
-          "unit": "m³/h",
-          "limit": ""
-        },
-        {
-          "stt": "3",
-          "name": "Tổng lưu lượng",
-          "time": "07:57:29 8/3/2026",
-          "value": "124308",
-          "unit": "m³",
-          "limit": ""
-        }
-      ]
-    },
-    {
       "station": "GIẾNG SỐ 15",
       "deviceName": "G15",
-      "updateTime": "2026-03-08T00:56:13+0000",
+      "updateTime": "2026-03-08T01:14:14+0000",
       "lat": 9.1835,
       "lng": 105.152611,
       "data": [
         {
           "stt": "1",
           "name": "Tổng lưu lượng",
-          "time": "07:56:13 8/3/2026",
-          "value": "462126",
+          "time": "08:14:14 8/3/2026",
+          "value": "462135",
           "unit": "m³",
           "limit": ""
         },
         {
           "stt": "2",
           "name": "Lưu lượng",
-          "time": "07:56:13 8/3/2026",
+          "time": "08:14:14 8/3/2026",
           "value": "33",
           "unit": "m³/h",
           "limit": ""
@@ -284,16 +28,16 @@
         {
           "stt": "3",
           "name": "Nhiệt độ nước",
-          "time": "07:56:13 8/3/2026",
-          "value": "34.11",
+          "time": "08:14:14 8/3/2026",
+          "value": "34.12",
           "unit": "°C",
           "limit": ""
         },
         {
           "stt": "4",
           "name": "Mực nước",
-          "time": "07:56:13 8/3/2026",
-          "value": "31.41",
+          "time": "08:14:14 8/3/2026",
+          "value": "31.49",
           "unit": "m",
           "limit": ""
         }
@@ -302,32 +46,82 @@
     {
       "station": "GIẾNG SỐ 30A",
       "deviceName": "G30A",
-      "updateTime": "2026-03-08T00:56:51+0000",
+      "updateTime": "2026-03-08T01:14:51+0000",
       "lat": 9.165363,
       "lng": 105.157047,
       "data": [
         {
           "stt": "1",
           "name": "Mực nước",
-          "time": "07:56:51 8/3/2026",
-          "value": "32.61",
+          "time": "08:14:51 8/3/2026",
+          "value": "32.6",
           "unit": "m",
           "limit": ""
         },
         {
           "stt": "2",
           "name": "Lưu lượng",
-          "time": "07:56:51 8/3/2026",
-          "value": "65",
+          "time": "08:14:51 8/3/2026",
+          "value": "64",
           "unit": "m³/h",
           "limit": ""
         },
         {
           "stt": "3",
           "name": "Tổng lưu lượng",
-          "time": "07:56:51 8/3/2026",
-          "value": "76860",
+          "time": "08:14:51 8/3/2026",
+          "value": "76879",
           "unit": "m³",
+          "limit": ""
+        }
+      ]
+    },
+    {
+      "station": "QT2-NM2 (Quan trắc NM2)",
+      "deviceName": "QT2_NM2",
+      "updateTime": "2026-03-08T01:12:53+0000",
+      "lat": 9.203337,
+      "lng": 105.129712,
+      "data": [
+        {
+          "stt": "1",
+          "name": "Nhiệt độ nước",
+          "time": "08:12:53 8/3/2026",
+          "value": "27.52",
+          "unit": "°C",
+          "limit": ""
+        },
+        {
+          "stt": "2",
+          "name": "Mực nước",
+          "time": "08:12:53 8/3/2026",
+          "value": "25.83",
+          "unit": "m",
+          "limit": ""
+        }
+      ]
+    },
+    {
+      "station": "QT2M (36/GP-BTNMT)",
+      "deviceName": "QT2",
+      "updateTime": "2026-03-08T01:15:45+0000",
+      "lat": 9.179219,
+      "lng": 105.139376,
+      "data": [
+        {
+          "stt": "1",
+          "name": "Mực nước",
+          "time": "08:15:45 8/3/2026",
+          "value": "26.6",
+          "unit": "m",
+          "limit": ""
+        },
+        {
+          "stt": "2",
+          "name": "Nhiệt độ nước",
+          "time": "08:15:45 8/3/2026",
+          "value": "30.8",
+          "unit": "°C",
           "limit": ""
         }
       ]
@@ -335,22 +129,22 @@
     {
       "station": "GIẾNG SỐ 29A",
       "deviceName": "G29A",
-      "updateTime": "2026-03-08T00:57:28+0000",
+      "updateTime": "2026-03-08T01:15:28+0000",
       "lat": 9.14649,
       "lng": 105.139282,
       "data": [
         {
           "stt": "1",
           "name": "Mực nước",
-          "time": "07:57:28 8/3/2026",
-          "value": "29.51",
+          "time": "08:15:28 8/3/2026",
+          "value": "29.49",
           "unit": "m",
           "limit": ""
         },
         {
           "stt": "2",
           "name": "Lưu lượng",
-          "time": "07:57:28 8/3/2026",
+          "time": "08:15:28 8/3/2026",
           "value": "84",
           "unit": "m³/h",
           "limit": ""
@@ -358,8 +152,214 @@
         {
           "stt": "3",
           "name": "Tổng lưu lượng",
-          "time": "07:57:28 8/3/2026",
-          "value": "103942",
+          "time": "08:15:28 8/3/2026",
+          "value": "103967",
+          "unit": "m³",
+          "limit": ""
+        }
+      ]
+    },
+    {
+      "station": "NHÀ MÁY SỐ 1 - GIẾNG SỐ 2",
+      "deviceName": "GS1_NM2",
+      "updateTime": "2026-03-08T01:15:30Z",
+      "lat": 9.205104,
+      "lng": 105.131994,
+      "data": [
+        {
+          "stt": "1",
+          "name": "Mực nước",
+          "time": "08:15:30 8/3/2026",
+          "value": "29.65",
+          "unit": "m",
+          "limit": ""
+        },
+        {
+          "stt": "2",
+          "name": "Nhiệt độ nước",
+          "time": "08:15:30 8/3/2026",
+          "value": "-194.83",
+          "unit": "°C",
+          "limit": ""
+        },
+        {
+          "stt": "3",
+          "name": "Lưu lượng",
+          "time": "08:15:30 8/3/2026",
+          "value": "74",
+          "unit": "m³/h",
+          "limit": ""
+        },
+        {
+          "stt": "4",
+          "name": "Tổng lưu lượng",
+          "time": "08:15:30 8/3/2026",
+          "value": "99643",
+          "unit": "m³",
+          "limit": ""
+        }
+      ]
+    },
+    {
+      "station": "NHÀ MÁY SỐ 2 - GIẾNG SỐ 1",
+      "deviceName": "GS2_NM1",
+      "updateTime": "2026-03-08T01:15:30Z",
+      "lat": 9.173416,
+      "lng": 105.209793,
+      "data": [
+        {
+          "stt": "1",
+          "name": "Mực nước",
+          "time": "08:15:30 8/3/2026",
+          "value": "30.83",
+          "unit": "m",
+          "limit": ""
+        },
+        {
+          "stt": "2",
+          "name": "Nhiệt độ nước",
+          "time": "08:15:30 8/3/2026",
+          "value": "36.83",
+          "unit": "°C",
+          "limit": ""
+        },
+        {
+          "stt": "3",
+          "name": "Lưu lượng",
+          "time": "08:15:30 8/3/2026",
+          "value": "74",
+          "unit": "m³/h",
+          "limit": ""
+        },
+        {
+          "stt": "4",
+          "name": "Tổng lưu lượng",
+          "time": "08:15:30 8/3/2026",
+          "value": "1019512",
+          "unit": "m³",
+          "limit": ""
+        }
+      ]
+    },
+    {
+      "station": "QT5 (Quan trắc)",
+      "deviceName": "QT5",
+      "updateTime": "2026-03-08T01:15:30Z",
+      "lat": 9.178642307966712,
+      "lng": 105.1542747288355,
+      "data": [
+        {
+          "stt": "1",
+          "name": "Mực nước",
+          "time": "08:15:30 8/3/2026",
+          "value": "21.13",
+          "unit": "m",
+          "limit": ""
+        }
+      ]
+    },
+    {
+      "station": "GIẾNG SỐ 18",
+      "deviceName": "G18",
+      "updateTime": "2026-03-08T01:13:10+0000",
+      "lat": 9.175669,
+      "lng": 105.170509,
+      "data": [
+        {
+          "stt": "1",
+          "name": "Tổng lưu lượng",
+          "time": "08:13:10 8/3/2026",
+          "value": "347401",
+          "unit": "m³",
+          "limit": ""
+        },
+        {
+          "stt": "2",
+          "name": "Lưu lượng",
+          "time": "08:13:10 8/3/2026",
+          "value": "35",
+          "unit": "m³/h",
+          "limit": ""
+        },
+        {
+          "stt": "3",
+          "name": "Nhiệt độ nước",
+          "time": "08:13:10 8/3/2026",
+          "value": "34.12",
+          "unit": "°C",
+          "limit": ""
+        },
+        {
+          "stt": "4",
+          "name": "Mực nước",
+          "time": "08:13:10 8/3/2026",
+          "value": "31.98",
+          "unit": "m",
+          "limit": ""
+        }
+      ]
+    },
+    {
+      "station": "GIẾNG SỐ 31B",
+      "deviceName": "G31B",
+      "updateTime": "2026-03-08T01:12:33+0000",
+      "lat": 9.206425975447889,
+      "lng": 105.16646383795273,
+      "data": [
+        {
+          "stt": "1",
+          "name": "Mực nước",
+          "time": "08:12:33 8/3/2026",
+          "value": "29.35",
+          "unit": "m",
+          "limit": ""
+        },
+        {
+          "stt": "2",
+          "name": "Lưu lượng",
+          "time": "08:12:33 8/3/2026",
+          "value": "66",
+          "unit": "m³/h",
+          "limit": ""
+        },
+        {
+          "stt": "3",
+          "name": "Tổng lưu lượng",
+          "time": "08:12:33 8/3/2026",
+          "value": "270546",
+          "unit": "m³",
+          "limit": ""
+        }
+      ]
+    },
+    {
+      "station": "GIẾNG TẮC VẠN",
+      "deviceName": "GTACVAN",
+      "updateTime": "2026-03-08T01:15:29+0000",
+      "lat": 9.163367389961877,
+      "lng": 105.25151245767171,
+      "data": [
+        {
+          "stt": "1",
+          "name": "Mực nước",
+          "time": "08:15:29 8/3/2026",
+          "value": "29.69",
+          "unit": "m",
+          "limit": ""
+        },
+        {
+          "stt": "2",
+          "name": "Lưu lượng",
+          "time": "08:15:29 8/3/2026",
+          "value": "108",
+          "unit": "m³/h",
+          "limit": ""
+        },
+        {
+          "stt": "3",
+          "name": "Tổng lưu lượng",
+          "time": "08:15:29 8/3/2026",
+          "value": "124340",
           "unit": "m³",
           "limit": ""
         }
@@ -367,369 +367,369 @@
     }
   ],
   "deviceGroups": {
-    "QT2_NM2": {
-      "deviceCode": "QT2_NM2",
-      "lastUpdate": "2026-03-08T00:54:52+0000",
-      "parameters": {
-        "NHIETDO": {
-          "name": "Nhiệt độ nước",
-          "time": "07:54:52 8/3/2026",
-          "value": 27.52,
-          "unit": "°C",
-          "rawType": "NHIETDO",
-          "timestamp": "2026-03-08T00:54:52+0000"
-        },
-        "MUCNUOC": {
-          "name": "Mực nước",
-          "time": "07:54:52 8/3/2026",
-          "value": 25.78,
-          "unit": "m",
-          "rawType": "MUCNUOC",
-          "timestamp": "2026-03-08T00:54:52+0000"
-        }
-      }
-    },
-    "QT2": {
-      "deviceCode": "QT2",
-      "lastUpdate": "2026-03-08T00:57:44+0000",
-      "parameters": {
-        "MUCNUOC": {
-          "name": "Mực nước",
-          "time": "07:57:44 8/3/2026",
-          "value": 26.62,
-          "unit": "m",
-          "rawType": "MUCNUOC",
-          "timestamp": "2026-03-08T00:57:44+0000"
-        },
-        "NHIETDO": {
-          "name": "Nhiệt độ nước",
-          "time": "07:57:44 8/3/2026",
-          "value": 30.91,
-          "unit": "°C",
-          "rawType": "NHIETDO",
-          "timestamp": "2026-03-08T00:57:44+0000"
-        }
-      }
-    },
-    "G18": {
-      "deviceCode": "G18",
-      "lastUpdate": "2026-03-08T00:55:10+0000",
-      "parameters": {
-        "TONGLUULUONG": {
-          "name": "Tổng lưu lượng",
-          "time": "07:55:10 8/3/2026",
-          "value": 347390,
-          "unit": "m³",
-          "rawType": "TONGLUULUONG",
-          "timestamp": "2026-03-08T00:55:10+0000"
-        },
-        "LUULUONG": {
-          "name": "Lưu lượng",
-          "time": "07:55:10 8/3/2026",
-          "value": 35,
-          "unit": "m³/h",
-          "rawType": "LUULUONG",
-          "timestamp": "2026-03-08T00:55:10+0000"
-        },
-        "NHIETDO": {
-          "name": "Nhiệt độ nước",
-          "time": "07:55:10 8/3/2026",
-          "value": 34.11,
-          "unit": "°C",
-          "rawType": "NHIETDO",
-          "timestamp": "2026-03-08T00:55:10+0000"
-        },
-        "MUCNUOC": {
-          "name": "Mực nước",
-          "time": "07:55:10 8/3/2026",
-          "value": 31.97,
-          "unit": "m",
-          "rawType": "MUCNUOC",
-          "timestamp": "2026-03-08T00:55:10+0000"
-        }
-      }
-    },
-    "QT4": {
-      "deviceCode": "QT4",
-      "lastUpdate": "2026-03-08T00:57:26+0000",
-      "parameters": {
-        "MUCNUOC": {
-          "name": "Mực nước",
-          "time": "07:57:26 8/3/2026",
-          "value": 23.59,
-          "unit": "m",
-          "rawType": "MUCNUOC",
-          "timestamp": "2026-03-08T00:57:26+0000"
-        },
-        "NHIETDO": {
-          "name": "Nhiệt độ nước",
-          "time": "07:57:26 8/3/2026",
-          "value": 0,
-          "unit": "°C",
-          "rawType": "NHIETDO",
-          "timestamp": "2026-03-08T00:57:26+0000"
-        }
-      }
-    },
-    "QT5": {
-      "deviceCode": "QT5",
-      "lastUpdate": "2026-03-08T00:57:30Z",
-      "parameters": {
-        "MUCNUOC": {
-          "name": "Mực nước",
-          "time": "07:57:30 8/3/2026",
-          "value": 21.36,
-          "unit": "m",
-          "rawType": "MUCNUOC",
-          "timestamp": "2026-03-08T00:57:30Z"
-        }
-      }
-    },
-    "GS1_NM2": {
-      "deviceCode": "GS1_NM2",
-      "lastUpdate": "2026-03-08T00:57:30Z",
-      "parameters": {
-        "MUCNUOC": {
-          "name": "Mực nước",
-          "time": "07:57:30 8/3/2026",
-          "value": 29.64,
-          "unit": "m",
-          "rawType": "MUCNUOC",
-          "timestamp": "2026-03-08T00:57:30Z"
-        },
-        "NHIETDO": {
-          "name": "Nhiệt độ nước",
-          "time": "07:57:30 8/3/2026",
-          "value": -191.49,
-          "unit": "°C",
-          "rawType": "NHIETDO",
-          "timestamp": "2026-03-08T00:57:30Z"
-        },
-        "LUULUONG": {
-          "name": "Lưu lượng",
-          "time": "07:57:30 8/3/2026",
-          "value": 74,
-          "unit": "m³/h",
-          "rawType": "LUULUONG",
-          "timestamp": "2026-03-08T00:57:30Z"
-        },
-        "TONGLUULUONG": {
-          "name": "Tổng lưu lượng",
-          "time": "07:57:30 8/3/2026",
-          "value": 99621,
-          "unit": "m³",
-          "rawType": "TONGLUULUONG",
-          "timestamp": "2026-03-08T00:57:30Z"
-        }
-      }
-    },
-    "LUULUONG1": {
-      "deviceCode": "LUULUONG1",
-      "lastUpdate": "2026-03-08T00:57:30Z",
-      "parameters": {
-        "": {
-          "name": "",
-          "time": "07:57:30 8/3/2026",
-          "value": 74,
-          "unit": "",
-          "rawType": "",
-          "timestamp": "2026-03-08T00:57:30Z"
-        }
-      }
-    },
-    "GS2_NM1": {
-      "deviceCode": "GS2_NM1",
-      "lastUpdate": "2026-03-08T00:57:30Z",
-      "parameters": {
-        "MUCNUOC": {
-          "name": "Mực nước",
-          "time": "07:57:30 8/3/2026",
-          "value": 30.85,
-          "unit": "m",
-          "rawType": "MUCNUOC",
-          "timestamp": "2026-03-08T00:57:30Z"
-        },
-        "NHIETDO": {
-          "name": "Nhiệt độ nước",
-          "time": "07:57:30 8/3/2026",
-          "value": 36.9,
-          "unit": "°C",
-          "rawType": "NHIETDO",
-          "timestamp": "2026-03-08T00:57:30Z"
-        },
-        "LUULUONG": {
-          "name": "Lưu lượng",
-          "time": "07:57:30 8/3/2026",
-          "value": 74,
-          "unit": "m³/h",
-          "rawType": "LUULUONG",
-          "timestamp": "2026-03-08T00:57:30Z"
-        },
-        "TONGLUULUONG": {
-          "name": "Tổng lưu lượng",
-          "time": "07:57:30 8/3/2026",
-          "value": 1019490,
-          "unit": "m³",
-          "rawType": "TONGLUULUONG",
-          "timestamp": "2026-03-08T00:57:30Z"
-        }
-      }
-    },
-    "G31B": {
-      "deviceCode": "G31B",
-      "lastUpdate": "2026-03-08T00:54:33+0000",
-      "parameters": {
-        "MUCNUOC": {
-          "name": "Mực nước",
-          "time": "07:54:33 8/3/2026",
-          "value": 29.35,
-          "unit": "m",
-          "rawType": "MUCNUOC",
-          "timestamp": "2026-03-08T00:54:33+0000"
-        },
-        "LUULUONG": {
-          "name": "Lưu lượng",
-          "time": "07:54:33 8/3/2026",
-          "value": 66,
-          "unit": "m³/h",
-          "rawType": "LUULUONG",
-          "timestamp": "2026-03-08T00:54:33+0000"
-        },
-        "TONGLUULUONG": {
-          "name": "Tổng lưu lượng",
-          "time": "07:54:33 8/3/2026",
-          "value": 270526,
-          "unit": "m³",
-          "rawType": "TONGLUULUONG",
-          "timestamp": "2026-03-08T00:54:33+0000"
-        }
-      }
-    },
-    "GTACVAN": {
-      "deviceCode": "GTACVAN",
-      "lastUpdate": "2026-03-08T00:57:29+0000",
-      "parameters": {
-        "MUCNUOC": {
-          "name": "Mực nước",
-          "time": "07:57:29 8/3/2026",
-          "value": 29.59,
-          "unit": "m",
-          "rawType": "MUCNUOC",
-          "timestamp": "2026-03-08T00:57:29+0000"
-        },
-        "LUULUONG": {
-          "name": "Lưu lượng",
-          "time": "07:57:29 8/3/2026",
-          "value": 107,
-          "unit": "m³/h",
-          "rawType": "LUULUONG",
-          "timestamp": "2026-03-08T00:57:29+0000"
-        },
-        "TONGLUULUONG": {
-          "name": "Tổng lưu lượng",
-          "time": "07:57:29 8/3/2026",
-          "value": 124308,
-          "unit": "m³",
-          "rawType": "TONGLUULUONG",
-          "timestamp": "2026-03-08T00:57:29+0000"
-        }
-      }
-    },
     "G15": {
       "deviceCode": "G15",
-      "lastUpdate": "2026-03-08T00:56:13+0000",
+      "lastUpdate": "2026-03-08T01:14:14+0000",
       "parameters": {
         "TONGLUULUONG": {
           "name": "Tổng lưu lượng",
-          "time": "07:56:13 8/3/2026",
-          "value": 462126,
+          "time": "08:14:14 8/3/2026",
+          "value": 462135,
           "unit": "m³",
           "rawType": "TONGLUULUONG",
-          "timestamp": "2026-03-08T00:56:13+0000"
+          "timestamp": "2026-03-08T01:14:14+0000"
         },
         "LUULUONG": {
           "name": "Lưu lượng",
-          "time": "07:56:13 8/3/2026",
+          "time": "08:14:14 8/3/2026",
           "value": 33,
           "unit": "m³/h",
           "rawType": "LUULUONG",
-          "timestamp": "2026-03-08T00:56:13+0000"
+          "timestamp": "2026-03-08T01:14:14+0000"
         },
         "NHIETDO": {
           "name": "Nhiệt độ nước",
-          "time": "07:56:13 8/3/2026",
-          "value": 34.11,
+          "time": "08:14:14 8/3/2026",
+          "value": 34.12,
           "unit": "°C",
           "rawType": "NHIETDO",
-          "timestamp": "2026-03-08T00:56:13+0000"
+          "timestamp": "2026-03-08T01:14:14+0000"
         },
         "MUCNUOC": {
           "name": "Mực nước",
-          "time": "07:56:13 8/3/2026",
-          "value": 31.41,
+          "time": "08:14:14 8/3/2026",
+          "value": 31.49,
           "unit": "m",
           "rawType": "MUCNUOC",
-          "timestamp": "2026-03-08T00:56:13+0000"
+          "timestamp": "2026-03-08T01:14:14+0000"
         }
       }
     },
     "G30A": {
       "deviceCode": "G30A",
-      "lastUpdate": "2026-03-08T00:56:51+0000",
+      "lastUpdate": "2026-03-08T01:14:51+0000",
       "parameters": {
         "MUCNUOC": {
           "name": "Mực nước",
-          "time": "07:56:51 8/3/2026",
-          "value": 32.61,
+          "time": "08:14:51 8/3/2026",
+          "value": 32.6,
           "unit": "m",
           "rawType": "MUCNUOC",
-          "timestamp": "2026-03-08T00:56:51+0000"
+          "timestamp": "2026-03-08T01:14:51+0000"
         },
         "LUULUONG": {
           "name": "Lưu lượng",
-          "time": "07:56:51 8/3/2026",
-          "value": 65,
+          "time": "08:14:51 8/3/2026",
+          "value": 64,
           "unit": "m³/h",
           "rawType": "LUULUONG",
-          "timestamp": "2026-03-08T00:56:51+0000"
+          "timestamp": "2026-03-08T01:14:51+0000"
         },
         "TONGLUULUONG": {
           "name": "Tổng lưu lượng",
-          "time": "07:56:51 8/3/2026",
-          "value": 76860,
+          "time": "08:14:51 8/3/2026",
+          "value": 76879,
           "unit": "m³",
           "rawType": "TONGLUULUONG",
-          "timestamp": "2026-03-08T00:56:51+0000"
+          "timestamp": "2026-03-08T01:14:51+0000"
+        }
+      }
+    },
+    "QT2_NM2": {
+      "deviceCode": "QT2_NM2",
+      "lastUpdate": "2026-03-08T01:12:53+0000",
+      "parameters": {
+        "NHIETDO": {
+          "name": "Nhiệt độ nước",
+          "time": "08:12:53 8/3/2026",
+          "value": 27.52,
+          "unit": "°C",
+          "rawType": "NHIETDO",
+          "timestamp": "2026-03-08T01:12:53+0000"
+        },
+        "MUCNUOC": {
+          "name": "Mực nước",
+          "time": "08:12:53 8/3/2026",
+          "value": 25.83,
+          "unit": "m",
+          "rawType": "MUCNUOC",
+          "timestamp": "2026-03-08T01:12:53+0000"
+        }
+      }
+    },
+    "QT2": {
+      "deviceCode": "QT2",
+      "lastUpdate": "2026-03-08T01:15:45+0000",
+      "parameters": {
+        "MUCNUOC": {
+          "name": "Mực nước",
+          "time": "08:15:45 8/3/2026",
+          "value": 26.6,
+          "unit": "m",
+          "rawType": "MUCNUOC",
+          "timestamp": "2026-03-08T01:15:45+0000"
+        },
+        "NHIETDO": {
+          "name": "Nhiệt độ nước",
+          "time": "08:15:45 8/3/2026",
+          "value": 30.8,
+          "unit": "°C",
+          "rawType": "NHIETDO",
+          "timestamp": "2026-03-08T01:15:45+0000"
         }
       }
     },
     "G29A": {
       "deviceCode": "G29A",
-      "lastUpdate": "2026-03-08T00:57:28+0000",
+      "lastUpdate": "2026-03-08T01:15:28+0000",
       "parameters": {
         "MUCNUOC": {
           "name": "Mực nước",
-          "time": "07:57:28 8/3/2026",
-          "value": 29.51,
+          "time": "08:15:28 8/3/2026",
+          "value": 29.49,
           "unit": "m",
           "rawType": "MUCNUOC",
-          "timestamp": "2026-03-08T00:57:28+0000"
+          "timestamp": "2026-03-08T01:15:28+0000"
         },
         "LUULUONG": {
           "name": "Lưu lượng",
-          "time": "07:57:28 8/3/2026",
+          "time": "08:15:28 8/3/2026",
           "value": 84,
           "unit": "m³/h",
           "rawType": "LUULUONG",
-          "timestamp": "2026-03-08T00:57:28+0000"
+          "timestamp": "2026-03-08T01:15:28+0000"
         },
         "TONGLUULUONG": {
           "name": "Tổng lưu lượng",
-          "time": "07:57:28 8/3/2026",
-          "value": 103942,
+          "time": "08:15:28 8/3/2026",
+          "value": 103967,
           "unit": "m³",
           "rawType": "TONGLUULUONG",
-          "timestamp": "2026-03-08T00:57:28+0000"
+          "timestamp": "2026-03-08T01:15:28+0000"
+        }
+      }
+    },
+    "QT4": {
+      "deviceCode": "QT4",
+      "lastUpdate": "2026-03-08T01:15:27+0000",
+      "parameters": {
+        "MUCNUOC": {
+          "name": "Mực nước",
+          "time": "08:15:27 8/3/2026",
+          "value": 23.6,
+          "unit": "m",
+          "rawType": "MUCNUOC",
+          "timestamp": "2026-03-08T01:15:27+0000"
+        },
+        "NHIETDO": {
+          "name": "Nhiệt độ nước",
+          "time": "08:15:27 8/3/2026",
+          "value": 0,
+          "unit": "°C",
+          "rawType": "NHIETDO",
+          "timestamp": "2026-03-08T01:15:27+0000"
+        }
+      }
+    },
+    "GS1_NM2": {
+      "deviceCode": "GS1_NM2",
+      "lastUpdate": "2026-03-08T01:15:30Z",
+      "parameters": {
+        "MUCNUOC": {
+          "name": "Mực nước",
+          "time": "08:15:30 8/3/2026",
+          "value": 29.65,
+          "unit": "m",
+          "rawType": "MUCNUOC",
+          "timestamp": "2026-03-08T01:15:30Z"
+        },
+        "NHIETDO": {
+          "name": "Nhiệt độ nước",
+          "time": "08:15:30 8/3/2026",
+          "value": -194.83,
+          "unit": "°C",
+          "rawType": "NHIETDO",
+          "timestamp": "2026-03-08T01:15:30Z"
+        },
+        "LUULUONG": {
+          "name": "Lưu lượng",
+          "time": "08:15:30 8/3/2026",
+          "value": 74,
+          "unit": "m³/h",
+          "rawType": "LUULUONG",
+          "timestamp": "2026-03-08T01:15:30Z"
+        },
+        "TONGLUULUONG": {
+          "name": "Tổng lưu lượng",
+          "time": "08:15:30 8/3/2026",
+          "value": 99643,
+          "unit": "m³",
+          "rawType": "TONGLUULUONG",
+          "timestamp": "2026-03-08T01:15:30Z"
+        }
+      }
+    },
+    "LUULUONG1": {
+      "deviceCode": "LUULUONG1",
+      "lastUpdate": "2026-03-08T01:15:30Z",
+      "parameters": {
+        "": {
+          "name": "",
+          "time": "08:15:30 8/3/2026",
+          "value": 74,
+          "unit": "",
+          "rawType": "",
+          "timestamp": "2026-03-08T01:15:30Z"
+        }
+      }
+    },
+    "GS2_NM1": {
+      "deviceCode": "GS2_NM1",
+      "lastUpdate": "2026-03-08T01:15:30Z",
+      "parameters": {
+        "MUCNUOC": {
+          "name": "Mực nước",
+          "time": "08:15:30 8/3/2026",
+          "value": 30.83,
+          "unit": "m",
+          "rawType": "MUCNUOC",
+          "timestamp": "2026-03-08T01:15:30Z"
+        },
+        "NHIETDO": {
+          "name": "Nhiệt độ nước",
+          "time": "08:15:30 8/3/2026",
+          "value": 36.83,
+          "unit": "°C",
+          "rawType": "NHIETDO",
+          "timestamp": "2026-03-08T01:15:30Z"
+        },
+        "LUULUONG": {
+          "name": "Lưu lượng",
+          "time": "08:15:30 8/3/2026",
+          "value": 74,
+          "unit": "m³/h",
+          "rawType": "LUULUONG",
+          "timestamp": "2026-03-08T01:15:30Z"
+        },
+        "TONGLUULUONG": {
+          "name": "Tổng lưu lượng",
+          "time": "08:15:30 8/3/2026",
+          "value": 1019512,
+          "unit": "m³",
+          "rawType": "TONGLUULUONG",
+          "timestamp": "2026-03-08T01:15:30Z"
+        }
+      }
+    },
+    "QT5": {
+      "deviceCode": "QT5",
+      "lastUpdate": "2026-03-08T01:15:30Z",
+      "parameters": {
+        "MUCNUOC": {
+          "name": "Mực nước",
+          "time": "08:15:30 8/3/2026",
+          "value": 21.13,
+          "unit": "m",
+          "rawType": "MUCNUOC",
+          "timestamp": "2026-03-08T01:15:30Z"
+        }
+      }
+    },
+    "G18": {
+      "deviceCode": "G18",
+      "lastUpdate": "2026-03-08T01:13:10+0000",
+      "parameters": {
+        "TONGLUULUONG": {
+          "name": "Tổng lưu lượng",
+          "time": "08:13:10 8/3/2026",
+          "value": 347401,
+          "unit": "m³",
+          "rawType": "TONGLUULUONG",
+          "timestamp": "2026-03-08T01:13:10+0000"
+        },
+        "LUULUONG": {
+          "name": "Lưu lượng",
+          "time": "08:13:10 8/3/2026",
+          "value": 35,
+          "unit": "m³/h",
+          "rawType": "LUULUONG",
+          "timestamp": "2026-03-08T01:13:10+0000"
+        },
+        "NHIETDO": {
+          "name": "Nhiệt độ nước",
+          "time": "08:13:10 8/3/2026",
+          "value": 34.12,
+          "unit": "°C",
+          "rawType": "NHIETDO",
+          "timestamp": "2026-03-08T01:13:10+0000"
+        },
+        "MUCNUOC": {
+          "name": "Mực nước",
+          "time": "08:13:10 8/3/2026",
+          "value": 31.98,
+          "unit": "m",
+          "rawType": "MUCNUOC",
+          "timestamp": "2026-03-08T01:13:10+0000"
+        }
+      }
+    },
+    "G31B": {
+      "deviceCode": "G31B",
+      "lastUpdate": "2026-03-08T01:12:33+0000",
+      "parameters": {
+        "MUCNUOC": {
+          "name": "Mực nước",
+          "time": "08:12:33 8/3/2026",
+          "value": 29.35,
+          "unit": "m",
+          "rawType": "MUCNUOC",
+          "timestamp": "2026-03-08T01:12:33+0000"
+        },
+        "LUULUONG": {
+          "name": "Lưu lượng",
+          "time": "08:12:33 8/3/2026",
+          "value": 66,
+          "unit": "m³/h",
+          "rawType": "LUULUONG",
+          "timestamp": "2026-03-08T01:12:33+0000"
+        },
+        "TONGLUULUONG": {
+          "name": "Tổng lưu lượng",
+          "time": "08:12:33 8/3/2026",
+          "value": 270546,
+          "unit": "m³",
+          "rawType": "TONGLUULUONG",
+          "timestamp": "2026-03-08T01:12:33+0000"
+        }
+      }
+    },
+    "GTACVAN": {
+      "deviceCode": "GTACVAN",
+      "lastUpdate": "2026-03-08T01:15:29+0000",
+      "parameters": {
+        "MUCNUOC": {
+          "name": "Mực nước",
+          "time": "08:15:29 8/3/2026",
+          "value": 29.69,
+          "unit": "m",
+          "rawType": "MUCNUOC",
+          "timestamp": "2026-03-08T01:15:29+0000"
+        },
+        "LUULUONG": {
+          "name": "Lưu lượng",
+          "time": "08:15:29 8/3/2026",
+          "value": 108,
+          "unit": "m³/h",
+          "rawType": "LUULUONG",
+          "timestamp": "2026-03-08T01:15:29+0000"
+        },
+        "TONGLUULUONG": {
+          "name": "Tổng lưu lượng",
+          "time": "08:15:29 8/3/2026",
+          "value": 124340,
+          "unit": "m³",
+          "rawType": "TONGLUULUONG",
+          "timestamp": "2026-03-08T01:15:29+0000"
         }
       }
     }
