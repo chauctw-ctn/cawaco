@@ -90,6 +90,24 @@ const monreModule = require('./modules/monre');
 const app = express();
 const PORT = config.server.port;
 
+// Trigger Telegram alert check on ANY incoming request (including static-file pings from cron-job.org).
+// This ensures alerts fire even when cron pings /databtn.html instead of /health.
+// The time-based guard prevents redundant runs between normal check intervals.
+app.use((req, res, next) => {
+    if (config.telegram && config.telegram.enabled &&
+        config.telegram.botToken && config.telegram.chatId) {
+        const refreshMs = (config.telegram.refreshInterval || 15) * 60 * 1000;
+        const repeatMs  = (config.telegram.alertRepeatInterval || 60) * 60 * 1000;
+        const checkIntervalMs = Math.min(refreshMs, repeatMs);
+        if (Date.now() - lastTelegramCheckTime >= checkIntervalMs - 30000) {
+            checkAndSendTelegramAlerts().catch(err =>
+                console.error('❌ [REQUEST] Telegram check error:', err.message)
+            );
+        }
+    }
+    next();
+});
+
 // Middleware để serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
