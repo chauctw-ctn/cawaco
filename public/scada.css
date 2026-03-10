@@ -20,13 +20,13 @@ body {
 }
 
 .scada-main {
-    margin-top: 66px;
+    margin-top: 56px;
+    margin-top: calc(56px + env(safe-area-inset-top, 0px));
     margin-left: 0;
     padding: 30px;
-    min-height: calc(100vh - 66px);
-    min-height: calc(100dvh - 66px);
-    height: calc(100vh - 66px);
-    height: calc(100dvh - 66px);
+    min-height: calc(100vh - 56px);
+    min-height: calc(100dvh - 56px);
+    height: auto;
     overflow-y: auto;
     overflow-x: hidden;
     background-color: #f5f7fa;
@@ -38,6 +38,13 @@ body {
     margin-left: 300px;
     width: calc(100% - 300px);
     padding: 30px 25px;
+}
+
+@media (max-width: 1199px) {
+    .scada-main.with-sidebar {
+        margin-left: 0;
+        width: 100%;
+    }
 }
 
 .page-header-section {
@@ -316,6 +323,25 @@ body {
     overflow-x: hidden;
 }
 
+/* Responsive grid for scada group */
+@media (max-width: 1599px) {
+    .scada-group-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 1199px) {
+    .scada-group-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .scada-group-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .scada-group {
     min-width: 0;
     width: 100%;
@@ -477,8 +503,19 @@ body {
 
 /* Khi sidebar mở - 3 cột */
 .scada-main.with-sidebar .stations-grid {
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 20px;
+}
+
+/* Khi sidebar mở - giảm cột cho group grid */
+.scada-main.with-sidebar .scada-group-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1199px) {
+    .scada-main.with-sidebar .scada-group-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 /* Màn hình vừa - 3 cột khi không có sidebar */
@@ -815,15 +852,9 @@ body {
 }
 
 @media (max-width: 768px) {
-    .stations-grid {
-        grid-template-columns: 1fr !important;
-    }
-}
-
-@media (max-width: 768px) {
     .scada-main {
-        padding: 15px;
-        margin-top: 60px;
+        padding: 15px 10px;
+        margin-top: 56px;
     }
     
     .scada-main.with-sidebar {
@@ -888,7 +919,6 @@ body {
     .station-panel__metrics { 
         padding: 14px; 
         gap: 12px;
-        grid-template-columns: 1fr;
     }
     
     .hmi-block { 
@@ -910,13 +940,23 @@ body {
         font-size: 12px;
         padding: 10px 12px;
     }
+
+    .scada-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .scada-toolbar__left,
+    .scada-toolbar__right {
+        justify-content: space-between;
+    }
 }
 
 /* Mobile specific optimizations */
 @media (max-width: 480px) {
     .scada-main {
-        padding: 10px;
-        margin-top: 56px;
+        padding: 8px;
+        margin-top: 48px;
     }
     
     .page-title {
@@ -956,6 +996,11 @@ body {
     
     .hmi-unit {
         font-size: 11px;
+    }
+
+    .stations-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px;
     }
 }
 

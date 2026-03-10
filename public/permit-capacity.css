@@ -2,8 +2,9 @@
 
 /* Main Container with Scroll */
 main {
-    margin-top: 66px;
-    min-height: calc(100vh - 66px);
+    margin-top: 56px;
+    margin-top: calc(56px + env(safe-area-inset-top, 0px));
+    min-height: calc(100vh - 56px);
     overflow-x: hidden;
     overflow-y: auto;
     transition: margin-left 0.3s ease;
@@ -17,6 +18,12 @@ main.with-sidebar {
 
 main.sidebar-hidden {
     margin-left: 0;
+}
+
+@media (max-width: 1199px) {
+    main.with-sidebar {
+        margin-left: 0;
+    }
 }
 
 .container {
@@ -199,7 +206,7 @@ main.sidebar-hidden {
     border-radius: 8px;
     overflow-y: auto;
     overflow-x: auto;
-    max-height: calc(100vh - 420px);
+    max-height: calc(100vh - 380px);
     -webkit-overflow-scrolling: touch;
 }
 

@@ -39,7 +39,8 @@ body.page-transitioning {
 .header {
     background: #0066cc;
     color: white;
-    padding: 10px 20px;
+    padding: 8px 20px;
+    padding-top: max(8px, env(safe-area-inset-top));
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     position: fixed;
     top: 0;
@@ -340,9 +341,9 @@ body.page-transitioning {
 .sidebar {
     position: fixed;
     left: 0;
-    top: 66px;
+    top: 56px;
     width: 300px;
-    height: calc(100vh - 66px);
+    height: calc(100vh - 56px);
     background: linear-gradient(to bottom, #f8fafc 0%, #f1f5f9 100%);
     box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08);
     z-index: 100;
@@ -1208,9 +1209,9 @@ body.page-transitioning {
 /* Map */
 #map {
     width: 100%;
-    height: calc(100vh - 66px);
+    height: calc(100vh - 56px);
     min-height: 400px;
-    margin-top: 66px;
+    margin-top: 56px;
     transition: margin-left 0.3s ease, width 0.3s ease;
     overflow: hidden;
     position: relative;
@@ -1221,6 +1222,13 @@ body.page-transitioning {
 #map.with-sidebar {
     margin-left: 300px;
     width: calc(100% - 300px);
+}
+
+@media (max-width: 1199px) {
+    #map.with-sidebar {
+        margin-left: 0;
+        width: 100%;
+    }
 }
 
 /* Info Panel */
@@ -1661,17 +1669,24 @@ body.page-transitioning {
         padding: 0;
         gap: 8px;
         flex-wrap: nowrap;
+        align-items: center;
     }
     
     .company-info .company-name {
-        font-size: 12px;
+        font-size: 13px;
         line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     
     .company-address {
         font-size: 10px;
         line-height: 1.2;
         margin-top: 1px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     
     .company-contact {
@@ -1685,20 +1700,25 @@ body.page-transitioning {
     }
     
     .current-time-section {
-        padding: 5px 10px;
-        margin-left: 5px;
+        display: none;
     }
     
     #current-time {
         font-size: 11px;
     }
     
+    .logo-section {
+        min-width: 0;
+        overflow: hidden;
+    }
+    
     .menu-btn {
-        padding: 10px 12px;
-        font-size: 24px;
-        min-width: 48px;
-        min-height: 48px;
+        padding: 8px 10px;
+        font-size: 22px;
+        min-width: 44px;
+        min-height: 44px;
         touch-action: manipulation;
+        flex-shrink: 0;
     }
     
     .sidebar {
@@ -1714,13 +1734,17 @@ body.page-transitioning {
     #map {
         width: 100% !important;
         margin-left: 0 !important;
-        height: calc(100vh - 62px);
+        height: calc(100vh - 56px);
         min-height: 300px;
-        margin-top: 62px;
+        margin-top: 56px;
         touch-action: pan-x pan-y;
     }
     
-    /* Station filter control styles removed - now in sidebar */
+    @supports (height: 100dvh) {
+        #map {
+            height: calc(100dvh - 56px);
+        }
+    }
     
     .station-popup {
         min-width: 220px;
@@ -1748,14 +1772,15 @@ body.page-transitioning {
     }
     
     .user-menu-btn {
-        padding: 10px 14px;
-        min-width: 48px;
-        min-height: 48px;
+        padding: 8px 12px;
+        min-width: 44px;
+        min-height: 44px;
         font-size: 15px;
     }
     
     .auth-section {
         gap: 8px;
+        flex-shrink: 0;
     }
     
     #username-display {
@@ -1841,46 +1866,35 @@ body.page-transitioning {
     }
     
     .header {
-        padding: 8px;
+        padding: 6px 8px;
         height: auto;
-        min-height: 52px;
+        min-height: 48px;
     }
     
     .header-content {
-        flex-wrap: wrap;
-        gap: 5px;
-        align-items: flex-start;
+        flex-wrap: nowrap;
+        gap: 6px;
+        align-items: center;
     }
     
     .logo-section {
         flex: 1;
         min-width: 0;
-        order: 2;
-        gap: 8px;
+        gap: 6px;
+        overflow: hidden;
     }
     
     .header-logo {
-        height: 32px;
-    }
-    
-    .menu-btn {
-        order: 1;
-    }
-    
-    .current-time-section {
-        order: 3;
-        padding: 4px 8px;
-        margin-left: 0;
-    }
-    
-    .auth-section {
-        order: 4;
+        height: 28px;
     }
     
     .company-info .company-name {
-        font-size: 10px;
+        font-size: 11px;
         letter-spacing: 0;
         line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     
     .company-address,
@@ -1888,19 +1902,30 @@ body.page-transitioning {
         display: none;
     }
     
+    .current-time-section {
+        display: none;
+    }
+    
     #current-time {
         font-size: 10px;
     }
     
+    .auth-section {
+        flex-shrink: 0;
+    }
+    
     .user-menu-btn {
         padding: 6px 8px;
+        min-width: 40px;
+        min-height: 40px;
     }
     
     .menu-btn {
         padding: 6px 8px;
         font-size: 20px;
-        min-width: 44px;
-        min-height: 44px;
+        min-width: 40px;
+        min-height: 40px;
+        flex-shrink: 0;
     }
     
     .sidebar {
@@ -1914,12 +1939,11 @@ body.page-transitioning {
     }
     
     .sidebar-section {
-        padding: 12px;
+        padding: 0;
     }
     
     .section-header {
         font-size: 12px;
-        margin-bottom: 10px;
     }
     
     .menu-item {
@@ -1988,15 +2012,15 @@ body.page-transitioning {
     }
     
     #map {
-        height: calc(100vh - 62px);
+        height: calc(100vh - 52px);
         min-height: 300px;
-        margin-top: 62px;
+        margin-top: 52px;
     }
     
     /* Dynamic height adjustment for flexible header */
     @supports (height: 100dvh) {
         #map {
-            height: calc(100dvh - 62px);
+            height: calc(100dvh - 52px);
         }
     }
     
@@ -2356,12 +2380,25 @@ body.page-transitioning {
 /* Safe area for notched devices */
 @supports (padding: max(0px)) {
     .header {
+        padding-top: max(8px, env(safe-area-inset-top));
         padding-left: max(20px, env(safe-area-inset-left));
         padding-right: max(20px, env(safe-area-inset-right));
     }
     
     .sidebar {
+        top: calc(56px + env(safe-area-inset-top));
+        height: calc(100vh - 56px - env(safe-area-inset-top));
         padding-left: max(0px, env(safe-area-inset-left));
+    }
+    
+    #map {
+        margin-top: calc(56px + env(safe-area-inset-top));
+        height: calc(100vh - 56px - env(safe-area-inset-top));
+    }
+    
+    .stats-panel {
+        top: calc(56px + env(safe-area-inset-top));
+        height: calc(100vh - 56px - env(safe-area-inset-top));
     }
 }
 

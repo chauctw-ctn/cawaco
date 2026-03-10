@@ -438,5 +438,3 @@ body.transitioning .login-box {
         backface-visibility: hidden;
     }
 }
-
-        padding-bottom: max(10px, env(safe-area-inset-bottom));

@@ -2188,8 +2188,14 @@ function startTelegramAlertInterval() {
         return;
     }
     
-    // Reset state so next run re-initializes snapshot
-    telegramAlertInitialized = false;
+    // Only reset snapshot state if we don't have persisted alert history.
+    // When history was loaded from file (telegramAlertInitialized === true),
+    // keep it so the first check can send real alerts immediately after restart.
+    if (!telegramAlertInitialized) {
+        console.log('   ℹ️  No persisted history — first run will take snapshot only');
+    } else {
+        console.log('   ✅ Persisted history loaded — first run will send real alerts');
+    }
     
     // FIX: Use the SMALLER of refreshInterval and alertRepeatInterval as the check interval
     // This ensures we check frequently enough to respect the repeat interval
@@ -2200,19 +2206,20 @@ function startTelegramAlertInterval() {
     
     telegramAlertInterval = setInterval(checkAndSendTelegramAlerts, intervalMs);
     console.log(`   ✅ Alert interval STARTED: check every ${checkIntervalMinutes} min (refresh: ${refreshMinutes} min, repeat: ${repeatMinutes} min)`);
-    console.log(`   ℹ️  First run will take snapshot only, second check after 2 minutes`);
     
-    // Run once immediately on start (will take snapshot, not alert)
+    // Run once immediately on start
     checkAndSendTelegramAlerts();
     
     // Schedule a second check after 2 minutes so alerts start quickly after restart/deploy
     // (instead of waiting the full interval which could be 15+ minutes)
-    setTimeout(() => {
-        if (telegramAlertInitialized) {
-            console.log('🔔 [TELEGRAM] Running early second check (2 min after snapshot)...');
-            checkAndSendTelegramAlerts();
-        }
-    }, 2 * 60 * 1000);
+    if (!telegramAlertInitialized) {
+        setTimeout(() => {
+            if (telegramAlertInitialized) {
+                console.log('🔔 [TELEGRAM] Running early second check (2 min after snapshot)...');
+                checkAndSendTelegramAlerts();
+            }
+        }, 2 * 60 * 1000);
+    }
 }
 
 // Khởi động server
@@ -2368,27 +2375,29 @@ app.listen(PORT, async () => {
         || process.env.RENDER_EXTERNAL_URL
         || (process.env.RENDER_EXTERNAL_HOSTNAME ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME}` : null);
     
-    if (keepAliveUrl) {
-        const KEEP_ALIVE_INTERVAL = 5 * 60 * 1000; // 5 minutes
-        
-        const selfPing = async () => {
-            try {
-                const res = await axios.get(`${keepAliveUrl}/health`, { timeout: 15000 });
-                console.log(`🏓 [KEEP-ALIVE] Self-ping OK (status: ${res.data.status}, uptime: ${Math.floor(res.data.uptime)}s)`);
-            } catch (err) {
-                console.warn(`⚠️ [KEEP-ALIVE] Self-ping failed: ${err.message}`);
-            }
-        };
-        
-        setInterval(selfPing, KEEP_ALIVE_INTERVAL);
-        console.log(`🏓 [KEEP-ALIVE] Self-ping enabled: every 5 min → ${keepAliveUrl}/health`);
-        
-        // Verify the URL works on startup (after a short delay so the server is ready)
-        setTimeout(selfPing, 5000);
-    } else if (process.env.NODE_ENV === 'production') {
-        console.warn('⚠️ [KEEP-ALIVE] Không tìm thấy URL keep-alive — server có thể bị sleep trên free plan!');
-        console.warn('   → Cách 1: Set KEEP_ALIVE_URL=https://your-app.onrender.com trong Render Dashboard');
-        console.warn('   → Cách 2: Dùng cron-job.org (miễn phí) ping đến /health mỗi 5 phút');
+    // Always enable self-ping to keep the server alive and ensure telegram alerts fire
+    // even when no users are online. Use external URL if available, otherwise localhost.
+    const pingUrl = keepAliveUrl || `http://localhost:${PORT}`;
+    const KEEP_ALIVE_INTERVAL = 5 * 60 * 1000; // 5 minutes
+    
+    const selfPing = async () => {
+        try {
+            const res = await axios.get(`${pingUrl}/health`, { timeout: 15000 });
+            console.log(`🏓 [KEEP-ALIVE] Self-ping OK (status: ${res.data.status}, uptime: ${Math.floor(res.data.uptime)}s)`);
+        } catch (err) {
+            console.warn(`⚠️ [KEEP-ALIVE] Self-ping failed: ${err.message}`);
+        }
+    };
+    
+    setInterval(selfPing, KEEP_ALIVE_INTERVAL);
+    console.log(`🏓 [KEEP-ALIVE] Self-ping enabled: every 5 min → ${pingUrl}/health`);
+    
+    // Verify the URL works on startup (after a short delay so the server is ready)
+    setTimeout(selfPing, 5000);
+    
+    if (!keepAliveUrl && process.env.NODE_ENV === 'production') {
+        console.warn('⚠️ [KEEP-ALIVE] Đang dùng localhost self-ping. Nếu Render cho sleep tiến trình, hãy:');
+        console.warn('   → Set KEEP_ALIVE_URL=https://your-app.onrender.com trong Render Dashboard');
     }
     
     console.log('🔄 Tự động lưu dữ liệu vào SQL mỗi 5 phút\n');

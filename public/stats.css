@@ -179,9 +179,11 @@ body {
 .sidebar {
     position: fixed;
     left: 0;
-    top: 66px;
+    top: 56px;
+    top: calc(56px + env(safe-area-inset-top, 0px));
     width: 300px;
-    height: calc(100vh - 66px);
+    height: calc(100vh - 56px);
+    height: calc(100vh - 56px - env(safe-area-inset-top, 0px));
     background: linear-gradient(to bottom, #f8fafc 0%, #f1f5f9 100%);
     box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08);
     z-index: 100;
@@ -371,7 +373,8 @@ body {
 
 /* Main Content */
 main {
-    margin-top: 66px;
+    margin-top: 56px;
+    margin-top: calc(56px + env(safe-area-inset-top, 0px));
     margin-left: 300px;
     padding: 20px;
     transition: margin-left 0.3s ease;
@@ -389,6 +392,12 @@ main:not(.with-sidebar) {
     margin-left: 0;
 }
 
+@media (max-width: 1199px) {
+    main.with-sidebar {
+        margin-left: 0;
+    }
+}
+
 .container {
     max-width: 100%;
     margin: 0;
@@ -396,10 +405,10 @@ main:not(.with-sidebar) {
     border-radius: 0;
     box-shadow: none;
     padding: 20px;
-    height: calc(100vh - 66px);
+    min-height: calc(100vh - 56px);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .page-title {
@@ -413,7 +422,7 @@ main:not(.with-sidebar) {
 /* Filters */
 .filters-container {
     display: grid;
-    grid-template-columns: repeat(5, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px;
     margin-bottom: 25px;
     padding: 20px;
@@ -618,8 +627,15 @@ main:not(.with-sidebar) {
     position: relative;
     max-width: 100%;
     flex: 1;
-    max-height: calc(100vh - 350px);
+    max-height: calc(100vh - 320px);
     -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+    .table-container {
+        max-height: none;
+        overflow-y: visible;
+    }
 }
 
 #stats-table {
@@ -894,6 +910,10 @@ main:not(.with-sidebar) {
         grid-template-columns: repeat(2, minmax(180px, 1fr));
         gap: 16px;
     }
+    
+    main.with-sidebar {
+        margin-left: 0;
+    }
 }
 
 /* Tablet & Mobile Responsive */
@@ -942,14 +962,14 @@ main:not(.with-sidebar) {
     }
     
     main {
-        margin-left: 0;
+        margin-left: 0 !important;
         padding: 12px;
-        margin-top: 62px;
+        margin-top: 56px;
     }
     
     .container {
-        padding: 16px;
-        height: calc(100vh - 62px);
+        padding: 12px;
+        min-height: calc(100vh - 56px);
     }
     
     .page-title {
@@ -1028,11 +1048,11 @@ main:not(.with-sidebar) {
     
     main {
         padding: 10px;
-        margin-top: 62px;
+        margin-top: 48px;
     }
     
     .container {
-        padding: 12px;
+        padding: 8px;
     }
     
     .page-title {
