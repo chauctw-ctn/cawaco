@@ -567,6 +567,17 @@ function shouldSendAlert(station, newStatus, delayMinutes) {
     });
 
     if (isRepeatTime) {
+        // Check alert history to prevent duplicate sends within the same minute
+        const history = getAlertHistory();
+        const lastAlert = history[station];
+        if (lastAlert && lastAlert.lastAlertStatus === 'offline') {
+            const msSinceLast = now.getTime() - lastAlert.lastAlertTime;
+            // If alert was sent less than 2 minutes ago, skip (same cycle)
+            if (msSinceLast < 2 * 60 * 1000) {
+                console.log(`⏭️ ${station}: Already alerted ${(msSinceLast / 1000).toFixed(0)}s ago, skip duplicate`);
+                return { shouldSend: false, reason: 'duplicate_in_cycle' };
+            }
+        }
         console.log(`✅ ${station}: Offline + current time divisible by ${alertRepeatIntervalMinutes} min → send alert`);
         return { shouldSend: true, reason: 'offline_repeat_time' };
     }
@@ -846,9 +857,6 @@ async function fetchData() {
         hasLoadedDataOnce = true;
         
         console.log(`📊 Fetched ${currentData.length} data points`);
-        
-        // Check for station status changes and send alerts
-        void checkStationStatusChanges();
         
         hideLoading();
         renderTable();

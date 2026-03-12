@@ -624,10 +624,7 @@ app.post('/api/telegram/alert', verifyToken, async (req, res) => {
         }
         
         // Format the message
-        const statusEmoji = status === 'offline' ? '❌ Offline' : '✅ Online';
-
-        // Permit text
-        const permitText = permit ? ` - Giấy phép ${permit}` : '';
+        const statusText = status === 'offline' ? '❌ Chưa gửi dữ liệu' : '✅ Bình thường';
         
         // Measurement time (from data)
         const measurementTimeStr = measurementTime ? new Date(measurementTime).toLocaleString('vi-VN', {
@@ -639,17 +636,6 @@ app.post('/api/telegram/alert', verifyToken, async (req, res) => {
             month: '2-digit',
             year: 'numeric'
         }) : 'N/A';
-        
-        // Alert send time (current time)
-        const alertTime = new Date().toLocaleString('vi-VN', {
-            timeZone: 'Asia/Ho_Chi_Minh',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        });
         
         // Format delay time
         let delayStr = 'N/A';
@@ -667,7 +653,7 @@ app.post('/api/telegram/alert', verifyToken, async (req, res) => {
             }
         }
         
-        const message = `📍 Trạm: ${station}${permitText}\n📡 ${statusEmoji}\n🕒 Thời gian đo: ${measurementTimeStr}\n⏱️ Thời gian chậm gửi dữ liệu: ${delayStr}\n🕒 Thời gian gửi cảnh báo: ${alertTime}`;
+        const message = `📍 Trạm: ${station}:  ${statusText}\n🕒 Thời gian đo: ${measurementTimeStr}\n⏱️ Thời gian chậm gửi: ${delayStr}`;
         
         // Send to Telegram
         const telegramUrl = `https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`;
