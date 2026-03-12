@@ -535,71 +535,44 @@ window.clearAlertHistory = clearAlertHistory;
 window.viewAlertHistory = viewAlertHistory;
 
 /**
- * Check if should send alert for station
+ * Check if should send alert for station.
+ * Condition: station is offline (chưa gửi dữ liệu) AND current VN time (minutes from midnight)
+ * is divisible by alertRepeatIntervalMinutes.
  * Returns: { shouldSend: boolean, reason: string }
  */
 function shouldSendAlert(station, newStatus, delayMinutes) {
-    const history = getAlertHistory();
-    const stationHistory = history[station];
-    const now = Date.now();
-    
     console.log(`🔍 shouldSendAlert check for ${station}:`, {
         newStatus,
         delayMinutes,
-        hasHistory: !!stationHistory,
+        alertRepeatIntervalMinutes
+    });
+
+    if (newStatus !== 'offline') {
+        console.log(`ℹ️ ${station}: Online, no alert needed`);
+        return { shouldSend: false, reason: 'online' };
+    }
+
+    // Check if current Vietnam time (minutes from midnight) is divisible by alertRepeatInterval
+    const now = new Date();
+    const vnTimeStr = now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false, hour: '2-digit', minute: '2-digit' });
+    const [hours, minutes] = vnTimeStr.split(':').map(Number);
+    const minutesFromMidnight = hours * 60 + minutes;
+    const isRepeatTime = alertRepeatIntervalMinutes > 0 && (minutesFromMidnight % alertRepeatIntervalMinutes === 0);
+
+    console.log(`📊 ${station} time check:`, {
+        vnTime: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
+        minutesFromMidnight,
         alertRepeatIntervalMinutes,
-        configuredInterval: alertRepeatIntervalMinutes + ' minutes'
+        isRepeatTime
     });
-    
-    // First time seeing this station - check if already severely delayed
-    if (!stationHistory) {
-        // Nếu trạm offline và delay > ngưỡng cảnh báo (delayThresholdMinutes), gửi ngay
-        // Điều này đảm bảo trạm đã offline lâu sẽ được cảnh báo ngay sau khi load page
-        if (newStatus === 'offline') {
-            console.log(`✅ ${station}: First alert for offline station (delay: ${delayMinutes} min > threshold: ${delayThresholdMinutes} min)`);
-            return { shouldSend: true, reason: 'first_alert_offline' };
-        }
-        console.log(`✅ ${station}: First alert (no history)`);
-        return { shouldSend: true, reason: 'first_alert' };
-    }
-    
-    const { lastAlertTime, lastAlertStatus } = stationHistory;
-    const lastAlertTimeMs = typeof lastAlertTime === 'number' ? lastAlertTime : Date.parse(lastAlertTime);
 
-    if (!Number.isFinite(lastAlertTimeMs)) {
-        console.log(`⚠️ ${station}: Invalid alert history timestamp, allowing alert`);
-        return { shouldSend: true, reason: 'invalid_history' };
+    if (isRepeatTime) {
+        console.log(`✅ ${station}: Offline + current time divisible by ${alertRepeatIntervalMinutes} min → send alert`);
+        return { shouldSend: true, reason: 'offline_repeat_time' };
     }
 
-    const minutesSinceLastAlert = (now - lastAlertTimeMs) / (1000 * 60);
-    
-    console.log(`📊 ${station} alert history:`, {
-        lastAlertStatus,
-        minutesSinceLastAlert: minutesSinceLastAlert.toFixed(2) + ' min',
-        threshold: alertRepeatIntervalMinutes + ' min',
-        willSendIfOffline: minutesSinceLastAlert >= alertRepeatIntervalMinutes
-    });
-    
-    // Status changed - always send alert
-    if (lastAlertStatus !== newStatus) {
-        console.log(`✅ ${station}: Status changed from ${lastAlertStatus} to ${newStatus}`);
-        return { shouldSend: true, reason: 'status_changed' };
-    }
-    
-    // Station is offline and enough time has passed since last alert - send periodic reminder
-    if (newStatus === 'offline' && minutesSinceLastAlert >= alertRepeatIntervalMinutes) {
-        console.log(`✅ ${station}: Periodic reminder (${minutesSinceLastAlert.toFixed(2)} min >= ${alertRepeatIntervalMinutes} min)`);
-        return { shouldSend: true, reason: 'periodic_reminder' };
-    }
-    
-    // Otherwise, don't send
-    if (newStatus === 'offline') {
-        console.log(`⏳ ${station}: Too soon for periodic alert (${minutesSinceLastAlert.toFixed(2)} min < ${alertRepeatIntervalMinutes} min)`);
-        console.log(`   ⏱️  Will send next alert after ${(alertRepeatIntervalMinutes - minutesSinceLastAlert).toFixed(2)} more minutes`);
-    } else {
-        console.log(`ℹ️ ${station}: Online and no change, no alert needed`);
-    }
-    return { shouldSend: false, reason: 'too_soon' };
+    console.log(`⏭️ ${station}: Offline but current time not divisible by ${alertRepeatIntervalMinutes} min`);
+    return { shouldSend: false, reason: 'not_repeat_time' };
 }
 
 /**
@@ -700,12 +673,6 @@ async function sendTelegramAlert(station, status, measurementTime, delayMinutes,
  */
 async function checkStationStatusChanges() {
     console.log(`\n🔔 ===== checkStationStatusChanges called at ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} =====`);
-    console.log(`Telegram config:`, { 
-        hasConfig: !!telegramConfig, 
-        enabled: telegramConfig?.enabled,
-        alertRepeatIntervalMinutes,
-        isFirstCheck 
-    });
 
     if (isStatusCheckRunning) {
         console.log('⏭️ Previous status check is still running, skip overlapping run');
@@ -717,14 +684,11 @@ async function checkStationStatusChanges() {
         return;
     }
 
-    // Đảm bảo đã có dữ liệu hợp lệ từ API
     if (!hasLoadedDataOnce) {
         console.log('⏭️ Skipping status check: data has not been loaded from API yet');
         return;
     }
 
-    // Lấy dữ liệu nguồn cho cảnh báo: luôn dùng toàn bộ currentData
-    // (không phụ thuộc vào filter hiển thị của bảng)
     const sourceData = currentData;
 
     if (!sourceData || sourceData.length === 0) {
@@ -737,8 +701,7 @@ async function checkStationStatusChanges() {
     isStatusCheckRunning = true;
 
     try {
-        // Xác định trạng thái trạm theo thời gian đo mới nhất của trạm.
-        // Độ trễ cảnh báo được tính từ thời gian đo đến thời điểm hiện tại.
+        // Group by station, find newest measurement per station
         const stationData = buildStationStatusData(sourceData);
 
         const stationCount = Object.keys(stationData).length;
@@ -746,65 +709,24 @@ async function checkStationStatusChanges() {
             .filter(s => s.delayMinutes > delayThresholdMinutes)
             .map(s => ({ station: s.station, delayMinutes: s.delayMinutes }));
 
-        console.log(`📊 Grouped into ${stationCount} stations, offline (by measurementTime -> now, delayThresholdMinutes=${delayThresholdMinutes}):`, offlineStations);
+        console.log(`📊 Grouped into ${stationCount} stations, chưa gửi dữ liệu: ${offlineStations.length}`);
 
-        if (isFirstCheck) {
-            snapshotInitialAlertState(stationData);
-            isFirstCheck = false;
-            console.log('⏭️ Initial startup check only snapshots station states, no Telegram alerts sent');
-            console.log(`===== End checkStationStatusChanges =====\n`);
-            return;
-        }
-    
-        // Check each station for status changes
+        // Check each station - send alert if offline and current time divisible by repeat interval
         for (const data of Object.values(stationData)) {
             const station = data.station;
             const isOnline = data.delayMinutes <= delayThresholdMinutes;
             const currentStatus = isOnline ? 'online' : 'offline';
-            const previousStatus = stationStatusMap[station];
             const measurementTime = data.measurementTime;
             const delayMinutes = data.delayMinutes;
             const permit = data.permit || null;
-        
-            console.log(`\n🏢 Checking station: ${station}`);
-            console.log(`   Current: ${currentStatus} (delay: ${delayMinutes} min)`);
-            console.log(`   Previous: ${previousStatus || 'none'}`);
-            console.log(`   isFirstCheck: ${isFirstCheck}`);
 
-            // Luôn dùng alert history để chống spam, không chặn cảnh báo ở lần kiểm tra đầu tiên
-            // Status changed or periodic check needed
-            if (previousStatus !== undefined) {
-                if (previousStatus === 'online' && currentStatus === 'offline') {
-                    console.log(`🔔 Station ${station} went offline`);
-                    await sendTelegramAlert(station, 'offline', measurementTime, delayMinutes, permit, 'status_change');
-                }
-                else if (previousStatus === 'offline' && currentStatus === 'online') {
-                    console.log(`🔔 Station ${station} came back online`);
-                    await sendTelegramAlert(station, 'online', measurementTime, delayMinutes, permit, 'status_change');
-                }
-                else if (currentStatus === 'offline') {
-                    console.log(`🔄 Station ${station} still offline, checking if periodic alert needed...`);
-                    console.log(`   Alert repeat interval: ${alertRepeatIntervalMinutes} minute(s)`);
-                    await sendTelegramAlert(station, 'offline', measurementTime, delayMinutes, permit, 'periodic_check');
-                }
-                else {
-                    console.log(`✅ Station ${station} still online, no alert needed`);
-                }
+            // Only alert for offline stations (chưa gửi dữ liệu)
+            if (currentStatus === 'offline') {
+                await sendTelegramAlert(station, 'offline', measurementTime, delayMinutes, permit, 'offline_check');
             }
-            else {
-                console.log(`🆕 First time tracking ${station} after initial snapshot`);
 
-                if (currentStatus === 'offline') {
-                    await sendTelegramAlert(station, currentStatus, measurementTime, delayMinutes, permit, 'first_in_session');
-                } else {
-                    console.log(`ℹ️ Station ${station} is online, no alert needed`);
-                }
-            }
-        
             stationStatusMap[station] = currentStatus;
         }
-
-        console.log(`🔄 Checks after initial snapshot will evaluate status changes and periodic alerts.`);
     } finally {
         isStatusCheckRunning = false;
     }

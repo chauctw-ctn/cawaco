@@ -92,14 +92,11 @@ const PORT = config.server.port;
 
 // Trigger Telegram alert check on ANY incoming request (including static-file pings from cron-job.org).
 // This ensures alerts fire even when cron pings /databtn.html instead of /health.
-// The time-based guard prevents redundant runs between normal check intervals.
+// Rate-limited to at most once per minute.
 app.use((req, res, next) => {
     if (config.telegram && config.telegram.enabled &&
         config.telegram.botToken && config.telegram.chatId) {
-        const refreshMs = (config.telegram.refreshInterval || 15) * 60 * 1000;
-        const repeatMs  = (config.telegram.alertRepeatInterval || 60) * 60 * 1000;
-        const checkIntervalMs = Math.min(refreshMs, repeatMs);
-        if (Date.now() - lastTelegramCheckTime >= checkIntervalMs - 30000) {
+        if (Date.now() - lastTelegramCheckTime >= 55 * 1000) {
             checkAndSendTelegramAlerts().catch(err =>
                 console.error('❌ [REQUEST] Telegram check error:', err.message)
             );
@@ -1152,19 +1149,16 @@ app.get('/health', async (req, res) => {
     // Trigger Telegram alert check if enough time has passed (for cron-job.org support)
     // This ensures alerts fire even if setInterval died (Render free plan restarts)
     if (config.telegram.enabled && config.telegram.botToken && config.telegram.chatId) {
-        const refreshMs = (config.telegram.refreshInterval || 15) * 60 * 1000;
-        const repeatMs = (config.telegram.alertRepeatInterval || 60) * 60 * 1000;
-        const checkIntervalMs = Math.min(refreshMs, repeatMs);
         const timeSinceLastCheck = Date.now() - lastTelegramCheckTime;
         
-        if (timeSinceLastCheck >= checkIntervalMs - 30000) { // 30s tolerance
+        if (timeSinceLastCheck >= 55 * 1000) { // At most once per minute
             health.telegramCheckTriggered = true;
             // Run async - don't block health response
             checkAndSendTelegramAlerts().catch(err => {
                 console.error('❌ [HEALTH] Telegram check error:', err.message);
             });
         } else {
-            health.telegramNextCheckIn = Math.ceil((checkIntervalMs - timeSinceLastCheck) / 1000) + 's';
+            health.telegramNextCheckIn = Math.ceil((60 * 1000 - timeSinceLastCheck) / 1000) + 's';
         }
     }
     
@@ -2062,7 +2056,8 @@ async function sendServerTelegramMessage(text) {
 
 async function checkAndSendTelegramAlerts() {
     try {
-        console.log(`\n🔍 [TELEGRAM] Running periodic check at ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
+        const vnNow = new Date();
+        console.log(`\n🔍 [TELEGRAM] Running periodic check at ${vnNow.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
         
         if (!config.telegram.enabled || !config.telegram.botToken || !config.telegram.chatId) {
             console.log('⚠️ [TELEGRAM] Skipping: Telegram not properly configured');
@@ -2074,81 +2069,93 @@ async function checkAndSendTelegramAlerts() {
         const now = Date.now();
         lastTelegramCheckTime = now;
 
-        const stationStatus = await dbModule.checkStationsValueChanges(delayThreshold);
-        const totalStations = Object.keys(stationStatus).length;
-        const offlineStations = Object.values(stationStatus).filter(s => s.status === 'offline').length;
-        
-        console.log(`   • Total stations: ${totalStations}, Offline: ${offlineStations}`);
+        // Check if current Vietnam time (minutes from midnight) is divisible by alertRepeatInterval
+        const vnTimeStr = vnNow.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false, hour: '2-digit', minute: '2-digit' });
+        const [hours, minutes] = vnTimeStr.split(':').map(Number);
+        const minutesFromMidnight = hours * 60 + minutes;
+        const isRepeatTime = alertRepeatInterval > 0 && (minutesFromMidnight % alertRepeatInterval === 0);
 
-        // First run: just snapshot all current statuses, don't send any alerts
-        if (!telegramAlertInitialized) {
-            for (const [stationName, status] of Object.entries(stationStatus)) {
-                serverAlertHistory.set(stationName, {
-                    lastAlertTime: now,
-                    lastAlertStatus: status.status
-                });
-            }
-            telegramAlertInitialized = true;
-            saveAlertHistory();
-            console.log(`🛡️ [TELEGRAM] Snapshot initialized: ${totalStations} stations (${offlineStations} offline)`);
-            console.log('   ℹ️  Next check will start sending alerts for status changes');
+        console.log(`   • VN time: ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}, minutes from midnight: ${minutesFromMidnight}`);
+        console.log(`   • Alert repeat interval: ${alertRepeatInterval} min, is repeat time: ${isRepeatTime}`);
+
+        if (!isRepeatTime) {
+            console.log(`   ⏭️ Current time not divisible by ${alertRepeatInterval} min, skipping`);
             return;
         }
 
-        for (const [stationName, status] of Object.entries(stationStatus)) {
-            const currentStatus = status.status; // 'online' | 'offline'
-            const history = serverAlertHistory.get(stationName);
-            const timeSinceUpdate = status.timeSinceUpdate || 0;
+        // Fetch MONRE data (same source as "DỮ LIỆU ĐỒNG BỘ CÁC TRẠM QUAN TRẮC VỚI WEB BỘ TÀI NGUYÊN")
+        let monreData;
+        try {
+            monreData = await monreModule.getPermitData();
+        } catch (err) {
+            console.error('❌ [TELEGRAM] Failed to fetch MONRE data:', err.message);
+            return;
+        }
 
-            let shouldSend = false;
-            let reason = '';
+        if (!monreData || monreData.length === 0) {
+            console.log('⚠️ [TELEGRAM] No MONRE data available');
+            return;
+        }
 
-            if (!history) {
-                if (currentStatus === 'offline') {
-                    shouldSend = true;
-                    reason = 'new_station_offline';
-                }
-                serverAlertHistory.set(stationName, { lastAlertTime: now, lastAlertStatus: currentStatus });
-            } else {
-                const minutesSinceLast = (now - history.lastAlertTime) / (1000 * 60);
-                if (history.lastAlertStatus !== currentStatus) {
-                    shouldSend = true;
-                    reason = 'status_changed';
-                } else if (currentStatus === 'offline' && minutesSinceLast >= alertRepeatInterval) {
-                    shouldSend = true;
-                    reason = 'periodic_reminder';
-                }
+        // Group by station, keep the newest measurement per station
+        const stationStatus = {};
+        for (const row of monreData) {
+            const station = row.station || 'N/A';
+            let measurementMs = null;
+            if (typeof row.measurementTime === 'number') {
+                measurementMs = row.measurementTime;
+            } else if (row.measurementTime) {
+                const parsed = Date.parse(row.measurementTime);
+                if (!isNaN(parsed)) measurementMs = parsed;
             }
+            if (measurementMs === null) continue;
 
-            if (!shouldSend) continue;
+            const delayMinutes = Math.floor((now - measurementMs) / (1000 * 60));
 
-            const statusEmoji = currentStatus === 'offline' ? '❌ Offline' : '✅ Online';
-            const delayStr = formatDelayStr(timeSinceUpdate);
+            if (!stationStatus[station] || measurementMs > (stationStatus[station].measurementMs || 0)) {
+                stationStatus[station] = {
+                    status: delayMinutes > delayThreshold ? 'offline' : 'online',
+                    delayMinutes,
+                    measurementMs,
+                    measurementTime: row.measurementTime,
+                    permit: row.permit || null
+                };
+            }
+        }
+
+        const totalStations = Object.keys(stationStatus).length;
+        const offlineCount = Object.values(stationStatus).filter(s => s.status === 'offline').length;
+        console.log(`   • Total MONRE stations: ${totalStations}, Chưa gửi dữ liệu: ${offlineCount}`);
+
+        // Send alerts for all offline stations (chưa gửi dữ liệu)
+        for (const [stationName, status] of Object.entries(stationStatus)) {
+            if (status.status !== 'offline') continue;
+
+            const delayStr = formatDelayStr(status.delayMinutes);
             const alertTime = new Date().toLocaleString('vi-VN', {
                 timeZone: 'Asia/Ho_Chi_Minh',
                 hour: '2-digit', minute: '2-digit', second: '2-digit',
                 day: '2-digit', month: '2-digit', year: 'numeric'
             });
-            const measurementTime = status.lastUpdate
-                ? new Date(status.lastUpdate).toLocaleString('vi-VN', {
+            const measurementTimeStr = status.measurementTime
+                ? new Date(status.measurementTime).toLocaleString('vi-VN', {
                     timeZone: 'Asia/Ho_Chi_Minh',
                     hour: '2-digit', minute: '2-digit', second: '2-digit',
                     day: '2-digit', month: '2-digit', year: 'numeric'
                 })
                 : 'N/A';
 
-            const message = `📍 Trạm: ${stationName}\n📡 ${statusEmoji}\n🕒 Thời gian đo: ${measurementTime}\n⏱️ Thời gian chậm gửi dữ liệu: ${delayStr}\n🕒 Thời gian gửi cảnh báo: ${alertTime}`;
+            const message = `📍 Trạm: ${stationName}\n📡 ❌ Chưa gửi dữ liệu\n🕒 Thời gian đo: ${measurementTimeStr}\n⏱️ Thời gian chậm gửi dữ liệu: ${delayStr}\n🕒 Thời gian gửi cảnh báo: ${alertTime}`;
 
             try {
                 await sendServerTelegramMessage(message);
-                serverAlertHistory.set(stationName, { lastAlertTime: now, lastAlertStatus: currentStatus });
-                console.log(`✅ [TELEGRAM] Sent alert: ${stationName} → ${currentStatus} (${reason})`);
+                serverAlertHistory.set(stationName, { lastAlertTime: now, lastAlertStatus: 'offline' });
+                console.log(`✅ [TELEGRAM] Sent alert: ${stationName} → chưa gửi dữ liệu (delay: ${status.delayMinutes} min)`);
             } catch (err) {
                 console.error(`❌ [TELEGRAM] Failed to send for ${stationName}:`, err.message);
             }
         }
-        
-        // Persist alert history after each check
+
         saveAlertHistory();
         console.log(`✓ [TELEGRAM] Check completed`);
     } catch (error) {
@@ -2188,38 +2195,14 @@ function startTelegramAlertInterval() {
         return;
     }
     
-    // Only reset snapshot state if we don't have persisted alert history.
-    // When history was loaded from file (telegramAlertInitialized === true),
-    // keep it so the first check can send real alerts immediately after restart.
-    if (!telegramAlertInitialized) {
-        console.log('   ℹ️  No persisted history — first run will take snapshot only');
-    } else {
-        console.log('   ✅ Persisted history loaded — first run will send real alerts');
-    }
-    
-    // FIX: Use the SMALLER of refreshInterval and alertRepeatInterval as the check interval
-    // This ensures we check frequently enough to respect the repeat interval
-    const refreshMinutes = Math.max(1, config.telegram.refreshInterval || 15);
-    const repeatMinutes = Math.max(1, config.telegram.alertRepeatInterval || 60);
-    const checkIntervalMinutes = Math.min(refreshMinutes, repeatMinutes);
-    const intervalMs = checkIntervalMinutes * 60 * 1000;
+    // Check every minute to catch divisible minutes (alertRepeatInterval)
+    const intervalMs = 60 * 1000;
     
     telegramAlertInterval = setInterval(checkAndSendTelegramAlerts, intervalMs);
-    console.log(`   ✅ Alert interval STARTED: check every ${checkIntervalMinutes} min (refresh: ${refreshMinutes} min, repeat: ${repeatMinutes} min)`);
+    console.log(`   ✅ Alert interval STARTED: check every 1 min (alerts sent when VN minute divisible by ${config.telegram.alertRepeatInterval || 60} min)`);
     
     // Run once immediately on start
     checkAndSendTelegramAlerts();
-    
-    // Schedule a second check after 2 minutes so alerts start quickly after restart/deploy
-    // (instead of waiting the full interval which could be 15+ minutes)
-    if (!telegramAlertInitialized) {
-        setTimeout(() => {
-            if (telegramAlertInitialized) {
-                console.log('🔔 [TELEGRAM] Running early second check (2 min after snapshot)...');
-                checkAndSendTelegramAlerts();
-            }
-        }, 2 * 60 * 1000);
-    }
 }
 
 // Khởi động server
