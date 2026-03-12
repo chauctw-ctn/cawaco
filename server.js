@@ -2121,11 +2121,6 @@ async function checkAndSendTelegramAlerts() {
             if (status.status !== 'offline') continue;
 
             const delayStr = formatDelayStr(status.delayMinutes);
-            const alertTime = new Date().toLocaleString('vi-VN', {
-                timeZone: 'Asia/Ho_Chi_Minh',
-                hour: '2-digit', minute: '2-digit', second: '2-digit',
-                day: '2-digit', month: '2-digit', year: 'numeric'
-            });
             const measurementTimeStr = status.measurementTime
                 ? new Date(status.measurementTime).toLocaleString('vi-VN', {
                     timeZone: 'Asia/Ho_Chi_Minh',
@@ -2133,8 +2128,9 @@ async function checkAndSendTelegramAlerts() {
                     day: '2-digit', month: '2-digit', year: 'numeric'
                 })
                 : 'N/A';
+            const permitText = status.permit ? ` - ${status.permit}` : '';
 
-            const message = `📍 Trạm: ${stationName}\n📡 ❌ Chưa gửi dữ liệu\n🕒 Thời gian đo: ${measurementTimeStr}\n⏱️ Thời gian chậm gửi dữ liệu: ${delayStr}\n🕒 Thời gian gửi cảnh báo: ${alertTime}`;
+            const message = `📍 Trạm: ${stationName}${permitText}\n📡 ❌ Chưa gửi dữ liệu\n🕒 Thời gian đo: ${measurementTimeStr}\n⏱️ Thời gian chậm gửi dữ liệu: ${delayStr}`;
 
             try {
                 await sendServerTelegramMessage(message);

@@ -4,10 +4,8 @@ let currentData = [];
 let lastUpdateTime = null;
 let allPermits = []; // Danh sách tất cả giấy phép
 let autoRefreshInterval = null; // Auto refresh timer
-let statusCheckInterval = null; // Status check timer for periodic alerts
 let refreshIntervalMinutes = 15; // Default 15 minutes (from Telegram config)
 let delayThresholdMinutes = 60; // Default 60 minutes (from Telegram config)
-let alertRepeatIntervalMinutes = 60; // Default 60 minutes - repeat offline alerts (changed from 1 to 60)
 let hasLoadedDataOnce = false; // Đánh dấu đã tải dữ liệu từ API ít nhất 1 lần
 
 // Table header filters
@@ -16,12 +14,8 @@ let selectedStations = new Set(); // Các trạm được chọn
 let selectedPermits = new Set(); // Các giấy phép được chọn
 let selectedStatuses = new Set(['online', 'offline']); // Các trạng thái được chọn
 
-// Telegram alert tracking
-let stationStatusMap = {}; // Track previous status of each station
+// Telegram config (used for delayThreshold and refreshInterval)
 let telegramConfig = null; // Telegram configuration
-let pendingOfflineAlerts = new Set(); // Track in-flight station alerts to prevent duplicate sends
-let isStatusCheckRunning = false; // Prevent overlapping status checks
-const ALERT_HISTORY_KEY = 'telegram_alert_history'; // localStorage key for alert history
 
 /**
  * Format timestamp to Vietnamese date/time (Vietnam timezone)
@@ -251,46 +245,6 @@ function getMeasurementTimestampMs(value) {
 }
 
 /**
- * Build station status for Telegram from the latest measurement of each station.
- */
-function buildStationStatusData(rows) {
-    const stationData = {};
-
-    rows.forEach(row => {
-        const station = row.station || 'N/A';
-        const effectiveDelay = getEffectiveDelayMinutes(row);
-        const rowTimestampMs = getMeasurementTimestampMs(row?.measurementTime);
-        const existing = stationData[station];
-
-        if (!existing) {
-            stationData[station] = {
-                station,
-                delayMinutes: effectiveDelay,
-                measurementTime: row.measurementTime,
-                rowTimestampMs,
-                permit: row.permit || null
-            };
-            return;
-        }
-
-        const hasNewerMeasurement = rowTimestampMs !== null && (existing.rowTimestampMs === null || rowTimestampMs > existing.rowTimestampMs);
-        const useLowerDelayFallback = rowTimestampMs === null && existing.rowTimestampMs === null && effectiveDelay < existing.delayMinutes;
-
-        if (hasNewerMeasurement || useLowerDelayFallback) {
-            stationData[station] = {
-                station,
-                delayMinutes: effectiveDelay,
-                measurementTime: row.measurementTime,
-                rowTimestampMs,
-                permit: row.permit || existing.permit || null
-            };
-        }
-    });
-
-    return stationData;
-}
-
-/**
  * Create status badge HTML
  */
 function createStatusBadge(delayMinutes) {
@@ -380,325 +334,16 @@ async function fetchTelegramConfig() {
                 if (telegramConfig.delayThreshold) {
                     delayThresholdMinutes = Math.max(1, parseInt(telegramConfig.delayThreshold));
                 }
-                if (telegramConfig.alertRepeatInterval) {
-                    alertRepeatIntervalMinutes = Math.max(1, parseInt(telegramConfig.alertRepeatInterval));
-                    console.log(`🔔 Alert repeat interval updated to: ${alertRepeatIntervalMinutes} minutes`);
-                }
-                
                 console.log('✅ Telegram config loaded:', {
                     enabled: telegramConfig.enabled,
                     refreshInterval: refreshIntervalMinutes + ' min',
-                    delayThreshold: delayThresholdMinutes + ' min',
-                    alertRepeatInterval: alertRepeatIntervalMinutes + ' min'
+                    delayThreshold: delayThresholdMinutes + ' min'
                 });
-                
-                // Log current alert history size
-                const history = getAlertHistory();
-                console.log(`📝 Current alert history: ${Object.keys(history).length} stations tracked`);
             }
         }
     } catch (error) {
         console.error('❌ Error fetching Telegram config:', error);
     }
-}
-
-/**
- * Get alert history from localStorage
- */
-function getAlertHistory() {
-    try {
-        const history = localStorage.getItem(ALERT_HISTORY_KEY);
-        const parsed = history ? JSON.parse(history) : {};
-        console.log('📖 Alert history loaded:', Object.keys(parsed).length, 'stations');
-        return parsed;
-    } catch (error) {
-        console.error('❌ Error reading alert history:', error);
-        return {};
-    }
-}
-
-/**
- * Save alert history to localStorage
- */
-function saveAlertHistory(history) {
-    try {
-        localStorage.setItem(ALERT_HISTORY_KEY, JSON.stringify(history));
-        console.log('💾 Alert history saved:', Object.keys(history).length, 'stations');
-    } catch (error) {
-        console.error('❌ Error saving alert history:', error);
-    }
-}
-
-/**
- * Clear alert history for a specific station or all stations
- * Usage from browser console:
- *   - clearAlertHistory('QT1NM2') - clear for specific station
- *   - clearAlertHistory() - clear all
- */
-function clearAlertHistory(stationName = null) {
-    try {
-        if (stationName) {
-            const history = getAlertHistory();
-            if (history[stationName]) {
-                delete history[stationName];
-                saveAlertHistory(history);
-                console.log(`✅ Cleared alert history for station: ${stationName}`);
-                console.log(`   ℹ️  Next check will immediately send alert if station is offline`);
-            } else {
-                console.log(`⚠️  No alert history found for station: ${stationName}`);
-            }
-        } else {
-            localStorage.removeItem(ALERT_HISTORY_KEY);
-            console.log('✅ Cleared all alert history');
-            console.log(`   ℹ️  Next check will treat all stations as new and send alerts for offline stations`);
-        }
-    } catch (error) {
-        console.error('❌ Error clearing alert history:', error);
-    }
-}
-
-/**
- * View alert history from console
- * Usage: viewAlertHistory() or viewAlertHistory('QT1NM2')
- */
-function viewAlertHistory(stationName = null) {
-    const history = getAlertHistory();
-    if (stationName) {
-        if (history[stationName]) {
-            const info = history[stationName];
-            const lastAlertTime = new Date(info.lastAlertTime);
-            const minutesAgo = (Date.now() - info.lastAlertTime) / (1000 * 60);
-            console.log(`📊 Alert history for ${stationName}:`, {
-                lastAlertStatus: info.lastAlertStatus,
-                lastAlertTime: lastAlertTime.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
-                minutesAgo: minutesAgo.toFixed(2) + ' minutes ago',
-                nextAlertAfter: alertRepeatIntervalMinutes + ' minutes from last alert',
-                canSendNow: minutesAgo >= alertRepeatIntervalMinutes
-            });
-        } else {
-            console.log(`ℹ️  No alert history for station: ${stationName}`);
-        }
-    } else {
-        console.log(`📚 Alert history (${Object.keys(history).length} stations):`, history);
-        console.log(`\n💡 TIP: Use viewAlertHistory('STATION_NAME') to see details for specific station`);
-        console.log(`💡 TIP: Use clearAlertHistory('STATION_NAME') to reset a station's alert timer`);
-        console.log(`💡 TIP: Use clearAlertHistory() to reset all alert timers`);
-    }
-}
-
-// Make functions available globally for console access
-window.clearAlertHistory = clearAlertHistory;
-window.viewAlertHistory = viewAlertHistory;
-
-/**
- * Check if should send alert for station.
- * Condition: station is offline (chưa gửi dữ liệu) AND current VN time (minutes from midnight)
- * is divisible by alertRepeatIntervalMinutes.
- * Returns: { shouldSend: boolean, reason: string }
- */
-function shouldSendAlert(station, newStatus, delayMinutes) {
-    console.log(`🔍 shouldSendAlert check for ${station}:`, {
-        newStatus,
-        delayMinutes,
-        alertRepeatIntervalMinutes
-    });
-
-    if (newStatus !== 'offline') {
-        console.log(`ℹ️ ${station}: Online, no alert needed`);
-        return { shouldSend: false, reason: 'online' };
-    }
-
-    // Check if current Vietnam time (minutes from midnight) is divisible by alertRepeatInterval
-    const now = new Date();
-    const vnTimeStr = now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false, hour: '2-digit', minute: '2-digit' });
-    const [hours, minutes] = vnTimeStr.split(':').map(Number);
-    const minutesFromMidnight = hours * 60 + minutes;
-    const isRepeatTime = alertRepeatIntervalMinutes > 0 && (minutesFromMidnight % alertRepeatIntervalMinutes === 0);
-
-    console.log(`📊 ${station} time check:`, {
-        vnTime: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
-        minutesFromMidnight,
-        alertRepeatIntervalMinutes,
-        isRepeatTime
-    });
-
-    if (isRepeatTime) {
-        // Check alert history to prevent duplicate sends within the same minute
-        const history = getAlertHistory();
-        const lastAlert = history[station];
-        if (lastAlert && lastAlert.lastAlertStatus === 'offline') {
-            const msSinceLast = now.getTime() - lastAlert.lastAlertTime;
-            // If alert was sent less than 2 minutes ago, skip (same cycle)
-            if (msSinceLast < 2 * 60 * 1000) {
-                console.log(`⏭️ ${station}: Already alerted ${(msSinceLast / 1000).toFixed(0)}s ago, skip duplicate`);
-                return { shouldSend: false, reason: 'duplicate_in_cycle' };
-            }
-        }
-        console.log(`✅ ${station}: Offline + current time divisible by ${alertRepeatIntervalMinutes} min → send alert`);
-        return { shouldSend: true, reason: 'offline_repeat_time' };
-    }
-
-    console.log(`⏭️ ${station}: Offline but current time not divisible by ${alertRepeatIntervalMinutes} min`);
-    return { shouldSend: false, reason: 'not_repeat_time' };
-}
-
-/**
- * Record alert in history
- */
-function recordAlert(station, status) {
-    const history = getAlertHistory();
-    const alertInfo = {
-        lastAlertTime: Date.now(),
-        lastAlertStatus: status
-    };
-    history[station] = alertInfo;
-    saveAlertHistory(history);
-    console.log(`💾 Recorded alert for ${station}:`, alertInfo);
-}
-
-/**
- * Send Telegram alert for station status change
- */
-async function sendTelegramAlert(station, status, measurementTime, delayMinutes, permit, reason = '') {
-    const alertKey = `${station}:${status}`;
-
-    try {
-        console.log(`📤 sendTelegramAlert called for ${station}:`, { status, delayMinutes, reason });
-
-        if (pendingOfflineAlerts.has(alertKey)) {
-            console.log(`⏭️ Alert already in flight for ${alertKey}, skipping duplicate request`);
-            return;
-        }
-
-        pendingOfflineAlerts.add(alertKey);
-        
-        // Check if Telegram is enabled
-        if (!telegramConfig || !telegramConfig.enabled) {
-            console.log(`❌ Telegram not enabled:`, { hasConfig: !!telegramConfig, enabled: telegramConfig?.enabled });
-            return;
-        }
-        
-        console.log(`✅ Telegram is enabled, checking if should send...`);
-        
-        // Check if should send alert (prevent spam)
-        const alertCheck = shouldSendAlert(station, status, delayMinutes);
-        if (!alertCheck.shouldSend) {
-            console.log(`⏭️ Skipping alert for ${station}: ${alertCheck.reason}`);
-            return;
-        }
-        
-        console.log(`🚀 Sending alert for ${station}: ${status} (${alertCheck.reason})`);
-        
-        // Send alert
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-            console.log('⚠️ No auth token for sending alert');
-            return;
-        }
-        
-        const response = await fetch('/api/telegram/alert', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                station: station,
-                status: status,
-                measurementTime: measurementTime,
-                delayMinutes: delayMinutes,
-                permit: permit || null
-            })
-        });
-        
-        console.log(`📨 Alert API response status: ${response.status}`);
-        
-        if (response.ok) {
-            const data = await response.json();
-            console.log(`📨 Alert API response data:`, data);
-            
-            if (data.success) {
-                // Record this alert to prevent duplicate/spam
-                recordAlert(station, status);
-                console.log(`✅ Sent Telegram alert for ${station}: ${status} (${alertCheck.reason})`);
-            } else {
-                console.error(`❌ Alert API returned success=false:`, data);
-            }
-        } else {
-            console.error(`❌ Alert API returned error status: ${response.status}`);
-        }
-    } catch (error) {
-        console.error('❌ Error sending Telegram alert:', error);
-    } finally {
-        pendingOfflineAlerts.delete(alertKey);
-    }
-}
-
-/**
- * Check and send alerts for station status changes
- * This recalculates delays based on current time
- */
-async function checkStationStatusChanges() {
-    console.log(`\n🔔 ===== checkStationStatusChanges called at ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} =====`);
-
-    if (isStatusCheckRunning) {
-        console.log('⏭️ Previous status check is still running, skip overlapping run');
-        return;
-    }
-    
-    if (!telegramConfig || !telegramConfig.enabled) {
-        console.log(`❌ Telegram not enabled, skipping status check`);
-        return;
-    }
-
-    if (!hasLoadedDataOnce) {
-        console.log('⏭️ Skipping status check: data has not been loaded from API yet');
-        return;
-    }
-
-    const sourceData = currentData;
-
-    if (!sourceData || sourceData.length === 0) {
-        console.log('⚠️ No data available for status check');
-        return;
-    }
-
-    console.log(`✅ Telegram enabled, checking ${sourceData.length} data points`);
-
-    isStatusCheckRunning = true;
-
-    try {
-        // Group by station, find newest measurement per station
-        const stationData = buildStationStatusData(sourceData);
-
-        const stationCount = Object.keys(stationData).length;
-        const offlineStations = Object.values(stationData)
-            .filter(s => s.delayMinutes > delayThresholdMinutes)
-            .map(s => ({ station: s.station, delayMinutes: s.delayMinutes }));
-
-        console.log(`📊 Grouped into ${stationCount} stations, chưa gửi dữ liệu: ${offlineStations.length}`);
-
-        // Check each station - send alert if offline and current time divisible by repeat interval
-        for (const data of Object.values(stationData)) {
-            const station = data.station;
-            const isOnline = data.delayMinutes <= delayThresholdMinutes;
-            const currentStatus = isOnline ? 'online' : 'offline';
-            const measurementTime = data.measurementTime;
-            const delayMinutes = data.delayMinutes;
-            const permit = data.permit || null;
-
-            // Only alert for offline stations (chưa gửi dữ liệu)
-            if (currentStatus === 'offline') {
-                await sendTelegramAlert(station, 'offline', measurementTime, delayMinutes, permit, 'offline_check');
-            }
-
-            stationStatusMap[station] = currentStatus;
-        }
-    } finally {
-        isStatusCheckRunning = false;
-    }
-    
-    console.log(`===== End checkStationStatusChanges =====\n`);
 }
 
 /**
@@ -718,46 +363,6 @@ function setupAutoRefresh() {
     }, refreshIntervalMinutes * 60 * 1000);
     
     console.log(`✅ Auto refresh set to ${refreshIntervalMinutes} minutes (${refreshIntervalMinutes * 60} seconds)`);
-}
-
-/**
- * Setup status check interval for periodic alerts
- * This checks status and sends alerts independently from data refresh
- */
-function setupStatusCheckInterval() {
-    // Clear existing interval
-    if (statusCheckInterval) {
-        clearInterval(statusCheckInterval);
-        console.log('🔄 Cleared existing status check interval');
-    }
-    
-    // Only setup if Telegram is enabled
-    if (!telegramConfig || !telegramConfig.enabled) {
-        console.log('⚠️ Telegram not enabled, skipping status check interval setup');
-        console.log('   Telegram config:', telegramConfig);
-        return;
-    }
-    
-    // Fixed check interval: 1 minute (check frequently to detect changes quickly)
-    // The alert repeat interval (alertRepeatIntervalMinutes) is used separately in shouldSendAlert()
-    const CHECK_INTERVAL_MINUTES = 1;
-    const intervalMs = CHECK_INTERVAL_MINUTES * 60 * 1000;
-    
-    console.log(`⚙️ Setting up status check interval: ${CHECK_INTERVAL_MINUTES} minute(s)`);
-    console.log(`   Alert repeat interval: ${alertRepeatIntervalMinutes} minute(s)`);
-    console.log(`   Telegram enabled: ${telegramConfig.enabled}`);
-    console.log(`   Telegram chatId: ${telegramConfig.chatId}`);
-    
-    // Set new interval for status checks (convert minutes to milliseconds)
-    statusCheckInterval = setInterval(() => {
-        console.log('⏰ Periodic status check triggered at', new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }));
-        console.log('   Current data length:', currentData?.length || 0);
-        console.log('   Has loaded data once:', hasLoadedDataOnce);
-        void checkStationStatusChanges();
-    }, intervalMs);
-    
-    console.log(`✅ Status check interval set to ${CHECK_INTERVAL_MINUTES} minute(s)`);
-    console.log(`📅 Next check will run at: ${new Date(Date.now() + intervalMs).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
 }
 
 /**
@@ -1327,9 +932,6 @@ async function initializePage() {
     
     // Setup auto refresh
     setupAutoRefresh();
-    
-    // Setup status check interval for periodic alerts
-    setupStatusCheckInterval();
     
     // Setup station history modal
     setupStationHistoryModal();
