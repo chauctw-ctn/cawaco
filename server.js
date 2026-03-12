@@ -625,6 +625,9 @@ app.post('/api/telegram/alert', verifyToken, async (req, res) => {
         
         // Format the message
         const statusText = status === 'offline' ? '❌ Chưa gửi dữ liệu' : '✅ Bình thường';
+
+        // Permit text
+        const permitText = permit ? ` - ${permit}` : '';
         
         // Measurement time (from data)
         const measurementTimeStr = measurementTime ? new Date(measurementTime).toLocaleString('vi-VN', {
@@ -653,7 +656,7 @@ app.post('/api/telegram/alert', verifyToken, async (req, res) => {
             }
         }
         
-        const message = `📍 Trạm: ${station}:  ${statusText}\n🕒 Thời gian đo: ${measurementTimeStr}\n⏱️ Thời gian chậm gửi: ${delayStr}`;
+        const message = `📍 Trạm: ${station}${permitText}\n📡 ${statusText}\n🕒 Thời gian đo: ${measurementTimeStr}\n⏱️ Thời gian chậm gửi dữ liệu: ${delayStr}`;
         
         // Send to Telegram
         const telegramUrl = `https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`;
