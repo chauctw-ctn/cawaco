@@ -604,7 +604,7 @@ app.get('/api/permit-capacity', verifyToken, async (req, res) => {
 // Send Telegram alert
 app.post('/api/telegram/alert', verifyToken, async (req, res) => {
     try {
-        const { station, status, measurementTime, delayMinutes, permit } = req.body;
+        const { station, status, measurementTime, permit } = req.body;
         
         if (!station || !status) {
             return res.status(400).json({ 
@@ -629,52 +629,17 @@ app.post('/api/telegram/alert', verifyToken, async (req, res) => {
             });
         }
         
-        // Format the message
-        const statusText = status === 'offline' ? '❌ Chưa gửi dữ liệu' : '✅ Bình thường';
+        const stationStatus = {
+            status,
+            permit: permit || null,
+            measurementMs: measurementTime ? Date.parse(measurementTime) : null,
+            measurementTime
+        };
+        const message = `📡 Chưa gửi dữ liệu: ${status === 'offline' ? '1/1' : '0/1'}\n${buildStationLine(1, station, stationStatus)}`;
 
-        // Permit text
-        const permitText = permit ? ` - ${permit}` : '';
-        
-        // Measurement time (from data)
-        const measurementTimeStr = measurementTime ? new Date(measurementTime).toLocaleString('vi-VN', {
-            timeZone: 'Asia/Ho_Chi_Minh',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        }) : 'N/A';
-        
-        // Format delay time
-        let delayStr = 'N/A';
-        if (delayMinutes !== undefined && delayMinutes !== null) {
-            if (delayMinutes < 60) {
-                delayStr = `${delayMinutes} phút`;
-            } else if (delayMinutes < 1440) {
-                const hours = Math.floor(delayMinutes / 60);
-                const mins = delayMinutes % 60;
-                delayStr = mins > 0 ? `${hours} giờ ${mins} phút` : `${hours} giờ`;
-            } else {
-                const days = Math.floor(delayMinutes / 1440);
-                const hours = Math.floor((delayMinutes % 1440) / 60);
-                delayStr = hours > 0 ? `${days} ngày ${hours} giờ` : `${days} ngày`;
-            }
-        }
-        
-        const message = `📍 Trạm: ${station}${permitText}\n📡 ${statusText}\n🕒 Thời gian đo: ${measurementTimeStr}\n⏱️ Thời gian chậm gửi dữ liệu: ${delayStr}`;
-        
-        // Send to Telegram
-        const telegramUrl = `https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`;
-        const response = await axios.post(telegramUrl, {
-            chat_id: config.telegram.chatId,
-            text: message,
-            parse_mode: 'HTML'
-        }, {
-            timeout: 10000
-        });
-        
-        if (response.data.ok) {
+        const response = await sendServerTelegramMessage(message);
+
+        if (response.ok) {
             res.json({ 
                 success: true, 
                 message: 'Đã gửi cảnh báo thành công' 
@@ -696,10 +661,14 @@ app.post('/api/telegram/alert', verifyToken, async (req, res) => {
 // Test Telegram connection (send a test message)
 app.post('/api/telegram/test', verifyToken, async (req, res) => {
     try {
-        const { chatId } = req.body;
+        const { chatId, botToken } = req.body;
         
+        const effectiveBotToken = botToken && String(botToken).trim() !== ''
+            ? String(botToken).trim()
+            : config.telegram.botToken;
+
         // Validate bot token format first
-        if (!config.telegram.botToken || !config.telegram.botToken.includes(':')) {
+        if (!effectiveBotToken || !effectiveBotToken.includes(':')) {
             return res.status(400).json({ 
                 success: false, 
                 message: 'Bot token không hợp lệ. Vui lòng nhập Bot Token đúng định dạng từ @BotFather (format: 1234567890:ABCdef...)' 
@@ -731,7 +700,7 @@ app.post('/api/telegram/test', verifyToken, async (req, res) => {
 
         console.log(`📤 Sending test message to chat ID: ${targetChatId}`);
 
-        const result = await sendTelegramMessageWithFallback(targetChatId, message);
+        const result = await sendTelegramMessageWithFallback(targetChatId, message, effectiveBotToken);
 
         if (result.data.ok) {
             console.log('✅ Test message sent successfully');
@@ -2030,24 +1999,13 @@ function saveAlertHistory() {
     }
 }
 
-function formatDelayStr(delayMinutes) {
-    if (!delayMinutes && delayMinutes !== 0) return 'N/A';
-    if (delayMinutes < 60) return `${delayMinutes} phút`;
-    if (delayMinutes < 1440) {
-        const h = Math.floor(delayMinutes / 60), m = delayMinutes % 60;
-        return m > 0 ? `${h} giờ ${m} phút` : `${h} giờ`;
-    }
-    const d = Math.floor(delayMinutes / 1440), h = Math.floor((delayMinutes % 1440) / 60);
-    return h > 0 ? `${d} ngày ${h} giờ` : `${d} ngày`;
-}
-
 function getMigratedChatId(error) {
     const migrateToChatId = error?.response?.data?.parameters?.migrate_to_chat_id;
     return migrateToChatId ? String(migrateToChatId) : null;
 }
 
-async function sendTelegramMessageWithFallback(chatId, text) {
-    const botToken = config.telegram.botToken;
+async function sendTelegramMessageWithFallback(chatId, text, botTokenOverride = null) {
+    const botToken = botTokenOverride || config.telegram.botToken;
     if (!botToken || !chatId) {
         throw new Error('botToken hoặc chatId chưa được cấu hình');
     }
@@ -2088,7 +2046,7 @@ async function sendTelegramMessageWithFallback(chatId, text) {
             throw new Error('Telegram API trả về lỗi');
         }
 
-        if (String(config.telegram.chatId) === String(chatId)) {
+        if (!botTokenOverride && String(config.telegram.chatId) === String(chatId)) {
             config.telegram.chatId = migratedChatId;
             saveTelegramConfig();
         }
@@ -2122,6 +2080,12 @@ function formatAlertTime(timestamp) {
     }).formatToParts(d);
     const get = type => parts.find(p => p.type === type)?.value || '00';
     return `${get('hour')}:${get('minute')}:${get('second')} ${get('day')}/${get('month')}/${get('year')}`;
+}
+
+function buildStationLine(index, stationName, status) {
+    const permitText = status.permit ? ` - ${status.permit}` : '';
+    const timeStr = formatAlertTime(status.measurementMs || status.measurementTime);
+    return `${index}. Trạm: ${stationName}${permitText}\n    Truyền lần cuối lúc: ${timeStr}`;
 }
 
 async function checkAndSendTelegramAlerts() {
@@ -2194,9 +2158,8 @@ async function checkAndSendTelegramAlerts() {
             .sort((a, b) => a[0].localeCompare(b[0], 'vi'));
         console.log(`   • Total stations: ${totalStations}, offline: ${offlineCount}`);
 
-        // Categorise stations: status changes (immediate) vs repeat-offline
-        const statusChangedStations = [];
-        const repeatOfflineStations = [];
+        let statusChangedCount = 0;
+        let repeatOfflineCount = 0;
 
         for (const [stationName, status] of Object.entries(stationStatus)) {
             const history = serverAlertHistory.get(stationName);
@@ -2205,23 +2168,16 @@ async function checkAndSendTelegramAlerts() {
             if (prevStatus === undefined) {
                 // First time seeing this station
                 if (status.status === 'offline') {
-                    statusChangedStations.push({ stationName, status });
+                    statusChangedCount++;
                 }
                 // Online on first run: just record, no alert
             } else if (prevStatus !== status.status) {
                 // Status changed (offline→online or online→offline)
-                statusChangedStations.push({ stationName, status });
+                statusChangedCount++;
             } else if (status.status === 'offline' && isRepeatTime) {
                 // Still offline + now is a configured repeat minute
-                repeatOfflineStations.push({ stationName, status });
+                repeatOfflineCount++;
             }
-        }
-
-        // Helper to build a compact station line: "N. Trạm: NAME - PERMIT.  Truyền lần cuối lúc: TIME"
-        function stationLine(index, stationName, status) {
-            const permitText = status.permit ? ` - ${status.permit}` : '';
-            const timeStr = formatAlertTime(status.measurementMs || status.measurementTime);
-            return `${index}. Trạm: ${stationName}${permitText}.  Truyền lần cuối lúc: ${timeStr}`;
         }
 
         function buildOfflineSummaryMessage() {
@@ -2233,35 +2189,35 @@ async function checkAndSendTelegramAlerts() {
             }
 
             offlineStations.forEach(([stationName, status], index) => {
-                lines.push(stationLine(index + 1, stationName, status));
+                lines.push(buildStationLine(index + 1, stationName, status));
             });
 
             return lines.join('\n');
         }
 
         // Send status-change alert (immediate)
-        if (statusChangedStations.length > 0) {
+        if (statusChangedCount > 0) {
             const message = buildOfflineSummaryMessage();
             try {
                 await sendServerTelegramMessage(message);
-                console.log(`✅ [TELEGRAM] Sent immediate alert after ${statusChangedStations.length} status change(s)`);
+                console.log(`✅ [TELEGRAM] Sent immediate alert after ${statusChangedCount} status change(s)`);
             } catch (err) {
                 console.error('❌ [TELEGRAM] Failed to send status-change alert:', err.message);
             }
         }
 
         // Send repeat alert for persistently-offline stations
-        if (repeatOfflineStations.length > 0) {
+        if (repeatOfflineCount > 0) {
             const message = buildOfflineSummaryMessage();
             try {
                 await sendServerTelegramMessage(message);
-                console.log(`✅ [TELEGRAM] Sent repeat alert for ${repeatOfflineStations.length} offline station(s)`);
+                console.log(`✅ [TELEGRAM] Sent repeat alert for ${repeatOfflineCount} offline station(s)`);
             } catch (err) {
                 console.error('❌ [TELEGRAM] Failed to send repeat alert:', err.message);
             }
         }
 
-        if (statusChangedStations.length === 0 && repeatOfflineStations.length === 0) {
+        if (statusChangedCount === 0 && repeatOfflineCount === 0) {
             console.log('   ⏭️ No status changes and not a scheduled repeat time, skipping');
         }
 

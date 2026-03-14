@@ -502,8 +502,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (telegramConfigBtn) {
         telegramConfigBtn.addEventListener('click', async () => {
             toggleUserMenu(); // Close dropdown
-            await loadTelegramConfigToModal();
             showModal('telegram-config-modal');
+            await loadTelegramConfigToModal();
         });
     }
     
@@ -549,8 +549,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Load Telegram config to modal
 async function loadTelegramConfigToModal() {
     try {
+        const modal = document.getElementById('telegram-config-modal');
         const token = localStorage.getItem('authToken');
-        if (!token) return;
+        if (!modal || !token) return;
+
+        const enabledCheckbox = modal.querySelector('#telegram-enabled');
+        const botTokenInput = modal.querySelector('#telegram-bot-token');
+        const chatIdInput = modal.querySelector('#telegram-chat-id');
+        const refreshIntervalInput = modal.querySelector('#telegram-refresh-interval');
+        const delayThresholdInput = modal.querySelector('#telegram-delay-threshold');
+        const selectAllBtn = modal.querySelector('#alert-minutes-select-all');
+        const clearAllBtn  = modal.querySelector('#alert-minutes-clear-all');
+        const getChatIdLink = modal.querySelector('#get-chat-id-link');
+
+        const modalError = modal.querySelector('.modal-error');
+        if (modalError) {
+            modalError.classList.remove('show');
+            modalError.textContent = '';
+        }
         
         const response = await fetch('/api/telegram/config', {
             headers: {
@@ -561,12 +577,6 @@ async function loadTelegramConfigToModal() {
         if (response.ok) {
             const data = await response.json();
             if (data.success) {
-                const enabledCheckbox = document.getElementById('telegram-enabled');
-                const botTokenInput = document.getElementById('telegram-bot-token');
-                const chatIdInput = document.getElementById('telegram-chat-id');
-                const refreshIntervalInput = document.getElementById('telegram-refresh-interval');
-                const delayThresholdInput = document.getElementById('telegram-delay-threshold');
-                
                 if (enabledCheckbox) enabledCheckbox.checked = data.config.enabled;
                 
                 // Handle Bot Token field display
@@ -598,22 +608,19 @@ async function loadTelegramConfigToModal() {
                 const alertMinutes = Array.isArray(data.config.alertMinutes)
                     ? data.config.alertMinutes
                     : [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
-                document.querySelectorAll('.alert-minute-cb').forEach(cb => {
+                modal.querySelectorAll('.alert-minute-cb').forEach(cb => {
                     cb.checked = alertMinutes.includes(parseInt(cb.value));
                 });
 
                 // Wire up Select All / Clear All buttons
-                const selectAllBtn = document.getElementById('alert-minutes-select-all');
-                const clearAllBtn  = document.getElementById('alert-minutes-clear-all');
                 if (selectAllBtn) {
-                    selectAllBtn.onclick = () => document.querySelectorAll('.alert-minute-cb').forEach(cb => { cb.checked = true; });
+                    selectAllBtn.onclick = () => modal.querySelectorAll('.alert-minute-cb').forEach(cb => { cb.checked = true; });
                 }
                 if (clearAllBtn) {
-                    clearAllBtn.onclick = () => document.querySelectorAll('.alert-minute-cb').forEach(cb => { cb.checked = false; });
+                    clearAllBtn.onclick = () => modal.querySelectorAll('.alert-minute-cb').forEach(cb => { cb.checked = false; });
                 }
 
                 // Update the getUpdates link dynamically
-                const getChatIdLink = document.getElementById('get-chat-id-link');
                 if (getChatIdLink) {
                     if (tokenIsSet) {
                         // Token is set server-side; use a proxy endpoint to avoid exposing the token
@@ -633,6 +640,7 @@ async function loadTelegramConfigToModal() {
         }
     } catch (error) {
         console.error('Error loading Telegram config:', error);
+        showModalError('telegram-config-modal', 'Không thể tải cấu hình Telegram');
     }
 }
 
@@ -715,6 +723,7 @@ async function handleSaveTelegramConfig(e) {
 // Handle test Telegram connection
 async function handleTestTelegram() {
     const chatIdInput = document.getElementById('telegram-chat-id');
+    const botTokenInput = document.getElementById('telegram-bot-token');
     const testResult = document.getElementById('test-telegram-result');
     const testBtn = document.getElementById('test-telegram-btn');
     
@@ -725,6 +734,7 @@ async function handleTestTelegram() {
         }
         
         const chatId = chatIdInput.value.trim();
+        const botToken = botTokenInput ? botTokenInput.value.trim() : '';
         
         if (!chatId) {
             throw new Error('Vui lòng nhập Chat ID trước khi test');
@@ -750,7 +760,8 @@ async function handleTestTelegram() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                chatId: chatId
+                chatId: chatId,
+                botToken: botToken || undefined
             })
         });
         
