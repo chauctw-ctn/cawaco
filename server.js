@@ -727,28 +727,23 @@ app.post('/api/telegram/test', verifyToken, async (req, res) => {
             year: 'numeric'
         });
         
-        const message = `🧪 TEST CẢNH BÁO TELEGRAM\n\n📍 Trạm: TEST_STATION\n📡 ✅ Online\n🕒 Thời gian đo: ${currentTime}\n⏱️ Thời gian chậm gửi dữ liệu: 0 phút\n🕒 Thời gian gửi cảnh báo: ${currentTime}\n\n✅ Kết nối Telegram thành công!`;
-        
-        // Send to Telegram
-        const telegramUrl = `https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`;
+        const message = `🧪 TEST CẢNH BÁO TELEGRAM\n\n📡 Chưa gửi dữ liệu: 0/1\n1. Trạm: TEST_STATION.  Truyền lần cuối lúc: ${currentTime}`;
+
         console.log(`📤 Sending test message to chat ID: ${targetChatId}`);
-        
-        const response = await axios.post(telegramUrl, {
-            chat_id: targetChatId,
-            text: message,
-            parse_mode: 'HTML'
-        }, {
-            timeout: 10000
-        });
-        
-        if (response.data.ok) {
+
+        const result = await sendTelegramMessageWithFallback(targetChatId, message);
+
+        if (result.data.ok) {
             console.log('✅ Test message sent successfully');
             res.json({ 
                 success: true, 
-                message: 'Đã gửi tin nhắn test thành công! Kiểm tra Telegram của bạn.',
+                message: result.migrated
+                    ? `Đã gửi tin nhắn test thành công và tự cập nhật Chat ID mới: ${result.chatId}`
+                    : 'Đã gửi tin nhắn test thành công! Kiểm tra Telegram của bạn.',
                 data: {
-                    chatId: targetChatId,
-                    messageId: response.data.result.message_id
+                    chatId: result.chatId,
+                    messageId: result.data.result.message_id,
+                    migrated: result.migrated
                 }
             });
         } else {
@@ -2046,20 +2041,70 @@ function formatDelayStr(delayMinutes) {
     return h > 0 ? `${d} ngày ${h} giờ` : `${d} ngày`;
 }
 
-async function sendServerTelegramMessage(text) {
+function getMigratedChatId(error) {
+    const migrateToChatId = error?.response?.data?.parameters?.migrate_to_chat_id;
+    return migrateToChatId ? String(migrateToChatId) : null;
+}
+
+async function sendTelegramMessageWithFallback(chatId, text) {
     const botToken = config.telegram.botToken;
-    const chatId = config.telegram.chatId;
     if (!botToken || !chatId) {
         throw new Error('botToken hoặc chatId chưa được cấu hình');
     }
+
     const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-    const response = await axios.post(url, {
-        chat_id: chatId,
-        text,
-        parse_mode: 'HTML'
-    }, { timeout: 10000 });
-    if (!response.data.ok) throw new Error('Telegram API trả về lỗi');
-    return response.data;
+
+    try {
+        const response = await axios.post(url, {
+            chat_id: chatId,
+            text,
+            parse_mode: 'HTML'
+        }, { timeout: 10000 });
+
+        if (!response.data.ok) {
+            throw new Error('Telegram API trả về lỗi');
+        }
+
+        return {
+            data: response.data,
+            chatId: String(chatId),
+            migrated: false
+        };
+    } catch (error) {
+        const migratedChatId = getMigratedChatId(error);
+        if (!migratedChatId) {
+            throw error;
+        }
+
+        console.warn(`⚠️ [TELEGRAM] Chat upgraded to supergroup, retrying with new chat ID: ${migratedChatId}`);
+
+        const retryResponse = await axios.post(url, {
+            chat_id: migratedChatId,
+            text,
+            parse_mode: 'HTML'
+        }, { timeout: 10000 });
+
+        if (!retryResponse.data.ok) {
+            throw new Error('Telegram API trả về lỗi');
+        }
+
+        if (String(config.telegram.chatId) === String(chatId)) {
+            config.telegram.chatId = migratedChatId;
+            saveTelegramConfig();
+        }
+
+        return {
+            data: retryResponse.data,
+            chatId: migratedChatId,
+            migrated: true
+        };
+    }
+}
+
+async function sendServerTelegramMessage(text) {
+    const chatId = config.telegram.chatId;
+    const result = await sendTelegramMessageWithFallback(chatId, text);
+    return result.data;
 }
 
 /**
@@ -2144,6 +2189,9 @@ async function checkAndSendTelegramAlerts() {
 
         const totalStations = Object.keys(stationStatus).length;
         const offlineCount = Object.values(stationStatus).filter(s => s.status === 'offline').length;
+        const offlineStations = Object.entries(stationStatus)
+            .filter(([, status]) => status.status === 'offline')
+            .sort((a, b) => a[0].localeCompare(b[0], 'vi'));
         console.log(`   • Total stations: ${totalStations}, offline: ${offlineCount}`);
 
         // Categorise stations: status changes (immediate) vs repeat-offline
@@ -2176,16 +2224,27 @@ async function checkAndSendTelegramAlerts() {
             return `${index}. Trạm: ${stationName}${permitText}.  Truyền lần cuối lúc: ${timeStr}`;
         }
 
+        function buildOfflineSummaryMessage() {
+            const lines = [`📡 Chưa gửi dữ liệu: ${offlineCount}/${totalStations}`];
+
+            if (offlineStations.length === 0) {
+                lines.push('Tất cả trạm đang truyền dữ liệu bình thường.');
+                return lines.join('\n');
+            }
+
+            offlineStations.forEach(([stationName, status], index) => {
+                lines.push(stationLine(index + 1, stationName, status));
+            });
+
+            return lines.join('\n');
+        }
+
         // Send status-change alert (immediate)
         if (statusChangedStations.length > 0) {
-            const lines = [`📡 Chưa gửi dữ liệu: ${offlineCount}/${totalStations}`];
-            statusChangedStations.forEach(({ stationName, status }, i) => {
-                lines.push(stationLine(i + 1, stationName, status));
-            });
-            const message = lines.join('\n');
+            const message = buildOfflineSummaryMessage();
             try {
                 await sendServerTelegramMessage(message);
-                console.log(`✅ [TELEGRAM] Sent status-change alert for ${statusChangedStations.length} station(s)`);
+                console.log(`✅ [TELEGRAM] Sent immediate alert after ${statusChangedStations.length} status change(s)`);
             } catch (err) {
                 console.error('❌ [TELEGRAM] Failed to send status-change alert:', err.message);
             }
@@ -2193,11 +2252,7 @@ async function checkAndSendTelegramAlerts() {
 
         // Send repeat alert for persistently-offline stations
         if (repeatOfflineStations.length > 0) {
-            const lines = [`📡 Chưa gửi dữ liệu: ${offlineCount}/${totalStations}`];
-            repeatOfflineStations.forEach(({ stationName, status }, i) => {
-                lines.push(stationLine(i + 1, stationName, status));
-            });
-            const message = lines.join('\n');
+            const message = buildOfflineSummaryMessage();
             try {
                 await sendServerTelegramMessage(message);
                 console.log(`✅ [TELEGRAM] Sent repeat alert for ${repeatOfflineStations.length} offline station(s)`);
