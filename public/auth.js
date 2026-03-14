@@ -566,7 +566,6 @@ async function loadTelegramConfigToModal() {
                 const chatIdInput = document.getElementById('telegram-chat-id');
                 const refreshIntervalInput = document.getElementById('telegram-refresh-interval');
                 const delayThresholdInput = document.getElementById('telegram-delay-threshold');
-                const alertRepeatInput = document.getElementById('telegram-alert-repeat');
                 
                 if (enabledCheckbox) enabledCheckbox.checked = data.config.enabled;
                 
@@ -594,7 +593,24 @@ async function loadTelegramConfigToModal() {
                 if (chatIdInput) chatIdInput.value = data.config.chatId || '';
                 if (refreshIntervalInput) refreshIntervalInput.value = data.config.refreshInterval || 15;
                 if (delayThresholdInput) delayThresholdInput.value = data.config.delayThreshold || 60;
-                if (alertRepeatInput) alertRepeatInput.value = data.config.alertRepeatInterval || 60;
+
+                // Populate alert-minutes checkboxes
+                const alertMinutes = Array.isArray(data.config.alertMinutes)
+                    ? data.config.alertMinutes
+                    : [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+                document.querySelectorAll('.alert-minute-cb').forEach(cb => {
+                    cb.checked = alertMinutes.includes(parseInt(cb.value));
+                });
+
+                // Wire up Select All / Clear All buttons
+                const selectAllBtn = document.getElementById('alert-minutes-select-all');
+                const clearAllBtn  = document.getElementById('alert-minutes-clear-all');
+                if (selectAllBtn) {
+                    selectAllBtn.onclick = () => document.querySelectorAll('.alert-minute-cb').forEach(cb => { cb.checked = true; });
+                }
+                if (clearAllBtn) {
+                    clearAllBtn.onclick = () => document.querySelectorAll('.alert-minute-cb').forEach(cb => { cb.checked = false; });
+                }
 
                 // Update the getUpdates link dynamically
                 const getChatIdLink = document.getElementById('get-chat-id-link');
@@ -629,7 +645,6 @@ async function handleSaveTelegramConfig(e) {
         const chatIdInput = document.getElementById('telegram-chat-id');
         const refreshIntervalInput = document.getElementById('telegram-refresh-interval');
         const delayThresholdInput = document.getElementById('telegram-delay-threshold');
-        const alertRepeatInput = document.getElementById('telegram-alert-repeat');
         
         try {
             const token = localStorage.getItem('authToken');
@@ -642,7 +657,11 @@ async function handleSaveTelegramConfig(e) {
             const chatId = chatIdInput ? chatIdInput.value.trim() : '';
         const refreshInterval = parseInt(refreshIntervalInput.value);
         const delayThreshold = parseInt(delayThresholdInput.value);
-        const alertRepeat = parseInt(alertRepeatInput.value);
+
+        // Collect selected alert minutes from checkboxes
+        const alertMinutes = Array.from(document.querySelectorAll('.alert-minute-cb:checked'))
+            .map(cb => parseInt(cb.value))
+            .filter(v => !isNaN(v));
         
         // Validate
         if (enabled && !chatId) {
@@ -657,10 +676,6 @@ async function handleSaveTelegramConfig(e) {
             throw new Error('Độ trễ offline tối thiểu là 1 phút');
         }
         
-        if (isNaN(alertRepeat) || alertRepeat < 1) {
-            throw new Error('Chu kỳ nhắc lại cảnh báo tối thiểu là 1 phút');
-        }
-        
         const response = await fetch('/api/telegram/config', {
             method: 'POST',
             headers: {
@@ -673,7 +688,7 @@ async function handleSaveTelegramConfig(e) {
                 chatId: chatId,
                 refreshInterval: refreshInterval,
                 delayThreshold: delayThreshold,
-                alertRepeatInterval: alertRepeat
+                alertMinutes: alertMinutes
             })
         });
         

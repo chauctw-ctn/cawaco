@@ -401,10 +401,26 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="telegram-alert-repeat">Nhắc lại cảnh báo (phút):</label>
-                    <input type="number" id="telegram-alert-repeat" min="1" value="60" step="1" required>
-                    <small style="color: #6b7280; display: block; margin-top: 4px;">
-                        Chu kỳ gửi lại cảnh báo cho các trạm vẫn offline (tối thiểu 1 phút, khuyến nghị 60 phút)
+                    <label>Nhắc lại cảnh báo tại phút (trong mỗi giờ):</label>
+                    <div id="alert-minutes-checkboxes" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 12px; margin-top: 8px;">
+                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:normal;"><input type="checkbox" class="alert-minute-cb" value="5"  style="width:auto;"> :05</label>
+                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:normal;"><input type="checkbox" class="alert-minute-cb" value="10" style="width:auto;"> :10</label>
+                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:normal;"><input type="checkbox" class="alert-minute-cb" value="15" style="width:auto;"> :15</label>
+                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:normal;"><input type="checkbox" class="alert-minute-cb" value="20" style="width:auto;"> :20</label>
+                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:normal;"><input type="checkbox" class="alert-minute-cb" value="25" style="width:auto;"> :25</label>
+                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:normal;"><input type="checkbox" class="alert-minute-cb" value="30" style="width:auto;"> :30</label>
+                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:normal;"><input type="checkbox" class="alert-minute-cb" value="35" style="width:auto;"> :35</label>
+                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:normal;"><input type="checkbox" class="alert-minute-cb" value="40" style="width:auto;"> :40</label>
+                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:normal;"><input type="checkbox" class="alert-minute-cb" value="45" style="width:auto;"> :45</label>
+                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:normal;"><input type="checkbox" class="alert-minute-cb" value="50" style="width:auto;"> :50</label>
+                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:normal;"><input type="checkbox" class="alert-minute-cb" value="55" style="width:auto;"> :55</label>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <button type="button" id="alert-minutes-select-all" class="btn-secondary" style="font-size:12px;padding:4px 10px;">Chọn tất cả</button>
+                        <button type="button" id="alert-minutes-clear-all" class="btn-secondary" style="font-size:12px;padding:4px 10px;">Bỏ chọn</button>
+                    </div>
+                    <small style="color: #6b7280; display: block; margin-top: 6px;">
+                        Nhắc lại cho trạm vẫn offline tại các phút đã chọn trong mỗi giờ (mặc định mỗi 5 phút)
                     </small>
                 </div>
                 

@@ -61,7 +61,8 @@ function saveTelegramConfig() {
             chatId: config.telegram.chatId,
             refreshInterval: config.telegram.refreshInterval || 15,
             delayThreshold: config.telegram.delayThreshold || 60,
-            alertRepeatInterval: config.telegram.alertRepeatInterval || 60
+            alertRepeatInterval: config.telegram.alertRepeatInterval || 60,
+            alertMinutes: config.telegram.alertMinutes || [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
         };
         fs.writeFileSync(TELEGRAM_CONFIG_FILE, JSON.stringify(configToSave, null, 2), 'utf8');
         console.log('💾 Saved Telegram config to file');
@@ -801,7 +802,8 @@ app.get('/api/telegram/config', verifyToken, async (req, res) => {
                 chatId: config.telegram.chatId,
                 refreshInterval: config.telegram.refreshInterval || 15,
                 delayThreshold: config.telegram.delayThreshold || 60,
-                alertRepeatInterval: config.telegram.alertRepeatInterval || 60
+                alertRepeatInterval: config.telegram.alertRepeatInterval || 60,
+                alertMinutes: config.telegram.alertMinutes || [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
             }
         });
     } catch (error) {
@@ -832,7 +834,8 @@ app.get('/api/telegram/health', async (req, res) => {
             settings: {
                 refreshInterval: config.telegram?.refreshInterval || 15,
                 delayThreshold: config.telegram?.delayThreshold || 60,
-                alertRepeatInterval: config.telegram?.alertRepeatInterval || 60
+                alertRepeatInterval: config.telegram?.alertRepeatInterval || 60,
+                alertMinutes: config.telegram?.alertMinutes || [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
             }
         };
         
@@ -876,7 +879,7 @@ app.post('/api/telegram/config', verifyToken, async (req, res) => {
             });
         }
         
-        const { enabled, chatId, refreshInterval, delayThreshold, alertRepeatInterval, botToken } = req.body;
+        const { enabled, chatId, refreshInterval, delayThreshold, alertRepeatInterval, alertMinutes, botToken } = req.body;
         
         // Validate bot token format if provided
         if (botToken !== undefined && String(botToken).trim() !== '' && botToken !== '***set***') {
@@ -909,6 +912,16 @@ app.post('/api/telegram/config', verifyToken, async (req, res) => {
         if (alertRepeatInterval !== undefined) {
             config.telegram.alertRepeatInterval = Math.max(1, parseInt(alertRepeatInterval));
         }
+
+        if (alertMinutes !== undefined) {
+            // Validate: must be array of numbers in range 0-59
+            if (Array.isArray(alertMinutes)) {
+                const validMinutes = alertMinutes
+                    .map(m => parseInt(m))
+                    .filter(m => !isNaN(m) && m >= 0 && m <= 59);
+                config.telegram.alertMinutes = validMinutes;
+            }
+        }
         
         // Save to file
         const saved = saveTelegramConfig();
@@ -932,7 +945,8 @@ app.post('/api/telegram/config', verifyToken, async (req, res) => {
                 chatId: config.telegram.chatId,
                 refreshInterval: config.telegram.refreshInterval || 15,
                 delayThreshold: config.telegram.delayThreshold || 60,
-                alertRepeatInterval: config.telegram.alertRepeatInterval || 60
+                alertRepeatInterval: config.telegram.alertRepeatInterval || 60,
+                alertMinutes: config.telegram.alertMinutes || [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
             }
         });
         
@@ -2043,36 +2057,47 @@ async function sendServerTelegramMessage(text) {
     return response.data;
 }
 
+/**
+ * Format measurement timestamp for Telegram alert: HH:mm:ss DD/MM/YYYY (Vietnam time)
+ */
+function formatAlertTime(timestamp) {
+    if (!timestamp) return 'N/A';
+    const d = new Date(typeof timestamp === 'number' ? timestamp : Date.parse(timestamp));
+    if (isNaN(d.getTime())) return 'N/A';
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour12: false
+    }).formatToParts(d);
+    const get = type => parts.find(p => p.type === type)?.value || '00';
+    return `${get('hour')}:${get('minute')}:${get('second')} ${get('day')}/${get('month')}/${get('year')}`;
+}
+
 async function checkAndSendTelegramAlerts() {
     try {
         const vnNow = new Date();
         console.log(`\n🔍 [TELEGRAM] Running periodic check at ${vnNow.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
-        
+
         if (!config.telegram.enabled || !config.telegram.botToken || !config.telegram.chatId) {
             console.log('⚠️ [TELEGRAM] Skipping: Telegram not properly configured');
             return;
         }
 
         const delayThreshold = config.telegram.delayThreshold || 60;
-        const alertRepeatInterval = config.telegram.alertRepeatInterval || 60;
+        const alertMinutes = config.telegram.alertMinutes || [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
         const now = Date.now();
         lastTelegramCheckTime = now;
 
-        // Check if current Vietnam time (minutes from midnight) is divisible by alertRepeatInterval
+        // Determine current Vietnam minute-of-hour
         const vnTimeStr = vnNow.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false, hour: '2-digit', minute: '2-digit' });
-        const [hours, minutes] = vnTimeStr.split(':').map(Number);
-        const minutesFromMidnight = hours * 60 + minutes;
-        const isRepeatTime = alertRepeatInterval > 0 && (minutesFromMidnight % alertRepeatInterval === 0);
+        const [hours, currentMinute] = vnTimeStr.split(':').map(Number);
+        const isRepeatTime = alertMinutes.includes(currentMinute);
 
-        console.log(`   • VN time: ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}, minutes from midnight: ${minutesFromMidnight}`);
-        console.log(`   • Alert repeat interval: ${alertRepeatInterval} min, is repeat time: ${isRepeatTime}`);
+        console.log(`   • VN time: ${String(hours).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`);
+        console.log(`   • Alert minutes: [${alertMinutes.join(', ')}], is repeat time: ${isRepeatTime}`);
 
-        if (!isRepeatTime) {
-            console.log(`   ⏭️ Current time not divisible by ${alertRepeatInterval} min, skipping`);
-            return;
-        }
-
-        // Fetch MONRE data (same source as "DỮ LIỆU ĐỒNG BỘ CÁC TRẠM QUAN TRẮC VỚI WEB BỘ TÀI NGUYÊN")
+        // Fetch MONRE data
         let monreData;
         try {
             monreData = await monreModule.getPermitData();
@@ -2086,7 +2111,7 @@ async function checkAndSendTelegramAlerts() {
             return;
         }
 
-        // Group by station, keep the newest measurement per station
+        // Group by station, keep newest measurement per station
         const stationStatus = {};
         for (const row of monreData) {
             const station = row.station || 'N/A';
@@ -2114,35 +2139,84 @@ async function checkAndSendTelegramAlerts() {
 
         const totalStations = Object.keys(stationStatus).length;
         const offlineCount = Object.values(stationStatus).filter(s => s.status === 'offline').length;
-        console.log(`   • Total MONRE stations: ${totalStations}, Chưa gửi dữ liệu: ${offlineCount}`);
+        console.log(`   • Total stations: ${totalStations}, offline: ${offlineCount}`);
 
-        // Send alerts for all offline stations (chưa gửi dữ liệu)
+        // Categorise stations: status changes (immediate) vs repeat-offline
+        const statusChangedStations = [];
+        const repeatOfflineStations = [];
+
         for (const [stationName, status] of Object.entries(stationStatus)) {
-            if (status.status !== 'offline') continue;
+            const history = serverAlertHistory.get(stationName);
+            const prevStatus = history?.lastAlertStatus; // undefined on first run
 
-            const delayStr = formatDelayStr(status.delayMinutes);
-            const measurementTimeStr = status.measurementTime
-                ? new Date(status.measurementTime).toLocaleString('vi-VN', {
-                    timeZone: 'Asia/Ho_Chi_Minh',
-                    hour: '2-digit', minute: '2-digit', second: '2-digit',
-                    day: '2-digit', month: '2-digit', year: 'numeric'
-                })
-                : 'N/A';
-            const permitText = status.permit ? ` - ${status.permit}` : '';
-
-            const message = `📍 Trạm: ${stationName}${permitText}\n📡 ❌ Chưa gửi dữ liệu\n🕒 Thời gian đo: ${measurementTimeStr}\n⏱️ Thời gian chậm gửi dữ liệu: ${delayStr}`;
-
-            try {
-                await sendServerTelegramMessage(message);
-                serverAlertHistory.set(stationName, { lastAlertTime: now, lastAlertStatus: 'offline' });
-                console.log(`✅ [TELEGRAM] Sent alert: ${stationName} → chưa gửi dữ liệu (delay: ${status.delayMinutes} min)`);
-            } catch (err) {
-                console.error(`❌ [TELEGRAM] Failed to send for ${stationName}:`, err.message);
+            if (prevStatus === undefined) {
+                // First time seeing this station
+                if (status.status === 'offline') {
+                    statusChangedStations.push({ stationName, status });
+                }
+                // Online on first run: just record, no alert
+            } else if (prevStatus !== status.status) {
+                // Status changed (offline→online or online→offline)
+                statusChangedStations.push({ stationName, status });
+            } else if (status.status === 'offline' && isRepeatTime) {
+                // Still offline + now is a configured repeat minute
+                repeatOfflineStations.push({ stationName, status });
             }
         }
 
+        // Helper to build a station detail block
+        function stationBlock(stationName, status) {
+            const permitText = status.permit ? ` - ${status.permit}` : '';
+            const statusText = status.status === 'offline' ? '❌ Chưa gửi dữ liệu' : '✅ Bình thường';
+            const timeStr = formatAlertTime(status.measurementMs || status.measurementTime);
+            return `📍 Trạm: ${stationName}${permitText}\n ${statusText}\n🕒 Truyền lần cuối lúc: ${timeStr}`;
+        }
+
+        // Send status-change alert (immediate)
+        if (statusChangedStations.length > 0) {
+            const lines = [`📡 Số trạm chậm truyền: ${offlineCount}/${totalStations}\n`];
+            for (const { stationName, status } of statusChangedStations) {
+                lines.push(stationBlock(stationName, status));
+            }
+            const message = lines.join('\n');
+            try {
+                await sendServerTelegramMessage(message);
+                console.log(`✅ [TELEGRAM] Sent status-change alert for ${statusChangedStations.length} station(s)`);
+            } catch (err) {
+                console.error('❌ [TELEGRAM] Failed to send status-change alert:', err.message);
+            }
+        }
+
+        // Send repeat alert for persistently-offline stations
+        if (repeatOfflineStations.length > 0) {
+            const lines = [`📡 Số trạm chậm truyền: ${offlineCount}/${totalStations}\n`];
+            for (const { stationName, status } of repeatOfflineStations) {
+                lines.push(stationBlock(stationName, status));
+            }
+            const message = lines.join('\n');
+            try {
+                await sendServerTelegramMessage(message);
+                console.log(`✅ [TELEGRAM] Sent repeat alert for ${repeatOfflineStations.length} offline station(s)`);
+            } catch (err) {
+                console.error('❌ [TELEGRAM] Failed to send repeat alert:', err.message);
+            }
+        }
+
+        if (statusChangedStations.length === 0 && repeatOfflineStations.length === 0) {
+            console.log('   ⏭️ No status changes and not a scheduled repeat time, skipping');
+        }
+
+        // Update history for ALL stations so future runs can detect changes correctly
+        for (const [stationName, status] of Object.entries(stationStatus)) {
+            const existing = serverAlertHistory.get(stationName);
+            serverAlertHistory.set(stationName, {
+                lastAlertTime: existing?.lastAlertTime || now,
+                lastAlertStatus: status.status
+            });
+        }
+
         saveAlertHistory();
-        console.log(`✓ [TELEGRAM] Check completed`);
+        console.log('✓ [TELEGRAM] Check completed');
     } catch (error) {
         console.error('❌ [TELEGRAM] Error during periodic check:', error.message);
     }
@@ -2155,7 +2229,7 @@ function startTelegramAlertInterval() {
     console.log('   • Chat ID:', config.telegram.chatId || '❌ MISSING');
     console.log('   • Refresh Interval:', config.telegram.refreshInterval || 15, 'minutes');
     console.log('   • Delay Threshold:', config.telegram.delayThreshold || 60, 'minutes');
-    console.log('   • Alert Repeat:', config.telegram.alertRepeatInterval || 60, 'minutes');
+    console.log('   • Alert Minutes:', (config.telegram.alertMinutes || [5,10,15,20,25,30,35,40,45,50,55]).join(','));
     
     if (telegramAlertInterval) {
         clearInterval(telegramAlertInterval);
@@ -2180,11 +2254,12 @@ function startTelegramAlertInterval() {
         return;
     }
     
-    // Check every minute to catch divisible minutes (alertRepeatInterval)
+    // Check every minute to catch configured alert minutes
     const intervalMs = 60 * 1000;
     
     telegramAlertInterval = setInterval(checkAndSendTelegramAlerts, intervalMs);
-    console.log(`   ✅ Alert interval STARTED: check every 1 min (alerts sent when VN minute divisible by ${config.telegram.alertRepeatInterval || 60} min)`);
+    const alertMinutesStr = (config.telegram.alertMinutes || [5,10,15,20,25,30,35,40,45,50,55]).join(', ');
+    console.log(`   ✅ Alert interval STARTED: check every 1 min, alerts at minutes [${alertMinutesStr}] or on status change`);
     
     // Run once immediately on start
     checkAndSendTelegramAlerts();

@@ -120,7 +120,8 @@ module.exports = {
     telegram: {
         botToken: process.env.TELEGRAM_BOT_TOKEN || '', // Bắt buộc đặt TELEGRAM_BOT_TOKEN trong Render Dashboard
         chatId: process.env.TELEGRAM_CHAT_ID || '', // Chat ID để nhận cảnh báo (cần cấu hình)
-        alertRepeatInterval: 60, // 60 phút - Chu kỳ nhắc lại cảnh báo cho các trạm vẫn offline
+        alertRepeatInterval: 60, // 60 phút - Chu kỳ nhắc lại cảnh báo cho các trạm vẫn offline (legacy)
+        alertMinutes: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55], // Danh sách phút trong giờ khi gửi nhắc lại
         refreshInterval: 15, // 15 phút - Chu kỳ quét dữ liệu mới từ server
         delayThreshold: 60, // 60 phút - Độ trễ tối đa trước khi trạm được coi là offline
         enabled: false // Bật/tắt chức năng cảnh báo (mặc định tắt cho đến khi cấu hình chat ID)
