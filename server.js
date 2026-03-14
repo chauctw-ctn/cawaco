@@ -34,7 +34,12 @@ function loadTelegramConfig() {
                 delete savedConfig.alertCooldown;
                 console.log('⚠️ Converted alertCooldown to alertRepeatInterval for backward compatibility');
             }
-            
+
+            // Don't overwrite a bot token set via env var with an empty string from the file
+            if (!savedConfig.botToken && config.telegram.botToken) {
+                delete savedConfig.botToken;
+            }
+
             // Merge saved config with default config
             config.telegram = { ...config.telegram, ...savedConfig };
             console.log('✅ Loaded Telegram config:', { ...config.telegram, botToken: config.telegram.botToken ? '***set***' : '(empty)' });
@@ -2164,20 +2169,19 @@ async function checkAndSendTelegramAlerts() {
             }
         }
 
-        // Helper to build a station detail block
-        function stationBlock(stationName, status) {
+        // Helper to build a compact station line: "N. Trạm: NAME - PERMIT.  Truyền lần cuối lúc: TIME"
+        function stationLine(index, stationName, status) {
             const permitText = status.permit ? ` - ${status.permit}` : '';
-            const statusText = status.status === 'offline' ? '❌ Chưa gửi dữ liệu' : '✅ Bình thường';
             const timeStr = formatAlertTime(status.measurementMs || status.measurementTime);
-            return `📍 Trạm: ${stationName}${permitText}\n ${statusText}\n🕒 Truyền lần cuối lúc: ${timeStr}`;
+            return `${index}. Trạm: ${stationName}${permitText}.  Truyền lần cuối lúc: ${timeStr}`;
         }
 
         // Send status-change alert (immediate)
         if (statusChangedStations.length > 0) {
-            const lines = [`📡 Số trạm chậm truyền: ${offlineCount}/${totalStations}\n`];
-            for (const { stationName, status } of statusChangedStations) {
-                lines.push(stationBlock(stationName, status));
-            }
+            const lines = [`📡 Chưa gửi dữ liệu: ${offlineCount}/${totalStations}`];
+            statusChangedStations.forEach(({ stationName, status }, i) => {
+                lines.push(stationLine(i + 1, stationName, status));
+            });
             const message = lines.join('\n');
             try {
                 await sendServerTelegramMessage(message);
@@ -2189,10 +2193,10 @@ async function checkAndSendTelegramAlerts() {
 
         // Send repeat alert for persistently-offline stations
         if (repeatOfflineStations.length > 0) {
-            const lines = [`📡 Số trạm chậm truyền: ${offlineCount}/${totalStations}\n`];
-            for (const { stationName, status } of repeatOfflineStations) {
-                lines.push(stationBlock(stationName, status));
-            }
+            const lines = [`📡 Chưa gửi dữ liệu: ${offlineCount}/${totalStations}`];
+            repeatOfflineStations.forEach(({ stationName, status }, i) => {
+                lines.push(stationLine(i + 1, stationName, status));
+            });
             const message = lines.join('\n');
             try {
                 await sendServerTelegramMessage(message);
