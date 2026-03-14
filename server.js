@@ -2184,8 +2184,8 @@ async function checkAndSendTelegramAlerts() {
             const lines = [`📡 Chưa gửi dữ liệu: ${offlineCount}/${totalStations}`];
 
             if (offlineStations.length === 0) {
-                lines.push('Tất cả trạm đang truyền dữ liệu bình thường.');
-                return lines.join('\n');
+                // lines.push('Tất cả trạm đang truyền dữ liệu bình thường.');
+                // return lines.join('\n');
             }
 
             offlineStations.forEach(([stationName, status], index) => {
