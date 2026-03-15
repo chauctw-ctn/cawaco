@@ -314,6 +314,51 @@
         </div>
     </div>
 
+    <!-- Daily Capacity Chart Modal -->
+    <div id="daily-chart-modal" class="daily-chart-modal-overlay" style="display:none;">
+        <div class="daily-chart-modal-box">
+            <div class="daily-chart-modal-header">
+                <div>
+                    <div class="daily-chart-modal-title">THỐNG KÊ CÔNG SUẤT NGÀY</div>
+                    <div class="daily-chart-modal-station" id="daily-chart-station-name"></div>
+                </div>
+                <button class="daily-chart-close-btn" id="daily-chart-close-btn" title="Đóng">&times;</button>
+            </div>
+            <!-- Month / Year filter -->
+            <div class="daily-chart-filter-row">
+                <label class="daily-chart-filter-label">Tháng:</label>
+                <select id="daily-chart-month" class="daily-chart-select">
+                    <option value="1">Tháng 1</option>
+                    <option value="2">Tháng 2</option>
+                    <option value="3">Tháng 3</option>
+                    <option value="4">Tháng 4</option>
+                    <option value="5">Tháng 5</option>
+                    <option value="6">Tháng 6</option>
+                    <option value="7">Tháng 7</option>
+                    <option value="8">Tháng 8</option>
+                    <option value="9">Tháng 9</option>
+                    <option value="10">Tháng 10</option>
+                    <option value="11">Tháng 11</option>
+                    <option value="12">Tháng 12</option>
+                </select>
+                <label class="daily-chart-filter-label">Năm:</label>
+                <select id="daily-chart-year" class="daily-chart-select"></select>
+                <button id="daily-chart-load-btn" class="daily-chart-load-btn">Xem</button>
+            </div>
+            <!-- Summary -->
+            <div class="daily-chart-summary" id="daily-chart-summary"></div>
+            <!-- Chart -->
+            <div class="daily-chart-canvas-wrapper">
+                <div id="daily-chart-loading" class="daily-chart-loading" style="display:none;">
+                    <div class="spinner" style="margin: 0 auto;"></div>
+                    <p>Đang tải dữ liệu...</p>
+                </div>
+                <div id="daily-chart-error" class="daily-chart-error" style="display:none;"></div>
+                <canvas id="daily-chart-canvas"></canvas>
+            </div>
+        </div>
+    </div>
+
     <!-- Load header and sidebar first -->
     <script src="header-loader.js?v=20260307mobile"></script>
     <script src="sidebar-loader.js?v=20260307mobile"></script>
@@ -321,6 +366,7 @@
     <script src="auth.js?v=20260307mobile"></script>
     <script src="header.js?v=20260307mobile"></script>
     <script src="visitor-tracker.js?v=20260307mobile"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="permit-capacity.js?v=20260307mobile"></script>
     <script>
         // Permit capacity page initialization

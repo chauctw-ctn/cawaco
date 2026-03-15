@@ -597,6 +597,103 @@ app.get('/api/permit-capacity', verifyToken, async (req, res) => {
     }
 });
 
+/**
+ * GET /api/station-daily-capacity/:stationName
+ * Returns daily capacity (m³/day) for a station in a given month.
+ * Query params: year, month (1-12)
+ */
+app.get('/api/station-daily-capacity/:stationName', verifyToken, async (req, res) => {
+    try {
+        const stationName = decodeURIComponent(req.params.stationName);
+        const year  = parseInt(req.query.year)  || new Date().getFullYear();
+        const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
+
+        if (month < 1 || month > 12 || year < 2000 || year > 2100) {
+            return res.status(400).json({ success: false, message: 'Tháng/năm không hợp lệ' });
+        }
+
+        if (!dbModule.pool) {
+            return res.status(503).json({ success: false, message: 'Database chưa sẵn sàng' });
+        }
+
+        await dbModule.pool.query("SET TIMEZONE='Asia/Ho_Chi_Minh'");
+
+        const daysInMonth = new Date(year, month, 0).getDate();
+
+        // Include the day immediately before the month to compute day-1 capacity
+        const prevMonthYear  = month === 1 ? year - 1 : year;
+        const prevMonth      = month === 1 ? 12 : month - 1;
+        const prevMonthDays  = new Date(prevMonthYear, prevMonth, 0).getDate();
+
+        const startTs = new Date(`${prevMonthYear}-${String(prevMonth).padStart(2,'0')}-${String(prevMonthDays).padStart(2,'0')}T00:00:00+07:00`);
+        const endTs   = new Date(`${year}-${String(month).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}T23:59:59+07:00`);
+
+        // Max "Tổng lưu lượng" per calendar day (VN timezone) across all 3 tables
+        const queryText = `
+            SELECT
+                DATE(ts AT TIME ZONE 'Asia/Ho_Chi_Minh') AS day,
+                MAX(CAST(val AS NUMERIC))                 AS max_value,
+                unit
+            FROM (
+                SELECT timestamp AS ts, value AS val, unit FROM mqtt_data
+                 WHERE parameter_name ILIKE '%tổng lưu lượng%'
+                   AND station_name = $1 AND timestamp >= $2 AND timestamp <= $3
+                UNION ALL
+                SELECT timestamp, value, unit FROM tva_data
+                 WHERE parameter_name ILIKE '%tổng lưu lượng%'
+                   AND station_name = $1 AND timestamp >= $2 AND timestamp <= $3
+                UNION ALL
+                SELECT timestamp, value, unit FROM scada_data
+                 WHERE parameter_name ILIKE '%tổng lưu lượng%'
+                   AND station_name = $1 AND timestamp >= $2 AND timestamp <= $3
+            ) combined
+            GROUP BY DATE(ts AT TIME ZONE 'Asia/Ho_Chi_Minh'), unit
+            ORDER BY day ASC
+        `;
+
+        const result = await dbModule.pool.query(queryText, [stationName, startTs.toISOString(), endTs.toISOString()]);
+
+        // Build date → max_value map
+        const dailyMap = {};
+        let unit = 'm³';
+        result.rows.forEach(row => {
+            const dayStr = (row.day instanceof Date ? row.day.toISOString() : String(row.day)).substring(0, 10);
+            dailyMap[dayStr] = parseFloat(row.max_value) || 0;
+            if (row.unit) unit = row.unit;
+        });
+
+        // Previous day's key (last day of previous month)
+        const prevDayKey = `${prevMonthYear}-${String(prevMonth).padStart(2,'0')}-${String(prevMonthDays).padStart(2,'0')}`;
+
+        const dailyCapacity = [];
+        for (let d = 1; d <= daysInMonth; d++) {
+            const todayKey = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const yesterdayKey = d === 1
+                ? prevDayKey
+                : `${year}-${String(month).padStart(2,'0')}-${String(d-1).padStart(2,'0')}`;
+
+            const todayMax = dailyMap[todayKey]     || 0;
+            const prevMax  = dailyMap[yesterdayKey] || 0;
+
+            let capacity = 0;
+            if (todayMax > 0 && prevMax > 0 && todayMax > prevMax) {
+                capacity = todayMax - prevMax;
+            }
+
+            dailyCapacity.push({
+                day: d,
+                date: todayKey,
+                capacity: Math.round(capacity * 100) / 100
+            });
+        }
+
+        res.json({ success: true, stationName, year, month, unit, dailyCapacity });
+    } catch (err) {
+        console.error('❌ Error fetching station daily capacity:', err.message);
+        res.status(500).json({ success: false, message: 'Lỗi server: ' + err.message });
+    }
+});
+
 // ============================================
 // TELEGRAM ALERT API
 // ============================================
@@ -686,17 +783,7 @@ app.post('/api/telegram/test', verifyToken, async (req, res) => {
         }
         
         // Format test message
-        const currentTime = new Date().toLocaleString('vi-VN', {
-            timeZone: 'Asia/Ho_Chi_Minh',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        });
-        
-        const message = `🧪 TEST CẢNH BÁO TELEGRAM\n\n📡 Chưa gửi dữ liệu: 0/1\n1. Trạm: TEST_STATION.  Truyền lần cuối lúc: ${currentTime}`;
+        const message = `🧪 TEST CẢNH BÁO TELEGRAM\n\n📡 Chưa gửi dữ liệu: 1/1\n1. TEST_STATION - GP_TEST. Tgian: ${formatAlertTime(Date.now())}`;
 
         console.log(`📤 Sending test message to chat ID: ${targetChatId}`);
 
@@ -2074,18 +2161,18 @@ function formatAlertTime(timestamp) {
     if (isNaN(d.getTime())) return 'N/A';
     const parts = new Intl.DateTimeFormat('en-GB', {
         timeZone: 'Asia/Ho_Chi_Minh',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour: '2-digit', minute: '2-digit',
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour12: false
     }).formatToParts(d);
     const get = type => parts.find(p => p.type === type)?.value || '00';
-    return `${get('hour')}:${get('minute')}:${get('second')} ${get('day')}/${get('month')}/${get('year')}`;
+    return `${get('hour')}:${get('minute')}-${get('day')}/${get('month')}/${get('year')}`;
 }
 
 function buildStationLine(index, stationName, status) {
     const permitText = status.permit ? ` - ${status.permit}` : '';
     const timeStr = formatAlertTime(status.measurementMs || status.measurementTime);
-    return `${index}. Trạm: ${stationName}${permitText}\n    Truyền lần cuối lúc: ${timeStr}`;
+    return `${index}. ${stationName}${permitText}. Tgian: ${timeStr}`;
 }
 
 async function checkAndSendTelegramAlerts() {
@@ -2181,17 +2268,13 @@ async function checkAndSendTelegramAlerts() {
         }
 
         function buildOfflineSummaryMessage() {
-            const lines = [`📡 Chưa gửi dữ liệu: ${offlineCount}/${totalStations}`];
-
             if (offlineStations.length === 0) {
-                // lines.push('Tất cả trạm đang truyền dữ liệu bình thường.');
-                // return lines.join('\n');
+                return 'Các trạm: ✅ Bình thường';
             }
-
+            const lines = [`📡 Chưa gửi dữ liệu: ${offlineCount}/${totalStations}`];
             offlineStations.forEach(([stationName, status], index) => {
                 lines.push(buildStationLine(index + 1, stationName, status));
             });
-
             return lines.join('\n');
         }
 

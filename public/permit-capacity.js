@@ -292,9 +292,12 @@ function renderCapacityTable(tableData) {
             
             // Station name column (standardized)
             const stationTd = document.createElement('td');
-            stationTd.className = 'station-name';
+            stationTd.className = 'station-name clickable';
             stationTd.style.textAlign = 'left';
             stationTd.textContent = standardizeStationName(row.stationName, permit);
+            stationTd.dataset.rawStation = row.stationName;
+            stationTd.title = `Xem thống kê công suất ngày của ${standardizeStationName(row.stationName, permit)}`;
+            stationTd.addEventListener('click', () => openDailyChartModal(row.stationName, standardizeStationName(row.stationName, permit)));
             tr.appendChild(stationTd);
             
             // Monthly capacity column
@@ -493,3 +496,247 @@ function hideError() {
 
 // Export for use in HTML
 window.initializeCapacityPage = initializeCapacityPage;
+
+// ============================================
+// DAILY CAPACITY CHART MODAL
+// ============================================
+
+let dailyChart = null; // Chart.js instance
+
+/**
+ * Open the daily capacity chart modal for a station
+ */
+function openDailyChartModal(rawStationName, displayName) {
+    const modal = document.getElementById('daily-chart-modal');
+    if (!modal) return;
+
+    // Set station label
+    const stationEl = document.getElementById('daily-chart-station-name');
+    if (stationEl) stationEl.textContent = displayName || rawStationName;
+
+    // Populate year selector (current year ± 1)
+    const yearSel = document.getElementById('daily-chart-year');
+    if (yearSel) {
+        const thisYear = new Date().getFullYear();
+        yearSel.innerHTML = '';
+        for (let y = thisYear - 1; y <= thisYear; y++) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = `Năm ${y}`;
+            if (y === thisYear) opt.selected = true;
+            yearSel.appendChild(opt);
+        }
+    }
+
+    // Default month = current month
+    const monthSel = document.getElementById('daily-chart-month');
+    if (monthSel) {
+        monthSel.value = new Date().getMonth() + 1;
+    }
+
+    // Clear previous chart
+    clearDailyChart();
+    const summaryEl = document.getElementById('daily-chart-summary');
+    if (summaryEl) summaryEl.textContent = '';
+
+    // Show modal
+    modal.style.display = 'flex';
+
+    // Attach load button handler (replace to avoid duplicate listeners)
+    const loadBtn = document.getElementById('daily-chart-load-btn');
+    if (loadBtn) {
+        const newBtn = loadBtn.cloneNode(true);
+        loadBtn.parentNode.replaceChild(newBtn, loadBtn);
+        newBtn.addEventListener('click', () => loadDailyChartData(rawStationName, displayName));
+    }
+
+    // Auto-load current month
+    loadDailyChartData(rawStationName, displayName);
+}
+
+/**
+ * Load daily capacity data and render chart
+ */
+async function loadDailyChartData(rawStationName, displayName) {
+    const monthSel = document.getElementById('daily-chart-month');
+    const yearSel  = document.getElementById('daily-chart-year');
+    const loading  = document.getElementById('daily-chart-loading');
+    const errorEl  = document.getElementById('daily-chart-error');
+    const summaryEl = document.getElementById('daily-chart-summary');
+
+    const month = parseInt(monthSel?.value) || (new Date().getMonth() + 1);
+    const year  = parseInt(yearSel?.value)  || new Date().getFullYear();
+
+    // Show loading
+    if (loading) loading.style.display = 'block';
+    if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+    if (summaryEl) summaryEl.textContent = '';
+    clearDailyChart();
+
+    try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(
+            `/api/station-daily-capacity/${encodeURIComponent(rawStationName)}?year=${year}&month=${month}`,
+            { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                localStorage.removeItem('authToken');
+                window.location.href = '/login.html';
+                return;
+            }
+            throw new Error(`Lỗi ${response.status}`);
+        }
+
+        const result = await response.json();
+        if (!result.success) throw new Error(result.message || 'Không thể lấy dữ liệu');
+
+        if (loading) loading.style.display = 'none';
+
+        renderDailyChart(result, displayName || rawStationName);
+    } catch (err) {
+        if (loading) loading.style.display = 'none';
+        if (errorEl) {
+            errorEl.textContent = 'Không thể tải dữ liệu: ' + err.message;
+            errorEl.style.display = 'block';
+        }
+    }
+}
+
+/**
+ * Render bar chart with Chart.js
+ */
+function renderDailyChart(data, displayName) {
+    const canvas  = document.getElementById('daily-chart-canvas');
+    const summaryEl = document.getElementById('daily-chart-summary');
+    if (!canvas) return;
+
+    const { dailyCapacity, unit, year, month } = data;
+
+    clearDailyChart();
+
+    const labels   = dailyCapacity.map(d => `${d.day}`);
+    const values   = dailyCapacity.map(d => d.capacity);
+    const total    = values.reduce((s, v) => s + v, 0);
+    const maxVal   = Math.max(...values, 0);
+
+    // Month name in Vietnamese
+    const monthNames = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6',
+                        'Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
+    const monthLabel = monthNames[month - 1] || `Tháng ${month}`;
+
+    // Summary text
+    if (summaryEl) {
+        const daysWithData = values.filter(v => v > 0).length;
+        summaryEl.innerHTML =
+            `${monthLabel}/${year} &nbsp;|&nbsp; ` +
+            `Tổng: <strong>${formatNumber(Math.round(total))} ${unit}</strong> &nbsp;|&nbsp; ` +
+            `Ngày cao nhất: <strong>${formatNumber(Math.round(maxVal))} ${unit}</strong> &nbsp;|&nbsp; ` +
+            `Số ngày có dữ liệu: <strong>${daysWithData}/${dailyCapacity.length}</strong>`;
+    }
+
+    // Color bars: highlight the highest day
+    const backgroundColors = values.map(v =>
+        v === maxVal && v > 0 ? 'rgba(220, 38, 38, 0.80)' : 'rgba(0, 102, 204, 0.72)'
+    );
+    const borderColors = values.map(v =>
+        v === maxVal && v > 0 ? '#dc2626' : '#0066cc'
+    );
+
+    const ctx = canvas.getContext('2d');
+    dailyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: `Công suất (${unit})`,
+                data: values,
+                backgroundColor: backgroundColors,
+                borderColor: borderColors,
+                borderWidth: 1,
+                borderRadius: 3,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: (items) => `Ngày ${items[0].label}/${month}/${year}`,
+                        label: (item) => ` ${formatNumber(Math.round(item.raw))} ${unit}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { size: 11 } },
+                    title: {
+                        display: true,
+                        text: `Ngày trong tháng (${monthLabel}/${year})`,
+                        font: { size: 12 }
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(0,0,0,0.06)' },
+                    ticks: {
+                        font: { size: 11 },
+                        callback: (v) => formatNumber(Math.round(v))
+                    },
+                    title: {
+                        display: true,
+                        text: `Công suất (${unit})`,
+                        font: { size: 12 }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Destroy existing chart instance
+ */
+function clearDailyChart() {
+    if (dailyChart) {
+        dailyChart.destroy();
+        dailyChart = null;
+    }
+}
+
+/**
+ * Setup daily chart modal close handlers
+ */
+function setupDailyChartModal() {
+    const modal    = document.getElementById('daily-chart-modal');
+    const closeBtn = document.getElementById('daily-chart-close-btn');
+    if (!modal) return;
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+            clearDailyChart();
+        });
+    }
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+            clearDailyChart();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.style.display === 'flex') {
+            modal.style.display = 'none';
+            clearDailyChart();
+        }
+    });
+}
+
+// Initialize chart modal setup after DOM ready
+document.addEventListener('DOMContentLoaded', setupDailyChartModal);
