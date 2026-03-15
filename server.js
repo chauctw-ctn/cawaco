@@ -783,7 +783,7 @@ app.post('/api/telegram/test', verifyToken, async (req, res) => {
         }
         
         // Format test message
-        const message = `🧪 TEST CẢNH BÁO TELEGRAM\n\n📡 Chưa gửi dữ liệu: 1/1\n1. TEST_STATION - GP_TEST. Tgian: ${formatAlertTime(Date.now())}`;
+        const message = `🧪 TEST CẢNH BÁO TELEGRAM\n\n📡 Chưa gửi dữ liệu: 1/1\n1. TEST_STATION -GP_TEST. Lúc: ${formatAlertTime(Date.now())}`;
 
         console.log(`📤 Sending test message to chat ID: ${targetChatId}`);
 
@@ -2153,7 +2153,7 @@ async function sendServerTelegramMessage(text) {
 }
 
 /**
- * Format measurement timestamp for Telegram alert: HH:mm:ss DD/MM/YYYY (Vietnam time)
+ * Format measurement timestamp for Telegram alert: HH:mm-DD/MM (Vietnam time)
  */
 function formatAlertTime(timestamp) {
     if (!timestamp) return 'N/A';
@@ -2162,17 +2162,28 @@ function formatAlertTime(timestamp) {
     const parts = new Intl.DateTimeFormat('en-GB', {
         timeZone: 'Asia/Ho_Chi_Minh',
         hour: '2-digit', minute: '2-digit',
-        day: '2-digit', month: '2-digit', year: 'numeric',
+        day: '2-digit', month: '2-digit',
         hour12: false
     }).formatToParts(d);
     const get = type => parts.find(p => p.type === type)?.value || '00';
-    return `${get('hour')}:${get('minute')}-${get('day')}/${get('month')}/${get('year')}`;
+    return `${get('hour')}:${get('minute')}-${get('day')}/${get('month')}`;
+}
+
+function formatPermitForAlert(permit) {
+    if (!permit) return '';
+    const permitStr = String(permit).trim();
+    const numberMatch = permitStr.match(/(\d+)/);
+    if (numberMatch) {
+        return `GP${numberMatch[1]}`;
+    }
+    return permitStr;
 }
 
 function buildStationLine(index, stationName, status) {
-    const permitText = status.permit ? ` - ${status.permit}` : '';
+    const formattedPermit = formatPermitForAlert(status.permit);
+    const permitText = formattedPermit ? ` -${formattedPermit}` : '';
     const timeStr = formatAlertTime(status.measurementMs || status.measurementTime);
-    return `${index}. ${stationName}${permitText}. Tgian: ${timeStr}`;
+    return `${index}. ${stationName}${permitText}. Lúc: ${timeStr}`;
 }
 
 async function checkAndSendTelegramAlerts() {
