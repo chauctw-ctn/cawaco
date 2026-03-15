@@ -34,8 +34,8 @@
                 <div class="page-header">
                     <h2 class="page-title">CÔNG SUẤT HOẠT ĐỘNG THEO GIẤY PHÉP</h2>
                 </div>
-                <!-- Summary Cards - Permit Capacity -->
-                <div class="summary-cards">
+                <!-- Summary Cards - Row 1: 4 giấy phép + 1 giếng sở tài nguyên -->
+                <div class="summary-cards-row summary-cards-row-1">
                     <!-- Giấy phép 35 -->
                     <div class="summary-card" style="background: linear-gradient(135deg, #e0f2fe, #bae6fd); border-left: 4px solid #0284c7;">
                         <div class="card-content">
@@ -88,23 +88,47 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Tổng cộng ngày -->
+                </div>
+
+                <!-- Summary Cards - Row 2: tổng giấy phép và tổng cộng dồn sở tài nguyên -->
+                <div class="summary-cards-row summary-cards-row-2">
+                    <!-- Tổng công suất ngày (giếng giấy phép) -->
                     <div class="summary-card" style="background: linear-gradient(135deg, #10b981, #059669); border-left: 4px solid #047857;">
                         <div class="card-content">
-                            <div class="card-label" style="font-size: 15px; font-weight: 800; margin-bottom: 8px; color: #ffffff; white-space: nowrap;">TỔNG CÔNG SUẤT NGÀY</div>
+                            <div class="card-label" style="font-size: 13px; font-weight: 800; margin-bottom: 8px; color: #ffffff;">TỔNG CS NGÀY (GIẤY PHÉP)</div>
                             <div style="font-size: 12px;">
                                 <div style="margin-bottom: 5px; white-space: nowrap;">Ngày trước: <span class="card-value" id="total-daily-previous" style="font-size: 18px; font-weight: 800; color: #fef3c7;">0 m³</span></div>
                                 <div style="white-space: nowrap;">Ngày hiện tại: <span class="card-value" id="total-daily-current" style="font-size: 18px; font-weight: 800; color: #ffffff;">0 m³</span></div>
                             </div>
                         </div>
                     </div>
-                    <!-- Tổng cộng tháng -->
+                    <!-- Tổng công suất ngày (giấy phép + sở tài nguyên) -->
+                    <div class="summary-card" style="background: linear-gradient(135deg, #0ea5e9, #0284c7); border-left: 4px solid #0369a1;">
+                        <div class="card-content">
+                            <div class="card-label" style="font-size: 13px; font-weight: 800; margin-bottom: 8px; color: #ffffff;">TỔNG CS NGÀY (GP + SỞ TN)</div>
+                            <div style="font-size: 12px;">
+                                <div style="margin-bottom: 5px; white-space: nowrap;">Ngày trước: <span class="card-value" id="total-daily-all-previous" style="font-size: 18px; font-weight: 800; color: #e0f2fe;">0 m³</span></div>
+                                <div style="white-space: nowrap;">Ngày hiện tại: <span class="card-value" id="total-daily-all-current" style="font-size: 18px; font-weight: 800; color: #ffffff;">0 m³</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Tổng cộng tháng (giếng giấy phép) -->
                     <div class="summary-card highlight">
                         <div class="card-content">
-                            <div class="card-label" style="font-size: 15px; font-weight: 800; margin-bottom: 8px; color: #ffffff; white-space: nowrap;">TỔNG CỘNG THÁNG</div>
+                            <div class="card-label" style="font-size: 13px; font-weight: 800; margin-bottom: 8px; color: #ffffff;">TỔNG CS THÁNG (GIẤY PHÉP)</div>
                             <div style="font-size: 12px;">
                                 <div style="margin-bottom: 5px; white-space: nowrap;">Tháng trước: <span class="card-value" id="total-monthly" style="font-size: 18px; font-weight: 800; color: #fbbf24;">0 m³</span></div>
                                 <div style="white-space: nowrap;">Tháng nay: <span class="card-value" id="total-current" style="font-size: 18px; font-weight: 800; color: #34d399;">0 m³</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Tổng cộng tháng (giấy phép + sở tài nguyên) -->
+                    <div class="summary-card" style="background: linear-gradient(135deg, #7c3aed, #6d28d9); border-left: 4px solid #5b21b6;">
+                        <div class="card-content">
+                            <div class="card-label" style="font-size: 13px; font-weight: 800; margin-bottom: 8px; color: #ffffff;">TỔNG CS THÁNG (GP + SỞ TN)</div>
+                            <div style="font-size: 12px;">
+                                <div style="margin-bottom: 5px; white-space: nowrap;">Tháng trước: <span class="card-value" id="total-monthly-all-previous" style="font-size: 18px; font-weight: 800; color: #fde68a;">0 m³</span></div>
+                                <div style="white-space: nowrap;">Tháng nay: <span class="card-value" id="total-monthly-all-current" style="font-size: 18px; font-weight: 800; color: #bbf7d0;">0 m³</span></div>
                             </div>
                         </div>
                     </div>

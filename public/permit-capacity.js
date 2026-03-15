@@ -218,6 +218,12 @@ function updateSummaryCards(data) {
     updateElement('outside-current', formatNumber(outsideTotals.current) + ' m³');
     updateElement('outside-daily-previous', formatNumber(outsideTotals.previousDay) + ' m³');
     updateElement('outside-daily-current', formatNumber(outsideTotals.today) + ' m³');
+
+    // Update combined totals: giấy phép + sở tài nguyên
+    updateElement('total-daily-all-previous', formatNumber(totalDailyPrevious + outsideTotals.previousDay) + ' m³');
+    updateElement('total-daily-all-current', formatNumber(totalDailyCurrent + outsideTotals.today) + ' m³');
+    updateElement('total-monthly-all-previous', formatNumber(totalMonthly + outsideTotals.monthly) + ' m³');
+    updateElement('total-monthly-all-current', formatNumber(totalCurrent + outsideTotals.current) + ' m³');
 }
 
 /**
