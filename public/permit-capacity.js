@@ -134,8 +134,12 @@ function renderCapacityData(data) {
     updateSummaryCards(data);
     
     // Render table
-    console.log('📑 Rendering table...', (data.tableData || []).length, 'rows');
-    renderCapacityTable(data.tableData);
+    const mergedTableData = [
+        ...(data.tableData || []),
+        ...(data.outsidePermitWells || [])
+    ];
+    console.log('📑 Rendering table...', mergedTableData.length, 'rows');
+    renderCapacityTable(mergedTableData);
     
     console.log('✅ Rendering complete');
 }
@@ -162,7 +166,7 @@ function updateSummaryCards(data) {
     let totalDailyPrevious = 0;
     let totalDailyCurrent = 0;
     
-    // Sum up capacities by permit
+    // Sum up capacities by permit (licensed wells only)
     data.tableData.forEach(row => {
         const permit = row.permit;
         if (permitTotals[permit]) {
@@ -174,6 +178,16 @@ function updateSummaryCards(data) {
         totalDailyPrevious += row.previousDayCapacity || 0;
         totalDailyCurrent += row.todayCapacity || 0;
     });
+
+    // Outside-permit wells summary card (Sở tài nguyên)
+    const outsideRows = data.outsidePermitWells || [];
+    const outsideTotals = outsideRows.reduce((acc, row) => {
+        acc.monthly += row.monthlyCapacity || 0;
+        acc.current += row.currentCapacity || 0;
+        acc.previousDay += row.previousDayCapacity || 0;
+        acc.today += row.todayCapacity || 0;
+        return acc;
+    }, { monthly: 0, current: 0, previousDay: 0, today: 0 });
     
     // Update permit 35
     updateElement('permit-35-monthly', formatNumber(permitTotals['35/gp-btnmt 15/01/2025'].monthly) + ' m³');
@@ -198,6 +212,12 @@ function updateSummaryCards(data) {
     // Update daily totals
     updateElement('total-daily-previous', formatNumber(totalDailyPrevious) + ' m³');
     updateElement('total-daily-current', formatNumber(totalDailyCurrent) + ' m³');
+
+    // Update outside-permit card
+    updateElement('outside-monthly', formatNumber(outsideTotals.monthly) + ' m³');
+    updateElement('outside-current', formatNumber(outsideTotals.current) + ' m³');
+    updateElement('outside-daily-previous', formatNumber(outsideTotals.previousDay) + ' m³');
+    updateElement('outside-daily-current', formatNumber(outsideTotals.today) + ' m³');
 }
 
 /**
@@ -241,7 +261,8 @@ function renderCapacityTable(tableData) {
             '35/gp-btnmt 15/01/2025': 1,
             '36/gp-btnmt 15/01/2025': 2,
             '391/gp-bnnmt 19/09/2025': 3,
-            '393/gp-bnnmt 22/09/2025': 4
+            '393/gp-bnnmt 22/09/2025': 4,
+            'so-tai-nguyen': 5
         };
         
         const permitA = permitOrder[a.permit] || 999;
@@ -354,6 +375,10 @@ function formatNumber(num) {
  */
 function standardizeStationName(stationName, permit) {
     if (!stationName) return '';
+
+    if (permit === 'so-tai-nguyen') {
+        return stationName;
+    }
     
     const name = stationName.trim().toUpperCase();
     
@@ -421,6 +446,7 @@ function standardizeStationName(stationName, permit) {
  */
 function getShortPermitLabel(permit) {
     if (!permit) return '';
+    if (permit === 'so-tai-nguyen') return 'SỞ TN';
     const match = permit.match(/^(\d+)\//);
     return match ? `GP ${match[1]}` : permit;
 }
@@ -434,6 +460,7 @@ function getPermitClass(permit) {
     if (permit.includes('36/gp-btnmt')) return 'permit-36';
     if (permit.includes('391/gp-bnnmt')) return 'permit-391';
     if (permit.includes('393/gp-bnnmt')) return 'permit-393';
+    if (permit === 'so-tai-nguyen') return 'permit-outside';
     return '';
 }
 

@@ -498,6 +498,143 @@ app.get('/api/station-history/:stationName', verifyToken, async (req, res) => {
 // PERMIT CAPACITY API
 // ============================================
 
+function normalizeStationNameForMatch(name) {
+    return String(name || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function isSoTaiNguyenWell(stationName) {
+    const n = normalizeStationNameForMatch(stationName);
+    const targets = [
+        'GIENG SO 29A',
+        'GIENG SO 30A',
+        'GIENG SO 31B',
+        'GIENG TAC VAN',
+        'TRAM BOM 16'
+    ];
+    return targets.some(target => n === target || n.includes(target));
+}
+
+function createVietnamBoundary(year, month, day, hour = 0, minute = 0, second = 0, ms = 0) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}.${String(ms).padStart(3, '0')}+07:00`;
+    return new Date(dateStr);
+}
+
+function calculateCapacityForStationRecords(records) {
+    const now = new Date();
+    const vietnamNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    const currentYear = vietnamNow.getFullYear();
+    const currentMonth = vietnamNow.getMonth() + 1;
+    const currentDay = vietnamNow.getDate();
+
+    const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+    const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+    const lastMonthDays = new Date(lastMonthYear, lastMonth, 0).getDate();
+
+    const lastMonthStart = createVietnamBoundary(lastMonthYear, lastMonth, 1, 0, 0, 0, 0);
+    const lastMonthEnd = createVietnamBoundary(lastMonthYear, lastMonth, lastMonthDays, 23, 59, 59, 999);
+    const currentMonthStart = createVietnamBoundary(currentYear, currentMonth, 1, 0, 0, 0, 0);
+
+    const yesterdayDate = new Date(vietnamNow);
+    yesterdayDate.setDate(currentDay - 1);
+    const yesterdayStart = createVietnamBoundary(
+        yesterdayDate.getFullYear(),
+        yesterdayDate.getMonth() + 1,
+        yesterdayDate.getDate(),
+        0, 0, 0, 0
+    );
+    const yesterdayEnd = createVietnamBoundary(
+        yesterdayDate.getFullYear(),
+        yesterdayDate.getMonth() + 1,
+        yesterdayDate.getDate(),
+        23, 59, 59, 999
+    );
+
+    const dayBeforeYesterday = new Date(yesterdayDate);
+    dayBeforeYesterday.setDate(yesterdayDate.getDate() - 1);
+    const dayBeforeStart = createVietnamBoundary(
+        dayBeforeYesterday.getFullYear(),
+        dayBeforeYesterday.getMonth() + 1,
+        dayBeforeYesterday.getDate(),
+        0, 0, 0, 0
+    );
+    const dayBeforeEnd = createVietnamBoundary(
+        dayBeforeYesterday.getFullYear(),
+        dayBeforeYesterday.getMonth() + 1,
+        dayBeforeYesterday.getDate(),
+        23, 59, 59, 999
+    );
+
+    const todayStart = createVietnamBoundary(currentYear, currentMonth, currentDay, 0, 0, 0, 0);
+
+    let lastMonthMin = Infinity;
+    let lastMonthMax = 0;
+    let currentMonthMin = Infinity;
+    let currentMonthMax = 0;
+    let yesterdayMax = 0;
+    let yesterdayMin = Infinity;
+    let dayBeforeYesterdayMax = 0;
+    let todayMax = 0;
+    let todayMin = Infinity;
+
+    records.forEach(record => {
+        const recordTime = new Date(record.measurementTime);
+        if (Number.isNaN(recordTime.getTime())) return;
+        const value = Number(record.value) || 0;
+
+        if (recordTime >= lastMonthStart && recordTime <= lastMonthEnd) {
+            lastMonthMax = Math.max(lastMonthMax, value);
+            lastMonthMin = Math.min(lastMonthMin, value);
+        }
+
+        if (recordTime >= currentMonthStart && recordTime <= now) {
+            currentMonthMax = Math.max(currentMonthMax, value);
+            currentMonthMin = Math.min(currentMonthMin, value);
+        }
+
+        if (recordTime >= dayBeforeStart && recordTime <= dayBeforeEnd) {
+            dayBeforeYesterdayMax = Math.max(dayBeforeYesterdayMax, value);
+        }
+
+        if (recordTime >= yesterdayStart && recordTime <= yesterdayEnd) {
+            yesterdayMax = Math.max(yesterdayMax, value);
+            yesterdayMin = Math.min(yesterdayMin, value);
+        }
+
+        if (recordTime >= todayStart && recordTime <= now) {
+            todayMax = Math.max(todayMax, value);
+            todayMin = Math.min(todayMin, value);
+        }
+    });
+
+    const lastMonthCapacity = lastMonthMax > 0 && lastMonthMin !== Infinity
+        ? Math.max(0, lastMonthMax - lastMonthMin)
+        : 0;
+
+    const currentMonthCapacity = currentMonthMax > 0 && currentMonthMin !== Infinity
+        ? Math.max(0, currentMonthMax - currentMonthMin)
+        : 0;
+
+    const previousDayCapacity = yesterdayMax > 0
+        ? Math.max(0, yesterdayMax - (dayBeforeYesterdayMax > 0 ? dayBeforeYesterdayMax : (yesterdayMin === Infinity ? 0 : yesterdayMin)))
+        : 0;
+
+    const todayCapacity = todayMax > 0
+        ? Math.max(0, todayMax - (yesterdayMax > 0 ? yesterdayMax : (todayMin === Infinity ? 0 : todayMin)))
+        : 0;
+
+    return {
+        monthlyCapacity: Math.round(lastMonthCapacity * 100) / 100,
+        currentCapacity: Math.round(currentMonthCapacity * 100) / 100,
+        previousDayCapacity: Math.round(previousDayCapacity * 100) / 100,
+        todayCapacity: Math.round(todayCapacity * 100) / 100
+    };
+}
+
 // Get permit capacity data (stations grouped by permit with capacity calculations)
 app.get('/api/permit-capacity', verifyToken, async (req, res) => {
     try {
@@ -574,8 +711,34 @@ app.get('/api/permit-capacity', verifyToken, async (req, res) => {
                 });
             });
         });
+
+        // Add outside-permit wells (Sở Tài nguyên) from SQL data
+        const outsidePermitWells = [];
+        Object.entries(flowData)
+            .filter(([stationName]) => isSoTaiNguyenWell(stationName))
+            .sort((a, b) => a[0].localeCompare(b[0], 'vi'))
+            .forEach(([stationName, records]) => {
+                const calc = calculateCapacityForStationRecords(records || []);
+                const lastRecord = Array.isArray(records) && records.length > 0 ? records[0] : null;
+
+                outsidePermitWells.push({
+                    stt: rowNumber++,
+                    stationName,
+                    permit: 'so-tai-nguyen',
+                    monthlyCapacity: calc.monthlyCapacity,
+                    currentCapacity: calc.currentCapacity,
+                    previousDayCapacity: calc.previousDayCapacity,
+                    todayCapacity: calc.todayCapacity,
+                    unit: lastRecord?.unit || 'm³',
+                    recordCount: Array.isArray(records) ? records.length : 0,
+                    source: Array.isArray(records)
+                        ? [...new Set(records.map(r => r.source).filter(Boolean))].join(', ')
+                        : ''
+                });
+            });
         
         console.log(`📊 Kết quả: ${totalStationsWithData} trạm có dữ liệu thuộc ${Object.keys(capacityByPermit).length} giấy phép`);
+        console.log(`📊 Giếng Sở tài nguyên: ${outsidePermitWells.length} trạm`);
         
         res.json({
             success: true,
@@ -584,6 +747,7 @@ app.get('/api/permit-capacity', verifyToken, async (req, res) => {
             totalPermits: Object.keys(capacityByPermit).length,
             grandTotalCapacity: Math.round(grandTotalCapacity * 100) / 100,
             tableData: tableData,
+            outsidePermitWells,
             data: capacityByPermit // Keep original format for reference
         });
     } catch (error) {

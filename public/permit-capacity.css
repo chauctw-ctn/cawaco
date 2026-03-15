@@ -444,6 +444,14 @@ main.sidebar-hidden {
     text-align: center !important;
 }
 
+#capacity-table tr.permit-outside {
+    background-color: #cffafe;
+}
+
+#capacity-table tr.permit-outside td.capacity-value {
+    text-align: center !important;
+}
+
 /* Permit-specific permit cell colors */
 #capacity-table tr.permit-35 .permit-cell {
     background-color: #bae6fd;
@@ -467,6 +475,12 @@ main.sidebar-hidden {
     background-color: #fecdd3;
     border-right-color: #e11d48;
     color: #9f1239;
+}
+
+#capacity-table tr.permit-outside .permit-cell {
+    background-color: #cffafe;
+    border-right-color: #0891b2;
+    color: #0e7490;
 }
 
 /* Permits Container */
