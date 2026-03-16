@@ -412,6 +412,17 @@ async function initDatabase() {
         `);
         console.log('✅ Bảng stations đã sẵn sàng');
 
+        // Bảng lưu tọa độ tùy chỉnh cho marker bản đồ
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS coordinate_overrides (
+                station_id TEXT PRIMARY KEY,
+                lat DOUBLE PRECISION NOT NULL,
+                lng DOUBLE PRECISION NOT NULL,
+                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('\u2705 B\u1ea3ng coordinate_overrides \u0111\u00e3 s\u1eb5n s\u00e0ng');
+
         // Bảng lưu thống kê visitor
         await client.query(`
             CREATE TABLE IF NOT EXISTS visitor_stats (
@@ -1357,6 +1368,45 @@ async function closeDatabase() {
     }
 }
 
+/**
+ * Load all coordinate overrides from database
+ * Returns an object: { stationId: { lat, lng }, ... }
+ */
+async function loadCoordinateOverrides() {
+    if (!pool) return {};
+    try {
+        const result = await pool.query('SELECT station_id, lat, lng FROM coordinate_overrides');
+        const overrides = {};
+        result.rows.forEach(row => {
+            overrides[row.station_id] = { lat: parseFloat(row.lat), lng: parseFloat(row.lng) };
+        });
+        return overrides;
+    } catch (e) {
+        console.error('\u274c loadCoordinateOverrides:', e.message);
+        return {};
+    }
+}
+
+/**
+ * Save (upsert) a coordinate override for a station
+ */
+async function saveCoordinateOverride(stationId, lat, lng) {
+    if (!pool) throw new Error('Database not ready');
+    await pool.query(`
+        INSERT INTO coordinate_overrides (station_id, lat, lng, updated_at)
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (station_id) DO UPDATE SET lat = $2, lng = $3, updated_at = NOW()
+    `, [stationId, lat, lng]);
+}
+
+/**
+ * Delete a coordinate override (reset to default)
+ */
+async function deleteCoordinateOverride(stationId) {
+    if (!pool) throw new Error('Database not ready');
+    await pool.query('DELETE FROM coordinate_overrides WHERE station_id = $1', [stationId]);
+}
+
 // Khởi tạo pool khi module được load
 initPool();
 
@@ -1380,5 +1430,8 @@ module.exports = {
     getVietnamTimestamp,
     syncTimestamps,
     checkTimestampStatus,
+    loadCoordinateOverrides,
+    saveCoordinateOverride,
+    deleteCoordinateOverride,
     pool
 };

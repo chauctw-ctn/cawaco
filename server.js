@@ -81,6 +81,22 @@ function saveTelegramConfig() {
 // Load Telegram config on startup
 loadTelegramConfig();
 
+// Coordinate overrides (admin can update via API, persisted in PostgreSQL)
+let coordinatesOverride = {};
+
+/**
+ * Load coordinate overrides from PostgreSQL into memory cache.
+ * Called once at startup and after each write.
+ */
+async function reloadCoordinatesOverride() {
+    try {
+        coordinatesOverride = await dbModule.loadCoordinateOverrides();
+        console.log(`✅ Loaded ${Object.keys(coordinatesOverride).length} coordinate overrides from DB`);
+    } catch (e) {
+        console.error('❌ reloadCoordinatesOverride:', e.message);
+    }
+}
+
 // Import coordinates
 const { TVA_STATION_COORDINATES } = require('./tva-coordinates');
 const { MQTT_STATION_COORDINATES } = require('./mqtt-coordinates');
@@ -1701,6 +1717,15 @@ app.get('/api/stations', async (req, res) => {
         });
         
         const duplicatesRemoved = allStations.length - deduplicatedStations.length;
+
+        // Apply coordinate overrides (admin configurable)
+        deduplicatedStations.forEach(station => {
+            const override = coordinatesOverride[station.id];
+            if (override) {
+                station.lat = override.lat;
+                station.lng = override.lng;
+            }
+        });
         
         console.log(`📊 ===== STATION STATUS SUMMARY =====`);
         console.log(`   🟢 Online:  ${onlineCount} stations`);
@@ -1728,6 +1753,74 @@ app.get('/api/stations', async (req, res) => {
             success: false,
             error: error.message
         });
+    }
+});
+
+// ============================================
+// COORDINATES CONFIGURATION API (Admin only)
+// ============================================
+
+/**
+ * GET /api/coordinates
+ * Returns all coordinate overrides (admin only)
+ */
+app.get('/api/coordinates', verifyToken, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Chỉ admin mới có quyền truy cập' });
+    }
+    res.json({ success: true, overrides: coordinatesOverride });
+});
+
+/**
+ * PUT /api/coordinates/:stationId
+ * Update coordinates for a single station (admin only)
+ */
+app.put('/api/coordinates/:stationId', verifyToken, async (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Chỉ admin mới có quyền cập nhật' });
+    }
+
+    const stationId = req.params.stationId;
+    const lat = parseFloat(req.body.lat);
+    const lng = parseFloat(req.body.lng);
+
+    if (isNaN(lat) || isNaN(lng)) {
+        return res.status(400).json({ success: false, message: 'Latitude hoặc Longitude không hợp lệ' });
+    }
+    // Reasonable bounds that include all of Vietnam and nearby
+    if (lat < 7 || lat > 24 || lng < 99 || lng > 115) {
+        return res.status(400).json({ success: false, message: 'Tọa độ nằm ngoài phạm vi Việt Nam' });
+    }
+
+    try {
+        await dbModule.saveCoordinateOverride(stationId, lat, lng);
+        coordinatesOverride[stationId] = { lat, lng };
+        console.log(`🗺️  Coordinate override saved: ${stationId} → (${lat}, ${lng})`);
+        res.json({ success: true, message: 'Đã cập nhật tọa độ thành công', stationId, lat, lng });
+    } catch (e) {
+        console.error('❌ saveCoordinateOverride:', e.message);
+        res.status(500).json({ success: false, message: 'Không thể lưu cấu hình tọa độ' });
+    }
+});
+
+/**
+ * DELETE /api/coordinates/:stationId
+ * Reset coordinates for a station back to default (admin only)
+ */
+app.delete('/api/coordinates/:stationId', verifyToken, async (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Chỉ admin mới có quyền xóa' });
+    }
+
+    const stationId = req.params.stationId;
+    try {
+        await dbModule.deleteCoordinateOverride(stationId);
+        delete coordinatesOverride[stationId];
+        console.log(`🗺️  Coordinate override removed: ${stationId} → default`);
+        res.json({ success: true, message: 'Đã reset tọa độ về mặc định', stationId });
+    } catch (e) {
+        console.error('❌ deleteCoordinateOverride:', e.message);
+        res.status(500).json({ success: false, message: 'Không thể xóa cấu hình tọa độ' });
     }
 });
 
@@ -2581,6 +2674,8 @@ app.listen(PORT, async () => {
     try {
         await dbModule.initDatabase();
         console.log('✅ Database đã sẵn sàng\n');
+        // Load coordinate overrides from DB after DB is ready
+        await reloadCoordinatesOverride();
     } catch (error) {
         console.error('❌ Lỗi khởi tạo database:', error.message);
     }

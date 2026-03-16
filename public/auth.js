@@ -99,6 +99,12 @@ function updateUserUI() {
     if (telegramConfigBtn) {
         telegramConfigBtn.style.display = userRole === 'admin' ? 'flex' : 'none';
     }
+
+    // Show/hide coordinates config button based on role
+    const coordinatesConfigBtn = document.getElementById('coordinates-config-btn');
+    if (coordinatesConfigBtn) {
+        coordinatesConfigBtn.style.display = userRole === 'admin' ? 'flex' : 'none';
+    }
 }
 
 // Toggle dropdown menu

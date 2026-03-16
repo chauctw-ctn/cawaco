@@ -78,6 +78,13 @@
                             </svg>
                             Cấu hình Telegram
                         </button>
+                        <button class="dropdown-item" id="coordinates-config-btn" style="display: none;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"/>
+                                <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+                            </svg>
+                            Cấu hình tọa độ
+                        </button>
                         <div class="dropdown-divider"></div>
                         <button class="dropdown-item logout" id="logout-btn">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -430,6 +437,51 @@
                     <button type="submit" class="btn-primary">Lưu cấu hình</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Coordinates Config Modal -->
+    <div id="coordinates-config-modal" class="modal">
+        <div class="modal-content" style="max-width: 750px;">
+            <div class="modal-header">
+                <h2>Cấu hình tọa độ marker bản đồ</h2>
+                <button class="modal-close" id="close-coordinates-config">&times;</button>
+            </div>
+            <div style="padding: 16px 24px 0;">
+                <p style="color:#6b7280;font-size:13px;margin-bottom:12px;">
+                    Cập nhật vị trí (latitude, longitude) cho từng trạm quan trắc trên bản đồ.
+                    Nhấn <strong>Lưu</strong> ở từng dòng để áp dụng tọa độ mới. Nhấn <strong>Reset</strong> để khôi phục tọa độ gốc.
+                </p>
+                <div style="display:flex;gap:8px;margin-bottom:10px;">
+                    <input type="text" id="coord-search" placeholder="Tìm kiếm trạm..." style="flex:1;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">
+                    <select id="coord-type-filter" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#fff;">
+                        <option value="all">Tất cả nhóm</option>
+                        <option value="TVA">TVA</option>
+                        <option value="MQTT">MQTT (Tấn Lợi)</option>
+                        <option value="SCADA">SCADA (Đức Hùng)</option>
+                    </select>
+                </div>
+            </div>
+            <div style="padding: 0 24px; overflow-y:auto; max-height:480px;">
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead style="position:sticky;top:0;background:#f9fafb;z-index:1;">
+                        <tr style="border-bottom:2px solid #e5e7eb;">
+                            <th style="padding:8px 6px;text-align:left;color:#374151;font-weight:600;">Trạm</th>
+                            <th style="padding:8px 6px;text-align:center;color:#374151;font-weight:600;width:60px;">Nhóm</th>
+                            <th style="padding:8px 6px;text-align:center;color:#374151;font-weight:600;width:140px;">Latitude</th>
+                            <th style="padding:8px 6px;text-align:center;color:#374151;font-weight:600;width:140px;">Longitude</th>
+                            <th style="padding:8px 6px;text-align:center;color:#374151;font-weight:600;width:120px;">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="coordinates-table-body">
+                        <tr><td colspan="5" style="text-align:center;padding:30px;color:#9ca3af;">Đang tải...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div style="padding:12px 24px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;">
+                <span id="coord-status-msg" style="font-size:13px;color:#6b7280;"></span>
+                <button type="button" class="btn-secondary" id="close-coordinates-config-btn">Đóng</button>
+            </div>
         </div>
     </div>
 

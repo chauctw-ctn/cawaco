@@ -1015,7 +1015,18 @@ function setupEventListeners() {
         console.log('🔄 Tự động làm mới dữ liệu...');
         refreshStations();
     }, 30 * 1000); // 30 giây
-    
+
+    // Coordinates config button
+    const coordinatesConfigBtn = document.getElementById('coordinates-config-btn');
+    if (coordinatesConfigBtn) {
+        coordinatesConfigBtn.addEventListener('click', () => {
+            // Close the user dropdown first
+            const dropdown = document.getElementById('user-dropdown');
+            if (dropdown) dropdown.classList.remove('show');
+            openCoordinatesConfigModal();
+        });
+    }
+
     // Group filter checkboxes
     setupGroupFilters();
 }
@@ -1701,3 +1712,225 @@ function displayChart(chartData) {
 window.showWaterLevelChart = showWaterLevelChart;
 window.showParameterChart = showParameterChart;
 window.showMultiParameterChart = showMultiParameterChart;
+
+// ============================================================
+// COORDINATES CONFIG MODAL
+// ============================================================
+
+let coordOverrides = {}; // cached from server
+
+/**
+ * Open the coordinates configuration modal and populate it
+ */
+async function openCoordinatesConfigModal() {
+    const modal = document.getElementById('coordinates-config-modal');
+    if (!modal) return;
+
+    modal.style.display = 'block';
+
+    // Load overrides from server
+    try {
+        const token = localStorage.getItem('authToken');
+        const resp = await fetch('/api/coordinates', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await resp.json();
+        if (data.success) {
+            coordOverrides = data.overrides || {};
+        }
+    } catch (e) {
+        coordOverrides = {};
+    }
+
+    renderCoordinatesTable(allStations);
+
+    // Search/filter handlers
+    const searchInput = document.getElementById('coord-search');
+    const typeFilter = document.getElementById('coord-type-filter');
+    function applyCoordFilter() {
+        const q = searchInput ? searchInput.value.toLowerCase() : '';
+        const t = typeFilter ? typeFilter.value : 'all';
+        const filtered = allStations.filter(s =>
+            (t === 'all' || s.type === t) &&
+            (!q || s.name.toLowerCase().includes(q))
+        );
+        renderCoordinatesTable(filtered);
+    }
+
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.oninput = applyCoordFilter;
+    }
+    if (typeFilter) {
+        typeFilter.value = 'all';
+        typeFilter.onchange = applyCoordFilter;
+    }
+
+    // Close button
+    const closeBtn = document.getElementById('close-coordinates-config');
+    const closeBtn2 = document.getElementById('close-coordinates-config-btn');
+    function closeModal() { modal.style.display = 'none'; }
+    if (closeBtn) closeBtn.onclick = closeModal;
+    if (closeBtn2) closeBtn2.onclick = closeModal;
+
+    // Close on overlay click
+    modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+}
+
+/**
+ * Render the coordinates table rows
+ */
+function renderCoordinatesTable(stations) {
+    const tbody = document.getElementById('coordinates-table-body');
+    if (!tbody) return;
+
+    if (!stations || stations.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:#9ca3af;">Không có trạm nào</td></tr>';
+        return;
+    }
+
+    const typeColors = { TVA: '#0066cc', MQTT: '#16a34a', SCADA: '#dc2626' };
+    const typeBg    = { TVA: '#eff6ff', MQTT: '#f0fdf4', SCADA: '#fff1f2' };
+
+    tbody.innerHTML = stations.map(station => {
+        const hasOverride = !!coordOverrides[station.id];
+        const lat = station.lat != null ? station.lat : '';
+        const lng = station.lng != null ? station.lng : '';
+        const overrideBadge = hasOverride
+            ? '<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:10px;margin-left:4px;white-space:nowrap;">đã chỉnh</span>'
+            : '';
+        return `
+        <tr data-station-id="${station.id}" style="border-bottom:1px solid #f3f4f6;">
+            <td style="padding:7px 6px;color:#374151;max-width:220px;word-break:break-word;">
+                ${station.name}${overrideBadge}
+            </td>
+            <td style="padding:7px 6px;text-align:center;">
+                <span style="font-size:11px;font-weight:600;color:${typeColors[station.type]||'#6b7280'};background:${typeBg[station.type]||'#f3f4f6'};padding:2px 7px;border-radius:10px;">${station.type}</span>
+            </td>
+            <td style="padding:7px 6px;">
+                <input type="number" class="coord-lat-input" data-id="${station.id}"
+                    value="${lat}" step="0.000001"
+                    style="width:120px;padding:4px 6px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;text-align:right;">
+            </td>
+            <td style="padding:7px 6px;">
+                <input type="number" class="coord-lng-input" data-id="${station.id}"
+                    value="${lng}" step="0.000001"
+                    style="width:120px;padding:4px 6px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;text-align:right;">
+            </td>
+            <td style="padding:7px 6px;text-align:center;white-space:nowrap;">
+                <button onclick="saveCoordinateRow('${station.id}')"
+                    style="padding:3px 10px;background:#0066cc;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;margin-right:4px;">
+                    Lưu
+                </button>
+                ${hasOverride ? `<button onclick="resetCoordinateRow('${station.id}')"
+                    style="padding:3px 8px;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;font-size:12px;">
+                    Reset
+                </button>` : ''}
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+/**
+ * Save coordinate override for a single station
+ */
+async function saveCoordinateRow(stationId) {
+    const latInput = document.querySelector(`.coord-lat-input[data-id="${stationId}"]`);
+    const lngInput = document.querySelector(`.coord-lng-input[data-id="${stationId}"]`);
+    const statusMsg = document.getElementById('coord-status-msg');
+
+    if (!latInput || !lngInput) return;
+
+    const lat = parseFloat(latInput.value);
+    const lng = parseFloat(lngInput.value);
+
+    if (isNaN(lat) || isNaN(lng)) {
+        if (statusMsg) { statusMsg.textContent = '❌ Latitude hoặc Longitude không hợp lệ'; statusMsg.style.color = '#dc2626'; }
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('authToken');
+        const resp = await fetch(`/api/coordinates/${encodeURIComponent(stationId)}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat, lng })
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            // Update cache
+            coordOverrides[stationId] = { lat, lng };
+
+            // Update marker and allStations in memory
+            const station = allStations.find(s => s.id === stationId);
+            if (station) {
+                station.lat = lat;
+                station.lng = lng;
+                const marker = markers.find(m => m.stationId === stationId);
+                if (marker) {
+                    marker.setLatLng([lat, lng]);
+                }
+            }
+
+            if (statusMsg) { statusMsg.textContent = `✅ Đã lưu tọa độ ${stationId.split('_').slice(1).join(' ')}`; statusMsg.style.color = '#16a34a'; }
+
+            // Re-render to update the badge and reset button
+            const searchInput = document.getElementById('coord-search');
+            const typeFilter = document.getElementById('coord-type-filter');
+            const q = searchInput ? searchInput.value.toLowerCase() : '';
+            const t = typeFilter ? typeFilter.value : 'all';
+            const filtered = allStations.filter(s =>
+                (t === 'all' || s.type === t) &&
+                (!q || s.name.toLowerCase().includes(q))
+            );
+            renderCoordinatesTable(filtered);
+        } else {
+            if (statusMsg) { statusMsg.textContent = '❌ ' + (data.message || 'Lỗi lưu tọa độ'); statusMsg.style.color = '#dc2626'; }
+        }
+    } catch (e) {
+        if (statusMsg) { statusMsg.textContent = '❌ Lỗi kết nối server'; statusMsg.style.color = '#dc2626'; }
+    }
+}
+
+/**
+ * Reset coordinate override for a station (restore default)
+ */
+async function resetCoordinateRow(stationId) {
+    const statusMsg = document.getElementById('coord-status-msg');
+    try {
+        const token = localStorage.getItem('authToken');
+        const resp = await fetch(`/api/coordinates/${encodeURIComponent(stationId)}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            delete coordOverrides[stationId];
+
+            // Reload stations from server to get restored default coordinates
+            await refreshStations();
+
+            if (statusMsg) { statusMsg.textContent = `♻️ Đã reset tọa độ về mặc định`; statusMsg.style.color = '#0066cc'; }
+
+            // Re-render table
+            const searchInput = document.getElementById('coord-search');
+            const typeFilter = document.getElementById('coord-type-filter');
+            const q = searchInput ? searchInput.value.toLowerCase() : '';
+            const t = typeFilter ? typeFilter.value : 'all';
+            const filtered = allStations.filter(s =>
+                (t === 'all' || s.type === t) &&
+                (!q || s.name.toLowerCase().includes(q))
+            );
+            renderCoordinatesTable(filtered);
+        } else {
+            if (statusMsg) { statusMsg.textContent = '❌ ' + (data.message || 'Lỗi reset tọa độ'); statusMsg.style.color = '#dc2626'; }
+        }
+    } catch (e) {
+        if (statusMsg) { statusMsg.textContent = '❌ Lỗi kết nối server'; statusMsg.style.color = '#dc2626'; }
+    }
+}
+
+window.saveCoordinateRow = saveCoordinateRow;
+window.resetCoordinateRow = resetCoordinateRow;
