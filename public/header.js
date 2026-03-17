@@ -14,7 +14,7 @@ function createHeader(pageTitle = '') {
             </div>
             <nav class="main-nav">
                 <a href="index.html" class="nav-link">🏠 Trang chủ</a>
-                <a href="scada.html" class="nav-link">Chất lượng nước</a>
+                <a href="scada.html" class="nav-link">Scada Giếng Quan Trắc</a>
                 <a href="stats.html" class="nav-link">📊 Thống kê</a>
             </nav>
             <div class="current-time-section">

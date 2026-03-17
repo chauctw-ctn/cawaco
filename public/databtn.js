@@ -254,6 +254,10 @@ function createStatusBadge(delayMinutes) {
     return `<span class="status-badge ${statusClass}">${statusText}</span>`;
 }
 
+function isDkgStation(stationName) {
+    return String(stationName || '').toUpperCase().includes('DKG');
+}
+
 /**
  * Show loading state
  */
@@ -799,6 +803,9 @@ function closeAllDropdowns() {
  */
 function getFilteredData() {
     let filteredData = currentData;
+
+    // Default behavior: hide DKG stations from this table.
+    filteredData = filteredData.filter(row => !isDkgStation(row.station));
     
     // ONLY use header dropdown filters (permit, status)
     // If selectedItems.size === 0, show nothing
@@ -876,6 +883,7 @@ function renderTable() {
             
             // Độ trễ hiển thị: tính theo (thời gian đo → thời gian hiện tại)
             const delayMinutes = getEffectiveDelayMinutes(row);
+            const statusCellHtml = isDkgStation(row.station) ? '' : createStatusBadge(delayMinutes);
             
             // For first row of station: add STT, TÊN TRẠM, and GIẤY PHÉP with rowspan
             // For subsequent rows: skip these columns (they are merged)
@@ -888,7 +896,7 @@ function renderTable() {
                     <td>${row.unit || 'N/A'}</td>
                     <td>${formatDateTime(row.measurementTime)}</td>
                     <td>${formatDelay(delayMinutes)}</td>
-                    <td>${createStatusBadge(delayMinutes)}</td>
+                    <td>${statusCellHtml}</td>
                     <td rowspan="${rowCount}">${row.permit || 'N/A'}</td>
                 `;
             } else {
@@ -898,7 +906,7 @@ function renderTable() {
                     <td>${row.unit || 'N/A'}</td>
                     <td>${formatDateTime(row.measurementTime)}</td>
                     <td>${formatDelay(delayMinutes)}</td>
-                    <td>${createStatusBadge(delayMinutes)}</td>
+                    <td>${statusCellHtml}</td>
                 `;
             }
             

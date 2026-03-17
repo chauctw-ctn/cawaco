@@ -126,7 +126,7 @@ main.sidebar-hidden {
 }
 
 .summary-cards-row-2 {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     margin-bottom: 12px;
 }
 

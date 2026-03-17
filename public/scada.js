@@ -1,20 +1,383 @@
-// SCADA Data Display Script
-
 let scadaData = null;
 
 let scadaAutoRefreshTimer = null;
+let scadaClockTimer = null;
 let scadaLoading = false;
+let scadaResizeObserver = null;
 
-// Update last update time
+const SCADA_CANVAS = {
+    width: 1532,
+    height: 831
+};
+
+const METRIC_TEXT_MAP = {
+    'MỰC_NƯỚC': 'MỰC NƯỚC',
+    'LƯU_LƯỢNG': 'LƯU LƯỢNG',
+    'TỔNG_LƯU_LƯỢNG': 'TỔNG LƯU LƯỢNG',
+    'PH': 'PH',
+    'TDS': 'TDS',
+    'AMONI': 'AMONI',
+    'NITRAT': 'NITRAT'
+};
+
+const METRIC_UNIT_FALLBACK = {
+    'MỰC_NƯỚC': 'm',
+    'LƯU_LƯỢNG': 'm³/h',
+    'TỔNG_LƯU_LƯỢNG': 'm³',
+    'PH': 'pH',
+    'TDS': 'mg/L',
+    'AMONI': 'mg/L',
+    'NITRAT': 'mg/L'
+};
+
+const VALUE_ONLY_METRICS = new Set(['MỰC_NƯỚC', 'LƯU_LƯỢNG', 'TỔNG_LƯU_LƯỢNG']);
+
+function normalizeUnitText(unit) {
+    const raw = String(unit || '').trim();
+    if (!raw) return '';
+
+    const normalized = raw
+        .replace(/m\s*3\s*\/\s*h/gi, 'm³/h')
+        .replace(/m\s*3/gi, 'm³')
+        .replace(/mg\s*\/\s*l/gi, 'mg/L')
+        .replace(/ph/gi, 'pH');
+
+    return normalized;
+}
+
+const SCADA_LAYOUT = [
+    {
+        id: 'G5_NM1',
+        match: ['g5_nm1', 'g5 nm1', 'gieng 5', 'gieng so 5', 'gieng 5 nha may 1'],
+        title: { text: 'Giếng Số 5 NM1', x: 35, y: 530, className: 'scada-label scada-label--station' },
+        details: [
+            { text: 'THÔNG TIN GIẾNG SỐ 5 NM1:', x: 5, y: 575, className: 'scada-label scada-label--section' },
+            { text: '- Lưu lượng khai thác: 1.800 m3/ngày đêm', x: 10, y: 615, className: 'scada-label scada-label--detail' },
+            { text: '- Mực nước cho phép tối đa: 32m', x: 10, y: 645, className: 'scada-label scada-label--detail' },
+            { text: '- Số giờ khai thác: 24 giờ/ngày đêm', x: 10, y: 675, className: 'scada-label scada-label--detail' },
+            { text: '- Đường kính giếng: D350mm', x: 10, y: 705, className: 'scada-label scada-label--detail' },
+            { text: '- Công suất bơm: 18.5kw', x: 10, y: 735, className: 'scada-label scada-label--detail' }
+        ],
+        pump: { x: 92, y: 420, w: 27, h: 85, paramKey: 'LƯU_LƯỢNG' },
+        metrics: [
+            { paramKey: 'MỰC_NƯỚC', x: 42, y: 220, w: 50, h: 18, companionText: 'M', companionX: 95, companionY: 220, companionClass: 'scada-unit' },
+            { paramKey: 'TỔNG_LƯU_LƯỢNG', x: 140, y: 188, w: 80, h: 18, companionText: 'M3', companionX: 223, companionY: 188, companionClass: 'scada-unit' },
+            { paramKey: 'LƯU_LƯỢNG', x: 140, y: 170, w: 80, h: 18, companionText: 'M3/H', companionX: 223, companionY: 170, companionClass: 'scada-unit' },
+            { paramKey: 'PH', x: 190, y: 270, w: 50, h: 18, companionText: 'PH', companionX: 150, companionY: 270, companionClass: 'scada-label scada-label--metric' },
+            { paramKey: 'TDS', x: 190, y: 292, w: 50, h: 18, companionText: 'TDS', companionX: 145, companionY: 292, companionClass: 'scada-label scada-label--metric' },
+            { paramKey: 'AMONI', x: 190, y: 314, w: 50, h: 18, companionText: 'AMONI', companionX: 135, companionY: 314, companionClass: 'scada-label scada-label--metric' },
+            { paramKey: 'NITRAT', x: 190, y: 336, w: 50, h: 18, companionText: 'NITRAT', companionX: 135, companionY: 336, companionClass: 'scada-label scada-label--metric' }
+        ]
+    },
+    {
+        id: 'G4_NM2',
+        match: ['g4_nm2', 'g4 nm2', 'gieng 4 nm2', 'gieng 4 nha may 2'],
+        title: { text: 'Giếng Số 4 NM2', x: 360, y: 530, className: 'scada-label scada-label--station' },
+        details: [
+            { text: 'THÔNG TIN GIẾNG SỐ 4 NM2:', x: 330, y: 575, className: 'scada-label scada-label--section' },
+            { text: '- Lưu lượng khai thác: 2000 m3/ngày đêm', x: 335, y: 615, className: 'scada-label scada-label--detail' },
+            { text: '- Mực nước cho phép tối đa: 32m', x: 335, y: 645, className: 'scada-label scada-label--detail' },
+            { text: '- Số giờ khai thác: 24 giờ/ngày đêm', x: 335, y: 675, className: 'scada-label scada-label--detail' },
+            { text: '- Đường kính giếng: D350mm', x: 335, y: 705, className: 'scada-label scada-label--detail' },
+            { text: '- Công suất bơm: 18.5kw', x: 335, y: 735, className: 'scada-label scada-label--detail' }
+        ],
+        pump: { x: 416, y: 420, w: 27, h: 85, paramKey: 'LƯU_LƯỢNG' },
+        metrics: [
+            { paramKey: 'MỰC_NƯỚC', x: 365, y: 220, w: 50, h: 18, companionText: 'M', companionX: 418, companionY: 220, companionClass: 'scada-unit' },
+            { paramKey: 'TỔNG_LƯU_LƯỢNG', x: 465, y: 188, w: 80, h: 18, companionText: 'M3', companionX: 550, companionY: 188, companionClass: 'scada-unit' },
+            { paramKey: 'LƯU_LƯỢNG', x: 465, y: 170, w: 80, h: 18, companionText: 'M3/H', companionX: 550, companionY: 170, companionClass: 'scada-unit' },
+            { paramKey: 'PH', x: 510, y: 270, w: 50, h: 18, companionText: 'PH', companionX: 470, companionY: 270, companionClass: 'scada-label scada-label--metric' },
+            { paramKey: 'TDS', x: 510, y: 292, w: 50, h: 18, companionText: 'TDS', companionX: 465, companionY: 292, companionClass: 'scada-label scada-label--metric' },
+            { paramKey: 'AMONI', x: 510, y: 314, w: 50, h: 18, companionText: 'AMONI', companionX: 455, companionY: 314, companionClass: 'scada-label scada-label--metric' },
+            { paramKey: 'NITRAT', x: 510, y: 336, w: 50, h: 18, companionText: 'NITRAT', companionX: 455, companionY: 336, companionClass: 'scada-label scada-label--metric' }
+        ]
+    },
+    {
+        id: 'G4_NM1',
+        match: ['g4_nm1', 'g4 nm1', 'gieng 4 nm1', 'gieng 4 nha may 1'],
+        title: { text: 'Giếng Số 4 NM1', x: 690, y: 530, className: 'scada-label scada-label--station' },
+        details: [
+            { text: 'THÔNG TIN GIẾNG SỐ 4 NM1:', x: 655, y: 575, className: 'scada-label scada-label--section' },
+            { text: '- Lưu lượng khai thác: 1800 m3/ngày đêm', x: 665, y: 615, className: 'scada-label scada-label--detail' },
+            { text: '- Mực nước cho phép tối đa: 32m', x: 665, y: 645, className: 'scada-label scada-label--detail' },
+            { text: '- Số giờ khai thác: 24 giờ/ngày đêm', x: 665, y: 675, className: 'scada-label scada-label--detail' },
+            { text: '- Đường kính giếng: D350mm', x: 665, y: 705, className: 'scada-label scada-label--detail' },
+            { text: '- Công suất bơm: 18.5kw', x: 665, y: 735, className: 'scada-label scada-label--detail' }
+        ],
+        pump: { x: 739, y: 420, w: 27, h: 85, paramKey: 'LƯU_LƯỢNG' },
+        metrics: [
+            { paramKey: 'MỰC_NƯỚC', x: 688, y: 220, w: 50, h: 18, companionText: 'M', companionX: 740, companionY: 220, companionClass: 'scada-unit' },
+            { paramKey: 'TỔNG_LƯU_LƯỢNG', x: 785, y: 188, w: 80, h: 18, companionText: 'M3', companionX: 870, companionY: 188, companionClass: 'scada-unit' },
+            { paramKey: 'LƯU_LƯỢNG', x: 785, y: 170, w: 80, h: 18, companionText: 'M3/H', companionX: 870, companionY: 170, companionClass: 'scada-unit' }
+        ]
+    },
+    {
+        id: 'TRAM_1',
+        match: ['tram_1', 'tram 1', 'tram bom 1', 'tram bom so 1'],
+        title: { text: 'Trạm Bơm Số 1', x: 990, y: 530, className: 'scada-label scada-label--station' },
+        details: [
+            { text: 'THÔNG TIN TRẠM BƠM SỐ 1:', x: 970, y: 575, className: 'scada-label scada-label--section' },
+            { text: '- Lưu lượng khai thác: 2200 m3/ngày đêm', x: 975, y: 615, className: 'scada-label scada-label--detail' },
+            { text: '- Mực nước cho phép tối đa: 34m', x: 975, y: 645, className: 'scada-label scada-label--detail' },
+            { text: '- Số giờ khai thác: 24 giờ/ngày đêm', x: 975, y: 675, className: 'scada-label scada-label--detail' },
+            { text: '- Đường kính giếng: D350mm', x: 975, y: 705, className: 'scada-label scada-label--detail' },
+            { text: '- Công suất bơm: 18.5kw', x: 975, y: 735, className: 'scada-label scada-label--detail' }
+        ],
+        pump: { x: 1042, y: 420, w: 27, h: 85, paramKey: 'LƯU_LƯỢNG' },
+        metrics: [
+            { paramKey: 'MỰC_NƯỚC', x: 990, y: 220, w: 50, h: 18, companionText: 'M', companionX: 1043, companionY: 220, companionClass: 'scada-unit' },
+            { paramKey: 'TỔNG_LƯU_LƯỢNG', x: 1090, y: 188, w: 80, h: 18, companionText: 'M3', companionX: 1175, companionY: 188, companionClass: 'scada-unit' },
+            { paramKey: 'LƯU_LƯỢNG', x: 1090, y: 170, w: 80, h: 18, companionText: 'M3/H', companionX: 1175, companionY: 170, companionClass: 'scada-unit' }
+        ]
+    },
+    {
+        id: 'TRAM_24',
+        match: ['tram_24', 'tram 24', 'tram bom 24', 'tram bom so 24', 'qt24'],
+        title: { text: 'Trạm Bơm Số 24', x: 1290, y: 530, className: 'scada-label scada-label--station' },
+        details: [],
+        pump: null,
+        metrics: [
+            { paramKey: 'MỰC_NƯỚC', x: 1290, y: 220, w: 50, h: 18, companionText: 'M', companionX: 1342, companionY: 220, companionClass: 'scada-unit' },
+            { paramKey: 'PH', x: 1405, y: 120, w: 50, h: 18, companionText: 'PH', companionX: 1360, companionY: 122, companionClass: 'scada-label scada-label--metric' },
+            { paramKey: 'TDS', x: 1405, y: 140, w: 50, h: 18, companionText: 'TDS', companionX: 1355, companionY: 140, companionClass: 'scada-label scada-label--metric' },
+            { paramKey: 'AMONI', x: 1405, y: 160, w: 50, h: 18, companionText: 'AMONI', companionX: 1345, companionY: 160, companionClass: 'scada-label scada-label--metric' },
+            { paramKey: 'NITRAT', x: 1405, y: 180, w: 50, h: 18, companionText: 'NITRAT', companionX: 1345, companionY: 180, companionClass: 'scada-label scada-label--metric' }
+        ]
+    }
+];
+
+function normalizeText(input) {
+    return String(input ?? '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\(.*?\)/g, ' ')
+        .replace(/_/g, ' ')
+        .replace(/nha\s*may/g, 'nm')
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function normalizeParameterName(paramName) {
+    const name = normalizeText(paramName);
+    const compact = name.replace(/\s+/g, '');
+    if (!name) return '';
+    if (compact.includes('ph')) return 'PH';
+    if (compact.includes('tds')) return 'TDS';
+    if (compact.includes('amoni') || compact.includes('nh4')) return 'AMONI';
+    if (compact.includes('nitrat') || compact.includes('no3')) return 'NITRAT';
+    if (compact.includes('luuluong')) {
+        if (compact.includes('tong')) return 'TỔNG_LƯU_LƯỢNG';
+        return 'LƯU_LƯỢNG';
+    }
+    if (compact.includes('mucnuoc')) return 'MỰC_NƯỚC';
+    return String(paramName ?? '').trim().toUpperCase();
+}
+
+function findStationLayout(station) {
+    const stationSource = `${station?.station || ''} ${station?.stationName || ''}`;
+    const stationKey = normalizeText(stationSource);
+    const stationCompact = stationKey.replace(/\s+/g, '');
+
+    return SCADA_LAYOUT.find((item) => item.match.some((token) => {
+        const normalizedToken = normalizeText(token);
+        const tokenCompact = normalizedToken.replace(/\s+/g, '');
+        return stationKey.includes(normalizedToken) || stationCompact.includes(tokenCompact);
+    })) || null;
+}
+
+function escapeHtml(input) {
+    return String(input ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function toPercentX(value) {
+    return `${(value / SCADA_CANVAS.width) * 100}%`;
+}
+
+function toPercentY(value) {
+    return `${(value / SCADA_CANVAS.height) * 100}%`;
+}
+
+function parseNumber(value) {
+    if (value === null || value === undefined) return Number.NaN;
+
+    const raw = String(value).trim().replace(/\s+/g, '');
+    if (!raw) return Number.NaN;
+
+    const hasComma = raw.includes(',');
+    const hasDot = raw.includes('.');
+
+    if (hasComma && hasDot) {
+        const lastComma = raw.lastIndexOf(',');
+        const lastDot = raw.lastIndexOf('.');
+
+        if (lastComma > lastDot) {
+            const normalized = raw.replace(/\./g, '').replace(',', '.');
+            return Number.parseFloat(normalized);
+        }
+
+        const normalized = raw.replace(/,/g, '');
+        return Number.parseFloat(normalized);
+    }
+
+    if (hasComma) {
+        const parts = raw.split(',');
+        if (parts.length === 2 && parts[1].length > 0 && parts[1].length <= 2) {
+            return Number.parseFloat(raw.replace(',', '.'));
+        }
+        return Number.parseFloat(raw.replace(/,/g, ''));
+    }
+
+    if (hasDot) {
+        const parts = raw.split('.');
+        if (parts.length === 2 && parts[1].length > 0 && parts[1].length <= 3) {
+            return Number.parseFloat(raw);
+        }
+        return Number.parseFloat(raw.replace(/\./g, ''));
+    }
+
+    return Number.parseFloat(raw);
+}
+
+function getStationParameterMap(station) {
+    const params = {};
+    if (!station || !Array.isArray(station.parameters)) return params;
+
+    station.parameters.forEach((param) => {
+        const key = normalizeParameterName(param.parameter || param.parameterName);
+        if (key) params[key] = param;
+    });
+
+    return params;
+}
+
+function formatMetricValue(param, metricKey) {
+    if (!param) return '--';
+    const raw = param.displayText ?? param.value;
+    if (raw === null || raw === undefined || raw === '' || raw === 'undefined') return '--';
+
+    const numericValue = parseNumber(raw);
+    if (Number.isNaN(numericValue)) {
+        return String(raw);
+    }
+
+    const fixedDigits = metricKey === 'TỔNG_LƯU_LƯỢNG' ? 0 : 2;
+    const formatter = new Intl.NumberFormat('vi-VN', {
+        minimumFractionDigits: fixedDigits,
+        maximumFractionDigits: fixedDigits
+    });
+
+    return formatter.format(numericValue);
+}
+
+function getQualityStatus(paramName, value) {
+    const numericValue = parseNumber(value);
+    if (Number.isNaN(numericValue)) return null;
+
+    switch (normalizeParameterName(paramName)) {
+        case 'PH':
+            if (numericValue >= 6.5 && numericValue <= 8.5) return { className: 'quality-good', text: 'Đạt chuẩn' };
+            if ((numericValue >= 6.0 && numericValue < 6.5) || (numericValue > 8.5 && numericValue <= 9.0)) {
+                return { className: 'quality-warning', text: 'Cảnh báo' };
+            }
+            return { className: 'quality-danger', text: 'Vượt chuẩn' };
+        case 'TDS':
+            if (numericValue <= 500) return { className: 'quality-good', text: 'Tốt' };
+            if (numericValue <= 1000) return { className: 'quality-warning', text: 'TB' };
+            return { className: 'quality-danger', text: 'Cao' };
+        case 'AMONI':
+            if (numericValue <= 0.5) return { className: 'quality-good', text: 'Tốt' };
+            if (numericValue <= 1.0) return { className: 'quality-warning', text: 'TB' };
+            return { className: 'quality-danger', text: 'Cao' };
+        case 'NITRAT':
+            if (numericValue <= 10) return { className: 'quality-good', text: 'Tốt' };
+            if (numericValue <= 20) return { className: 'quality-warning', text: 'TB' };
+            return { className: 'quality-danger', text: 'Cao' };
+        default:
+            return null;
+    }
+}
+
+function renderTextNode(node) {
+    const style = [`left:${toPercentX(node.x)}`, `top:${toPercentY(node.y)}`];
+    return `<div class="${node.className}" style="${style.join(';')}">${escapeHtml(node.text)}</div>`;
+}
+
+function renderValueNode(metricConfig, param) {
+    const value = formatMetricValue(param, metricConfig.paramKey);
+    const metricLabel = METRIC_TEXT_MAP[metricConfig.paramKey] || metricConfig.paramKey;
+    const metricUnit = normalizeUnitText(param?.unit || METRIC_UNIT_FALLBACK[metricConfig.paramKey] || '');
+    const displayText = VALUE_ONLY_METRICS.has(metricConfig.paramKey)
+        ? `${value}${metricUnit ? ` ${metricUnit}` : ''}`
+        : `${metricLabel}: ${value}${metricUnit ? ` (${metricUnit})` : ''}`;
+
+    const quality = getQualityStatus(metricConfig.paramKey, value);
+    const qualityClass = quality ? ` value-tag--${quality.className}` : '';
+    const mutedClass = value === '--' ? ' value-tag--muted' : '';
+    const valueLength = String(displayText).length;
+
+    let adaptiveClass = '';
+    if (valueLength >= 11) {
+        adaptiveClass = ' value-tag--tiny';
+    } else if (valueLength >= 8) {
+        adaptiveClass = ' value-tag--compact';
+    }
+
+    const baseWidth = Math.max(metricConfig.w, 38);
+    const dynamicWidth = Math.max(baseWidth, Math.min(240, 28 + valueLength * 6));
+
+    const style = [
+        `left:${toPercentX(metricConfig.x)}`,
+        `top:${toPercentY(metricConfig.y)}`,
+        `width:${dynamicWidth}px`,
+        `height:${Math.max(metricConfig.h, 16)}px`
+    ].join(';');
+
+    return `<div class="value-tag${qualityClass}${mutedClass}${adaptiveClass} pulse" style="${style}">${escapeHtml(displayText)}</div>`;
+}
+
+function renderPumpNode(slot, params) {
+    if (!slot.pump) return '';
+
+    const param = params[slot.pump.paramKey];
+    const rawFlow = param?.displayText ?? param?.value ?? '';
+    let numericValue = parseNumber(rawFlow);
+
+    if (Number.isNaN(numericValue)) {
+        const numericToken = String(rawFlow).match(/-?\d+(?:[.,]\d+)?/);
+        numericValue = parseNumber(numericToken ? numericToken[0] : '0');
+    }
+
+    const active = !Number.isNaN(numericValue) && Math.abs(numericValue) > Number.EPSILON;
+    if (!active) return '';
+
+    const style = [
+        `left:${toPercentX(slot.pump.x)}`,
+        `top:${toPercentY(slot.pump.y)}`,
+        `width:${slot.pump.w}px`,
+        `height:${slot.pump.h}px`,
+        'opacity:1'
+    ].join(';');
+
+    return `<img class="pump-state" style="${style}" src="GIENG_CHAY.PNG" alt="">`;
+}
+
 function updateLastUpdate() {
-    // Support both created_at (new) and timestamp (legacy) fields
-    const timeValue = scadaData?.created_at || scadaData?.timestamp;
-    if (!scadaData || !timeValue) return;
-    
-    const timestamp = new Date(timeValue);
     const el = document.getElementById('lastUpdate');
     if (!el) return;
-    // Format theo timezone Việt Nam (GMT+7)
+
+    const timeValue = scadaData?.created_at || scadaData?.timestamp;
+    if (!scadaData || !timeValue) {
+        el.textContent = 'Chưa có dữ liệu thời gian cập nhật';
+        return;
+    }
+
     const formatter = new Intl.DateTimeFormat('vi-VN', {
         timeZone: 'Asia/Ho_Chi_Minh',
         day: '2-digit',
@@ -25,16 +388,105 @@ function updateLastUpdate() {
         second: '2-digit',
         hour12: false
     });
-    el.textContent = `Cập nhật lần cuối: ${formatter.format(timestamp)} | Nguồn: ${scadaData.source || 'SCADA'} | Phương thức: ${scadaData.method || 'N/A'}`;
+
+    const totalStations = Object.keys(scadaData.stationsGrouped || {}).length;
+    el.textContent = `Cập nhật: ${formatter.format(new Date(timeValue))} | ${scadaData.source || 'SCADA'} | ${totalStations} trạm`;
 }
 
-// Load SCADA data
+function updateClock() {
+    const clock = document.getElementById('scadaClock');
+    if (!clock) return;
+    clock.textContent = new Date().toLocaleString('vi-VN', {
+        timeZone: 'Asia/Ho_Chi_Minh'
+    });
+}
+
+function fitScadaViewport() {
+    const stage = document.getElementById('scadaStageScroll');
+    const scaler = document.getElementById('scadaViewportScaler');
+    const viewport = document.getElementById('scadaViewport');
+
+    if (!stage || !scaler || !viewport) return;
+
+    const availableWidth = stage.clientWidth;
+    const availableHeight = stage.clientHeight;
+
+    if (!availableWidth || !availableHeight) return;
+
+    const scale = Math.min(
+        availableWidth / SCADA_CANVAS.width,
+        availableHeight / SCADA_CANVAS.height
+    );
+
+    const safeScale = Math.max(0.35, scale);
+
+    scaler.style.width = `${SCADA_CANVAS.width * safeScale}px`;
+    scaler.style.height = `${SCADA_CANVAS.height * safeScale}px`;
+    viewport.style.transform = `scale(${safeScale})`;
+    viewport.style.transformOrigin = 'top left';
+}
+
+function renderStations() {
+    const container = document.getElementById('stationsContainer');
+    if (!container) return;
+
+    if (!scadaData || !scadaData.stationsGrouped) {
+        container.innerHTML = '<div class="scada-error-state"><h3>Không có dữ liệu để hiển thị</h3><p>API chưa trả về thông tin trạm hợp lệ.</p></div>';
+        return;
+    }
+
+    const stationLayouts = new Map();
+    Object.values(scadaData.stationsGrouped).forEach((station) => {
+        const layout = findStationLayout(station);
+        if (layout) {
+            stationLayouts.set(layout.id, {
+                layout,
+                station,
+                params: getStationParameterMap(station)
+            });
+        }
+    });
+
+    const overlayNodes = [];
+    overlayNodes.push('<div class="scada-overlay-title">HỆ THỐNG SCADA GIẾNG QUAN TRẮC</div>');
+
+    SCADA_LAYOUT.forEach((slot) => {
+        overlayNodes.push(renderTextNode(slot.title));
+        slot.details.forEach((detail) => overlayNodes.push(renderTextNode(detail)));
+
+        const stationEntry = stationLayouts.get(slot.id);
+        const params = stationEntry?.params || {};
+
+        overlayNodes.push(renderPumpNode(slot, params));
+
+        slot.metrics.forEach((metricConfig) => {
+            overlayNodes.push(renderValueNode(metricConfig, params[metricConfig.paramKey]));
+        });
+    });
+
+    container.innerHTML = `
+        <div class="scada-stage-shell">
+            <div id="scadaStageScroll" class="scada-stage-scroll">
+                <div id="scadaViewportScaler" class="scada-viewport-scaler">
+                <div id="scadaViewport" class="scada-viewport">
+                    <img class="scada-bg" src="image19.png" alt="Sơ đồ SCADA chất lượng nước">
+                    <div class="scada-layer">${overlayNodes.join('')}</div>
+                    <div id="scadaClock" class="scada-clock"></div>
+                </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    updateClock();
+    fitScadaViewport();
+}
+
 async function loadScadaData(options = {}) {
     const { silent = false } = options;
-
     if (scadaLoading) return;
-    scadaLoading = true;
 
+    scadaLoading = true;
     const refreshBtn = document.getElementById('refresh-scada-btn');
     if (refreshBtn) refreshBtn.disabled = true;
 
@@ -42,481 +494,69 @@ async function loadScadaData(options = {}) {
         const response = await fetch(`/api/scada/cached?_t=${Date.now()}`, {
             cache: 'no-store'
         });
-        
+
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.message || `HTTP ${response.status}: Không thể tải dữ liệu`);
         }
-        
-        scadaData = await response.json();
-        
-        if (!scadaData.success && scadaData.success !== undefined) {
-            throw new Error(scadaData.message || 'Không có dữ liệu');
+
+        const data = await response.json();
+        if (!data.success && data.success !== undefined) {
+            throw new Error(data.message || 'Không có dữ liệu');
         }
-        
+
+        scadaData = data;
         renderStations();
         updateLastUpdate();
-
     } catch (error) {
         console.error('Error loading SCADA data:', error);
-        const container = document.getElementById('stationsContainer');
-        container.innerHTML = `
-            <div class="error" style="padding: 40px; text-align: center;">
-                <h3 style="color: #d32f2f; margin-bottom: 10px;">❌ ${error.message}</h3>
-                <p style="color: #666; margin-top: 10px;">
-                    Hệ thống sẽ tự động cập nhật dữ liệu chất lượng nước mỗi 5 phút.
-                </p>
-                <button onclick="loadScadaData()" style="margin-top: 20px; padding: 10px 20px; background: #0066cc; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                    Thử lại
-                </button>
-            </div>
-        `;
 
+        if (!silent || !scadaData) {
+            const container = document.getElementById('stationsContainer');
+            if (container) {
+                container.innerHTML = `
+                    <div class="scada-error-state">
+                        <h3>${escapeHtml(error.message)}</h3>
+                        <p>Hệ thống sẽ tiếp tục tự động thử tải lại dữ liệu mỗi 5 phút.</p>
+                        <button type="button" onclick="loadScadaData()">Thử lại</button>
+                    </div>
+                `;
+            }
+        }
     } finally {
         scadaLoading = false;
         if (refreshBtn) refreshBtn.disabled = false;
     }
 }
 
-// Render stations
-function renderStations() {
-    const container = document.getElementById('stationsContainer');
-    
-    if (!scadaData || !scadaData.stationsGrouped) {
-        container.innerHTML = '<div class="error">Không có dữ liệu để hiển thị</div>';
-        return;
-    }
-
-    const stations = scadaData.stationsGrouped;
-    const stationEntries = Object.entries(stations);
-    
-    // Debug: Log parameter names from database
-    console.log('🔍 Debug - SCADA Data from database:');
-    stationEntries.forEach(([id, st]) => {
-        console.log(`Station: ${st.stationName}`);
-        if (st.parameters) {
-            st.parameters.forEach(p => {
-                console.log(`  - Parameter: "${p.parameter}" (${p.parameterName}) = ${p.displayText} ${p.unit}`);
-            });
-        }
-    });
-
-    // SCADA/HMI style overview (no table)
-    const metrics = [
-        // Order required: Level, Flow, Total Flow, PH, TDS, AMONI, NITRAT
-        { key: 'MỰC_NƯỚC', label: 'Mực nước', unitFallback: 'm', kind: 'level', colorClass: 'level' },
-        { key: 'LƯU_LƯỢNG', label: 'Lưu lượng', unitFallback: 'm³/h', kind: 'flow', colorClass: 'flowrate' },
-        { key: 'TỔNG_LƯU_LƯỢNG', label: 'Tổng', unitFallback: 'm³', kind: 'total', colorClass: 'totalflow' },
-        { key: 'PH', label: 'pH', kind: 'quality', colorClass: 'ph' },
-        { key: 'TDS', label: 'TDS', kind: 'quality', colorClass: 'tds' },
-        { key: 'AMONI', label: 'Amoni', kind: 'quality', colorClass: 'amoni' },
-        { key: 'NITRAT', label: 'Nitrat', kind: 'quality', colorClass: 'nitrat' }
-    ];
-
-    // Sorting helpers
-    const normalizeKey = (input) => {
-        let s = String(input ?? '')
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '');
-
-        // normalize common words/variants
-        s = s
-            .replace(/\(.*?\)/g, ' ') // remove (QT24)
-            .replace(/nha\s*may/g, 'nm')
-            .replace(/\bso\b/g, ' ') // remove "so" ("số")
-            .replace(/[^a-z0-9\s_]/g, ' ')
-            .replace(/\bnm\s+(\d+)\b/g, 'nm$1')
-            .replace(/\s+/g, ' ')
-            .trim();
-
-        return s;
-    };
-
-    // Enforce station order left-to-right as requested
-    const explicitStationOrder = [
-        'giếng 5',
-        'giếng 4 nm2',
-        'giếng 4 nm1',
-        'trạm bơm 1',
-        'trạm bơm 24'
-    ].map(normalizeKey);
-
-    const getStationRank = (stationName) => {
-        const key = normalizeKey(stationName);
-        const idx = explicitStationOrder.findIndex(wanted => key === wanted || key.startsWith(wanted) || key.includes(wanted));
-        return idx; // -1 if not found
-    };
-
-    // Stations as columns (1 row, fixed order left-to-right)
-    const sortedStations = stationEntries
-        .map(([id, st]) => st)
-        .sort((s1, s2) => {
-            const n1 = (s1?.stationName || '').toString();
-            const n2 = (s2?.stationName || '').toString();
-            const r1 = getStationRank(n1);
-            const r2 = getStationRank(n2);
-
-            const has1 = r1 !== -1;
-            const has2 = r2 !== -1;
-            if (has1 && has2 && r1 !== r2) return r1 - r2;
-            if (has1 && !has2) return -1;
-            if (!has1 && has2) return 1;
-            return n1.localeCompare(n2, 'vi');
-        });
-
-    container.innerHTML = `
-        <div class="scada-group-grid" role="list" aria-label="Giếng/trạm">
-            ${sortedStations.map(st => renderGroupColumn(st.stationName || '--', [st], metrics)).join('')}
-        </div>
-    `;
-}
-
-function renderGroupColumn(groupName, stations, metrics) {
-    return `
-        <section class="scada-group" role="listitem" aria-label="${escapeHtml(groupName)}">
-            <div class="scada-panels" role="list" aria-label="Danh sách trạm">
-                ${stations.map(st => renderStationPanel(st, metrics)).join('')}
-            </div>
-        </section>
-    `;
-}
-
-function buildParamMap(station) {
-    const params = {};
-    if (!station || !Array.isArray(station.parameters)) return params;
-    
-    station.parameters.forEach(p => {
-        if (!p || !p.parameter) return;
-        
-        // Normalize parameter name for matching
-        const normalizedKey = normalizeParameterName(p.parameter);
-        
-        // Store both original and normalized keys
-        params[p.parameter] = p; // Original key
-        params[normalizedKey] = p; // Normalized key
-    });
-    
-    return params;
-}
-
-/**
- * Normalize parameter name for flexible matching
- * Examples:
- * - "pH" or "PH" -> "PH"
- * - "TDS (mg/l)" or "TDS" -> "TDS"
- * - "Amoni (NH4+)" or "Amoni" -> "AMONI"
- * - "Nitrat (NO3-)" or "Nitrat" -> "NITRAT"
- * - "Lưu lượng" -> "LƯU_LƯỢNG"
- * - "Mực nước" -> "MỰC_NƯỚC"
- */
-function normalizeParameterName(paramName) {
-    if (!paramName) return '';
-    
-    const name = String(paramName).trim().toLowerCase();
-    
-    // Water quality parameters
-    if (name.includes('ph')) return 'PH';
-    if (name.includes('tds')) return 'TDS';
-    if (name.includes('amoni') || name.includes('nh4')) return 'AMONI';
-    if (name.includes('nitrat') || name.includes('no3')) return 'NITRAT';
-    
-    // Flow and level parameters
-    if (name.includes('lưu lượng') || name.includes('luu luong')) {
-        if (name.includes('tổng') || name.includes('tong')) {
-            return 'TỔNG_LƯU_LƯỢNG';
-        }
-        return 'LƯU_LƯỢNG';
-    }
-    if (name.includes('mực nước') || name.includes('muc nuoc')) return 'MỰC_NƯỚC';
-    
-    // Return uppercase version with underscores
-    return paramName.toUpperCase().replace(/\s+/g, '_').replace(/[()]/g, '');
-}
-
-function formatCell(param, fallbackUnit) {
-    if (!param) return { text: '--', unit: '' };
-
-    let text = param.displayText ?? param.value ?? param.TextWithUnit ?? '--';
-    
-    // Handle undefined, null, or empty string
-    if (text === undefined || text === null || text === '' || text === 'undefined') {
-        text = '--';
-    } else {
-        text = String(text);
-    }
-    
-    const unit = (param.unit ?? fallbackUnit ?? '').toString();
-    return { text, unit };
-}
-
-function hasMeaningfulValue(param) {
-    if (!param) return false;
-    const raw = (param.displayText ?? param.value ?? param.TextWithUnit);
-    if (raw === null || raw === undefined || raw === '' || raw === 'undefined') return false;
-    const text = String(raw).trim();
-    if (!text) return false;
-    if (text === '--') return false;
-    if (text.toLowerCase() === 'n/a') return false;
-    return true;
-}
-
-function renderQualityBadge(param) {
-    if (!param) return '';
-    const quality = getQualityStatus(param.parameter, param.value);
-    if (!quality) return '';
-    return `<span class="quality-pill ${quality.class}">${quality.text}</span>`;
-}
-
-function renderStationPanel(station, metrics) {
-    const params = buildParamMap(station);
-    const name = station.stationName || '--';
-
-    // Always show all metrics, even if no meaningful value
-    const blocks = metrics
-        .map(m => {
-            const param = params[m.key];
-            const { text, unit } = formatCell(param, m.unitFallback);
-            const qualityBadge = m.kind === 'quality' && hasMeaningfulValue(param) ? renderQualityBadge(param) : '';
-
-            // Minor normalization for PH (often unitless)
-            const unitHtml = unit && m.key !== 'PH' ? `<span class="hmi-unit">${escapeHtml(unit)}</span>` : '';
-
-            return `
-                <div class="hmi-block hmi-${m.kind} hmi-${m.colorClass}" role="listitem">
-                    <div class="hmi-label">${escapeHtml(m.label)}</div>
-                    <div class="hmi-readout">
-                        <span class="hmi-value">${escapeHtml(text)}</span>
-                        ${unitHtml}
-                        ${qualityBadge}
-                    </div>
-                </div>
-            `;
-        })
-        .join('');
-
-    return `
-        <article class="station-panel" role="listitem">
-            <header class="station-panel__header">
-                <div class="station-panel__name" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
-            </header>
-            <div class="station-panel__metrics" role="list" aria-label="Thông số">
-                ${blocks || '<div class="station-panel__empty">Không có dữ liệu</div>'}
-            </div>
-        </article>
-    `;
-}
-
-function escapeHtml(input) {
-    return String(input)
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#039;');
-}
-
-// Get quality status
-function getQualityStatus(paramName, value) {
-    const numValue = parseFloat(value);
-    if (isNaN(numValue)) return null;
-    
-    // Normalize parameter name for comparison
-    const normalized = normalizeParameterName(paramName);
-    
-    switch(normalized) {
-        case 'PH':
-            if (numValue >= 6.5 && numValue <= 8.5) return {class: 'quality-good', text: 'Đạt chuẩn'};
-            if (numValue >= 6.0 && numValue < 6.5 || numValue > 8.5 && numValue <= 9.0) return {class: 'quality-warning', text: 'Cảnh báo'};
-            return {class: 'quality-danger', text: 'Vượt chuẩn'};
-        case 'TDS':
-            if (numValue <= 500) return {class: 'quality-good', text: 'Tốt'};
-            if (numValue <= 1000) return {class: 'quality-warning', text: 'TB'};
-            return {class: 'quality-danger', text: 'Cao'};
-        case 'AMONI':
-            if (numValue <= 0.5) return {class: 'quality-good', text: 'Tốt'};
-            if (numValue <= 1.0) return {class: 'quality-warning', text: 'TB'};
-            return {class: 'quality-danger', text: 'Cao'};
-        case 'NITRAT':
-            if (numValue <= 10) return {class: 'quality-good', text: 'Tốt'};
-            if (numValue <= 20) return {class: 'quality-warning', text: 'TB'};
-            return {class: 'quality-danger', text: 'Cao'};
-        default:
-            return null;
-    }
-}
-
-// Render individual station card
-function renderStationUnit(station) {
-    const params = {};
-    station.parameters.forEach(p => {
-        params[p.parameter] = p;
-    });
-
-    const flowRate = params['LƯU_LƯỢNG'] || {displayText: '0.0', value: 0, unit: 'm³/h'};
-    const totalFlow = params['TỔNG_LƯU_LƯỢNG'] || {displayText: '0', value: 0, unit: 'm³'};
-    const waterLevel = params['MỰC_NƯỚC'] || {displayText: '0.0', value: 0, unit: 'm'};
-    const pH = params['PH'];
-    const tds = params['TDS'];
-    const amoni = params['AMONI'];
-    const nitrat = params['NITRAT'];
-
-    const stationType = station.group || 'TRẠM';
-
-    return `
-        <div class="station-card">
-            <div class="station-header">
-                <div class="station-name">${station.stationName}</div>
-                <div class="station-type">${stationType}</div>
-            </div>
-            
-            <div class="parameters-grid">
-                <!-- Flow Rate -->
-                <div class="param-group flow">
-                    <div class="param-label">
-                        <span class="param-icon">💧</span>
-                        <span>Lưu Lượng</span>
-                    </div>
-                    <div class="param-value-container">
-                        <span class="param-value">${flowRate.displayText}</span>
-                        <span class="param-unit">${flowRate.unit}</span>
-                    </div>
-                </div>
-
-                <!-- Total Flow -->
-                <div class="param-group flow">
-                    <div class="param-label">
-                        <span class="param-icon">📊</span>
-                        <span>Tổng Lưu Lượng</span>
-                    </div>
-                    <div class="param-value-container">
-                        <span class="param-value">${totalFlow.displayText}</span>
-                        <span class="param-unit">${totalFlow.unit}</span>
-                    </div>
-                </div>
-
-                <!-- Water Level -->
-                <div class="param-group level">
-                    <div class="param-label">
-                        <span class="param-icon">📏</span>
-                        <span>Mực Nước</span>
-                    </div>
-                    <div class="param-value-container">
-                        <span class="param-value">${waterLevel.displayText}</span>
-                        <span class="param-unit">${waterLevel.unit}</span>
-                    </div>
-                </div>
-
-                ${pH ? renderQualityParam('🧪', 'pH', pH) : ''}
-                ${tds ? renderQualityParam('⚗️', 'TDS', tds) : ''}
-                ${amoni ? renderQualityParam('🔬', 'Amoni', amoni) : ''}
-                ${nitrat ? renderQualityParam('🧬', 'Nitrat', nitrat) : ''}
-            </div>
-        </div>
-    `;
-}
-
-// Render quality parameter with badge
-function renderQualityParam(icon, label, param) {
-    const quality = getQualityStatus(param.parameter, param.value);
-    const qualityBadge = quality ? `<span class="quality-badge ${quality.class}">${quality.text}</span>` : '';
-    
-    return `
-        <div class="param-group quality">
-            <div class="param-label">
-                <span class="param-icon">${icon}</span>
-                <span>${label}</span>
-            </div>
-            <div class="param-value-container">
-                <span class="param-value">${param.displayText}</span>
-                <span class="param-unit">${param.unit}</span>
-                ${qualityBadge}
-            </div>
-        </div>
-    `;
-}
-
-// Render individual parameter
-function renderParameter(param) {
-    const qualityClass = getQualityClass(param);
-    const qualityLabel = qualityClass ? `<span class="quality-indicator ${qualityClass}">${getQualityLabel(qualityClass)}</span>` : '';
-    
-    return `
-        <div class="parameter-row">
-            <div class="parameter-name">
-                ${param.status === 'Online' ? '<span class="status-online"></span>' : '<span class="status-offline"></span>'}
-                ${param.parameterName}
-            </div>
-            <div>
-                <span class="parameter-value">${param.displayText}</span>
-                <span class="parameter-unit">${param.unit}</span>
-                ${qualityLabel}
-            </div>
-        </div>
-    `;
-}
-
-// Get quality class based on parameter value
-function getQualityClass(param) {
-    // pH quality check
-    if (param.parameter === 'PH') {
-        const value = parseFloat(param.value);
-        if (value >= 6.5 && value <= 8.5) return 'quality-good';
-        if (value >= 6.0 && value <= 9.0) return 'quality-warning';
-        return 'quality-danger';
-    }
-    
-    // TDS quality check (mg/L)
-    if (param.parameter === 'TDS') {
-        const value = parseFloat(param.value);
-        if (value <= 500) return 'quality-good';
-        if (value <= 1000) return 'quality-warning';
-        return 'quality-danger';
-    }
-    
-    // Amoni quality check (mg/L)
-    if (param.parameter === 'AMONI') {
-        const value = parseFloat(param.value);
-        if (value <= 0.5) return 'quality-good';
-        if (value <= 1.0) return 'quality-warning';
-        return 'quality-danger';
-    }
-    
-    // Nitrat quality check (mg/L)
-    if (param.parameter === 'NITRAT') {
-        const value = parseFloat(param.value);
-        if (value <= 10) return 'quality-good';
-        if (value <= 45) return 'quality-warning';
-        return 'quality-danger';
-    }
-    
-    return null;
-}
-
-// Get quality label
-function getQualityLabel(qualityClass) {
-    switch(qualityClass) {
-        case 'quality-good': return 'Đạt';
-        case 'quality-warning': return 'Cảnh báo';
-        case 'quality-danger': return 'Vượt chuẩn';
-        default: return '';
-    }
-}
-
 function initScadaPage() {
     const container = document.getElementById('stationsContainer');
-    if (!container) return; // Not on SCADA page
+    if (!container) return;
 
-    // Refresh button
+    document.body.classList.remove('loading');
+
     const refreshBtn = document.getElementById('refresh-scada-btn');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', () => loadScadaData());
     }
 
-    // Initial load
+    updateClock();
+    if (scadaClockTimer) clearInterval(scadaClockTimer);
+    scadaClockTimer = setInterval(updateClock, 1000);
+
+    window.addEventListener('resize', fitScadaViewport);
+
+    const scadaMain = document.getElementById('scada-main');
+    if (window.ResizeObserver && scadaMain) {
+        if (scadaResizeObserver) scadaResizeObserver.disconnect();
+        scadaResizeObserver = new ResizeObserver(() => {
+            fitScadaViewport();
+        });
+        scadaResizeObserver.observe(scadaMain);
+    }
+
     loadScadaData();
 
-    // Auto refresh every 5 minutes
     if (scadaAutoRefreshTimer) clearInterval(scadaAutoRefreshTimer);
     scadaAutoRefreshTimer = setInterval(() => loadScadaData({ silent: true }), 5 * 60 * 1000);
 }
