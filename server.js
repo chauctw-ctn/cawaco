@@ -535,6 +535,12 @@ function isSoTaiNguyenWell(stationName) {
     return targets.some(target => n === target || n.includes(target));
 }
 
+function isDKGStation(stationName) {
+    const n = String(stationName || '').trim().toUpperCase();
+    // Check if station name starts with "DKG"
+    return n.startsWith('DKG');
+}
+
 function createVietnamBoundary(year, month, day, hour = 0, minute = 0, second = 0, ms = 0) {
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}.${String(ms).padStart(3, '0')}+07:00`;
     return new Date(dateStr);
@@ -2506,17 +2512,25 @@ async function checkAndSendTelegramAlerts() {
             }
         }
 
-        const totalStations = Object.keys(stationStatus).length;
-        const offlineCount = Object.values(stationStatus).filter(s => s.status === 'offline').length;
-        const offlineStations = Object.entries(stationStatus)
+        // Filter out DKG stations from alerts
+        const alertableStations = Object.entries(stationStatus)
+            .filter(([stationName]) => !isDKGStation(stationName))
+            .reduce((acc, [name, status]) => {
+                acc[name] = status;
+                return acc;
+            }, {});
+        
+        const totalStations = Object.keys(alertableStations).length;
+        const offlineCount = Object.values(alertableStations).filter(s => s.status === 'offline').length;
+        const offlineStations = Object.entries(alertableStations)
             .filter(([, status]) => status.status === 'offline')
             .sort((a, b) => a[0].localeCompare(b[0], 'vi'));
-        console.log(`   • Total stations: ${totalStations}, offline: ${offlineCount}`);
+        console.log(`   • Total stations: ${totalStations}, offline: ${offlineCount} (DKG stations excluded from alerts)`);
 
         let statusChangedCount = 0;
         let repeatOfflineCount = 0;
 
-        for (const [stationName, status] of Object.entries(stationStatus)) {
+        for (const [stationName, status] of Object.entries(alertableStations)) {
             const history = serverAlertHistory.get(stationName);
             const prevStatus = history?.lastAlertStatus; // undefined on first run
 
