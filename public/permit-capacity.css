@@ -1104,6 +1104,20 @@ main.sidebar-hidden {
 }
 .daily-chart-load-btn:hover { background: #0052a3; }
 
+.daily-chart-debug-btn {
+    padding: 5px 12px;
+    background: #6b7280;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-left: auto;
+}
+.daily-chart-debug-btn:hover { background: #4b5563; }
+
 .daily-chart-summary {
     padding: 8px 20px 4px;
     font-size: 13px;
@@ -1142,7 +1156,8 @@ main.sidebar-hidden {
 
 #daily-chart-canvas {
     width: 100% !important;
-    max-height: 380px;
+    height: 420px !important;
+    max-height: 420px;
 }
 
 /* Clickable station name in capacity table */
@@ -1164,5 +1179,15 @@ main.sidebar-hidden {
     .daily-chart-modal-title { font-size: 13px; }
     .daily-chart-filter-row { padding: 8px 12px; gap: 6px; }
     .daily-chart-canvas-wrapper { padding: 6px 8px 10px; }
-    #daily-chart-canvas { max-height: 260px; }
+    #daily-chart-canvas {
+        height: 300px !important;
+        max-height: 300px;
+    }
+}
+
+@media (min-width: 601px) and (max-width: 768px) {
+    #daily-chart-canvas {
+        height: 380px !important;
+        max-height: 380px;
+    }
 }

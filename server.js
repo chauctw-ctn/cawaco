@@ -815,43 +815,111 @@ app.get('/api/station-daily-capacity/:stationName', verifyToken, async (req, res
         const endTs   = new Date(`${year}-${String(month).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}T23:59:59+07:00`);
 
         // Max "Tổng lưu lượng" per calendar day (VN timezone) across all 3 tables
+        // Use TRIM and case-insensitive comparison for station_name to handle variations
         const queryText = `
+            WITH daily_data AS (
+                SELECT
+                    DATE(ts AT TIME ZONE 'Asia/Ho_Chi_Minh') AS day,
+                    CAST(val AS NUMERIC) AS value,
+                    unit
+                FROM (
+                    SELECT timestamp AS ts, value AS val, unit FROM mqtt_data
+                     WHERE parameter_name ILIKE '%tổng lưu lượng%'
+                       AND (
+                           TRIM(LOWER(station_name)) = TRIM(LOWER($1))
+                           OR REGEXP_REPLACE(UPPER(COALESCE(station_name, '')), '[^A-Z0-9]+', '', 'g') = REGEXP_REPLACE(UPPER(COALESCE($1, '')), '[^A-Z0-9]+', '', 'g')
+                       )
+                       AND timestamp >= $2 AND timestamp <= $3
+                    UNION ALL
+                    SELECT timestamp, value, unit FROM tva_data
+                     WHERE parameter_name ILIKE '%tổng lưu lượng%'
+                       AND (
+                           TRIM(LOWER(station_name)) = TRIM(LOWER($1))
+                           OR REGEXP_REPLACE(UPPER(COALESCE(station_name, '')), '[^A-Z0-9]+', '', 'g') = REGEXP_REPLACE(UPPER(COALESCE($1, '')), '[^A-Z0-9]+', '', 'g')
+                       )
+                       AND timestamp >= $2 AND timestamp <= $3
+                    UNION ALL
+                    SELECT timestamp, value, unit FROM scada_data
+                     WHERE parameter_name ILIKE '%tổng lưu lượng%'
+                       AND (
+                           TRIM(LOWER(station_name)) = TRIM(LOWER($1))
+                           OR REGEXP_REPLACE(UPPER(COALESCE(station_name, '')), '[^A-Z0-9]+', '', 'g') = REGEXP_REPLACE(UPPER(COALESCE($1, '')), '[^A-Z0-9]+', '', 'g')
+                       )
+                       AND timestamp >= $2 AND timestamp <= $3
+                ) combined
+            )
             SELECT
-                DATE(ts AT TIME ZONE 'Asia/Ho_Chi_Minh') AS day,
-                MAX(CAST(val AS NUMERIC))                 AS max_value,
-                unit
-            FROM (
-                SELECT timestamp AS ts, value AS val, unit FROM mqtt_data
-                 WHERE parameter_name ILIKE '%tổng lưu lượng%'
-                   AND station_name = $1 AND timestamp >= $2 AND timestamp <= $3
-                UNION ALL
-                SELECT timestamp, value, unit FROM tva_data
-                 WHERE parameter_name ILIKE '%tổng lưu lượng%'
-                   AND station_name = $1 AND timestamp >= $2 AND timestamp <= $3
-                UNION ALL
-                SELECT timestamp, value, unit FROM scada_data
-                 WHERE parameter_name ILIKE '%tổng lưu lượng%'
-                   AND station_name = $1 AND timestamp >= $2 AND timestamp <= $3
-            ) combined
-            GROUP BY DATE(ts AT TIME ZONE 'Asia/Ho_Chi_Minh'), unit
+                day,
+                TO_CHAR(day, 'YYYY-MM-DD') AS day_str,
+                MAX(value) AS max_value,
+                (ARRAY_AGG(unit ORDER BY CASE WHEN unit = 'm³' THEN 0 ELSE 1 END))[1] AS unit
+            FROM daily_data
+            GROUP BY day
             ORDER BY day ASC
         `;
 
+        console.log(`\n📊 ===== Query station daily capacity =====`);
+        console.log(`Station: "${stationName}"`);
+        console.log(`Period: ${year}/${month} (${daysInMonth} days)`);
+        console.log(`Date range: ${startTs.toISOString().substring(0, 10)} to ${endTs.toISOString().substring(0, 10)}`);
+
         const result = await dbModule.pool.query(queryText, [stationName, startTs.toISOString(), endTs.toISOString()]);
+
+        console.log(`📊 Found ${result.rows.length} day-rows with data in DB`);
+        if (result.rows.length > 0) {
+            console.log('📅 First record:', result.rows[0]);
+            console.log('📅 Last record:', result.rows[result.rows.length - 1]);
+            console.log('📅 All dates with data:', result.rows.map(r => {
+                const d = r.day_str || (r.day instanceof Date ? r.day.toISOString() : String(r.day)).substring(0, 10);
+                return `${d}=${r.max_value}`;
+            }).join(', '));
+        } else {
+            console.log('⚠️ NO DATA FOUND IN DATABASE');
+            console.log('⚠️ Possible reasons:');
+            console.log('   - Station name does not match exactly');
+            console.log('   - Parameter name is not "tổng lưu lượng"');
+            console.log('   - No data in date range');
+
+            // Try to find similar station names
+            const similarStationsQuery = `
+                SELECT DISTINCT station_name FROM (
+                    SELECT station_name FROM mqtt_data
+                    UNION
+                    SELECT station_name FROM tva_data
+                    UNION
+                    SELECT station_name FROM scada_data
+                ) all_stations
+                WHERE LOWER(station_name) LIKE LOWER($1)
+                LIMIT 5
+            `;
+            try {
+                const similarResult = await dbModule.pool.query(similarStationsQuery, [`%${stationName.substring(0, 10)}%`]);
+                if (similarResult.rows.length > 0) {
+                    console.log('   Similar station names found:', similarResult.rows.map(r => r.station_name));
+                }
+            } catch (e) {
+                console.error('   Could not search for similar station names:', e.message);
+            }
+        }
 
         // Build date → max_value map
         const dailyMap = {};
         let unit = 'm³';
         result.rows.forEach(row => {
-            const dayStr = (row.day instanceof Date ? row.day.toISOString() : String(row.day)).substring(0, 10);
+            const dayStr = row.day_str || (row.day instanceof Date ? row.day.toISOString() : String(row.day)).substring(0, 10);
             dailyMap[dayStr] = parseFloat(row.max_value) || 0;
             if (row.unit) unit = row.unit;
         });
 
+        console.log(`📅 dailyMap has ${Object.keys(dailyMap).length} unique dates`);
+
         // Previous day's key (last day of previous month)
         const prevDayKey = `${prevMonthYear}-${String(prevMonth).padStart(2,'0')}-${String(prevMonthDays).padStart(2,'0')}`;
 
+        console.log(`\n📊 Computing daily capacity for each day:`);
         const dailyCapacity = [];
+        let computedDays = 0;
+
         for (let d = 1; d <= daysInMonth; d++) {
             const todayKey = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
             const yesterdayKey = d === 1
@@ -862,8 +930,29 @@ app.get('/api/station-daily-capacity/:stationName', verifyToken, async (req, res
             const prevMax  = dailyMap[yesterdayKey] || 0;
 
             let capacity = 0;
-            if (todayMax > 0 && prevMax > 0 && todayMax > prevMax) {
-                capacity = todayMax - prevMax;
+            let reason = '';
+
+            if (todayMax > 0) {
+                if (prevMax > 0 && todayMax > prevMax) {
+                    // Normal case: today > yesterday
+                    capacity = todayMax - prevMax;
+                    reason = 'diff';
+                } else if (prevMax === 0) {
+                    // First day with data or previous day has no data
+                    capacity = todayMax;
+                    reason = 'first';
+                } else if (todayMax <= prevMax) {
+                    // Counter reset or overflow - use today's value directly
+                    capacity = todayMax;
+                    reason = 'reset';
+                }
+
+                if (capacity > 0) {
+                    computedDays++;
+                    if (computedDays <= 5 || d === daysInMonth) {
+                        console.log(`   Day ${d}: today=${todayMax}, prev=${prevMax} → capacity=${capacity} (${reason})`);
+                    }
+                }
             }
 
             dailyCapacity.push({
@@ -873,10 +962,144 @@ app.get('/api/station-daily-capacity/:stationName', verifyToken, async (req, res
             });
         }
 
-        res.json({ success: true, stationName, year, month, unit, dailyCapacity });
+        console.log(`✅ Computed capacity for ${computedDays} days out of ${daysInMonth}`);
+        console.log(`===== End query =====\n`);
+
+        res.json({
+            success: true,
+            stationName,
+            year,
+            month,
+            unit,
+            dailyCapacity,
+            debug: {
+                daysInMonth: daysInMonth,
+                daysWithRawData: result.rows.length,
+                daysWithCapacity: dailyCapacity.filter(d => d.capacity > 0).length,
+                queryRange: {
+                    start: startTs.toISOString().substring(0, 10),
+                    end: endTs.toISOString().substring(0, 10)
+                }
+            }
+        });
     } catch (err) {
         console.error('❌ Error fetching station daily capacity:', err.message);
         res.status(500).json({ success: false, message: 'Lỗi server: ' + err.message });
+    }
+});
+
+/**
+ * DEBUG ENDPOINT: GET /api/station-daily-capacity-debug/:stationName
+ * Returns raw database records for debugging
+ * Query params: year, month (1-12)
+ */
+app.get('/api/station-daily-capacity-debug/:stationName', verifyToken, async (req, res) => {
+    try {
+        const stationName = decodeURIComponent(req.params.stationName);
+        const year  = parseInt(req.query.year)  || new Date().getFullYear();
+        const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
+
+        if (!dbModule.pool) {
+            return res.status(503).json({ success: false, message: 'Database chưa sẵn sàng' });
+        }
+
+        await dbModule.pool.query("SET TIMEZONE='Asia/Ho_Chi_Minh'");
+
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const prevMonthYear  = month === 1 ? year - 1 : year;
+        const prevMonth      = month === 1 ? 12 : month - 1;
+        const prevMonthDays  = new Date(prevMonthYear, prevMonth, 0).getDate();
+
+        const startTs = new Date(`${prevMonthYear}-${String(prevMonth).padStart(2,'0')}-${String(prevMonthDays).padStart(2,'0')}T00:00:00+07:00`);
+        const endTs   = new Date(`${year}-${String(month).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}T23:59:59+07:00`);
+
+        // Get all raw records
+        const rawQuery = `
+            SELECT
+                DATE(ts AT TIME ZONE 'Asia/Ho_Chi_Minh') AS day,
+                TO_CHAR(DATE(ts AT TIME ZONE 'Asia/Ho_Chi_Minh'), 'YYYY-MM-DD') AS day_str,
+                ts,
+                val,
+                unit,
+                source
+            FROM (
+                SELECT timestamp AS ts, value AS val, unit, 'mqtt' AS source FROM mqtt_data
+                 WHERE parameter_name ILIKE '%tổng lưu lượng%'
+                   AND (
+                       TRIM(LOWER(station_name)) = TRIM(LOWER($1))
+                       OR REGEXP_REPLACE(UPPER(COALESCE(station_name, '')), '[^A-Z0-9]+', '', 'g') = REGEXP_REPLACE(UPPER(COALESCE($1, '')), '[^A-Z0-9]+', '', 'g')
+                   )
+                   AND timestamp >= $2 AND timestamp <= $3
+                UNION ALL
+                SELECT timestamp, value, unit, 'tva' AS source FROM tva_data
+                 WHERE parameter_name ILIKE '%tổng lưu lượng%'
+                   AND (
+                       TRIM(LOWER(station_name)) = TRIM(LOWER($1))
+                       OR REGEXP_REPLACE(UPPER(COALESCE(station_name, '')), '[^A-Z0-9]+', '', 'g') = REGEXP_REPLACE(UPPER(COALESCE($1, '')), '[^A-Z0-9]+', '', 'g')
+                   )
+                   AND timestamp >= $2 AND timestamp <= $3
+                UNION ALL
+                SELECT timestamp, value, unit, 'scada' AS source FROM scada_data
+                 WHERE parameter_name ILIKE '%tổng lưu lượng%'
+                   AND (
+                       TRIM(LOWER(station_name)) = TRIM(LOWER($1))
+                       OR REGEXP_REPLACE(UPPER(COALESCE(station_name, '')), '[^A-Z0-9]+', '', 'g') = REGEXP_REPLACE(UPPER(COALESCE($1, '')), '[^A-Z0-9]+', '', 'g')
+                   )
+                   AND timestamp >= $2 AND timestamp <= $3
+            ) combined
+            ORDER BY ts ASC
+            LIMIT 500
+        `;
+
+        const rawResult = await dbModule.pool.query(rawQuery, [stationName, startTs.toISOString(), endTs.toISOString()]);
+
+        // Group by day for summary
+        const byDay = {};
+        rawResult.rows.forEach(row => {
+            const dayStr = row.day_str || (row.day instanceof Date ? row.day.toISOString() : String(row.day)).substring(0, 10);
+            if (!byDay[dayStr]) {
+                byDay[dayStr] = { count: 0, max: 0, records: [] };
+            }
+            const val = parseFloat(row.val) || 0;
+            byDay[dayStr].count++;
+            if (val > byDay[dayStr].max) byDay[dayStr].max = val;
+            if (byDay[dayStr].records.length < 5) {
+                byDay[dayStr].records.push({
+                    timestamp: row.ts,
+                    value: val,
+                    unit: row.unit,
+                    source: row.source
+                });
+            }
+        });
+
+        res.json({
+            success: true,
+            stationName,
+            year,
+            month,
+            queryRange: {
+                start: startTs.toISOString(),
+                end: endTs.toISOString()
+            },
+            summary: {
+                totalRecords: rawResult.rows.length,
+                daysWithData: Object.keys(byDay).length,
+                dateRange: rawResult.rows.length > 0 ? {
+                    first: rawResult.rows[0].ts,
+                    last: rawResult.rows[rawResult.rows.length - 1].ts
+                } : null
+            },
+            byDay: Object.entries(byDay).map(([date, info]) => ({
+                date,
+                recordCount: info.count,
+                maxValue: info.max,
+                sampleRecords: info.records
+            })).sort((a, b) => a.date.localeCompare(b.date))
+        });
+    } catch (err) {
+        console.error('❌ Error in debug endpoint:', err.message);
+        res.status(500).json({ success: false, message: 'Lỗi: ' + err.message });
     }
 });
 
