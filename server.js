@@ -546,6 +546,164 @@ function createVietnamBoundary(year, month, day, hour = 0, minute = 0, second = 
     return new Date(dateStr);
 }
 
+function normalizeStationKey(stationName) {
+    return String(stationName || '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '');
+}
+
+function getVietnamMonthRange(year, month) {
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const prevMonthYear = month === 1 ? year - 1 : year;
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevMonthDays = new Date(prevMonthYear, prevMonth, 0).getDate();
+
+    const monthStartDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const monthEndDate = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+    const prevDayDate = `${prevMonthYear}-${String(prevMonth).padStart(2, '0')}-${String(prevMonthDays).padStart(2, '0')}`;
+
+    return {
+        daysInMonth,
+        monthStartDate,
+        monthEndDate,
+        prevDayDate,
+        startTs: `${prevDayDate}T00:00:00+07:00`,
+        endTs: `${monthEndDate}T23:59:59+07:00`
+    };
+}
+
+async function refreshStationCapacitySnapshot(stationName, year, month) {
+    const stationKey = normalizeStationKey(stationName);
+    const range = getVietnamMonthRange(year, month);
+
+    const upsertDailyQuery = `
+        WITH raw_data AS (
+            SELECT (timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AS day_date,
+                   value::double precision AS value,
+                   unit
+            FROM mqtt_data
+            WHERE timestamp >= $3::timestamptz
+              AND timestamp <= $4::timestamptz
+              AND value IS NOT NULL
+              AND lower(parameter_name) LIKE '%tổng lưu lượng%'
+              AND regexp_replace(upper(coalesce(station_name, '')), '[^A-Z0-9]+', '', 'g') = $2
+
+            UNION ALL
+
+            SELECT (timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AS day_date,
+                   value::double precision AS value,
+                   unit
+            FROM tva_data
+            WHERE timestamp >= $3::timestamptz
+              AND timestamp <= $4::timestamptz
+              AND value IS NOT NULL
+              AND lower(parameter_name) LIKE '%tổng lưu lượng%'
+              AND regexp_replace(upper(coalesce(station_name, '')), '[^A-Z0-9]+', '', 'g') = $2
+
+            UNION ALL
+
+            SELECT (timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AS day_date,
+                   value::double precision AS value,
+                   unit
+            FROM scada_data
+            WHERE timestamp >= $3::timestamptz
+              AND timestamp <= $4::timestamptz
+              AND value IS NOT NULL
+              AND lower(parameter_name) LIKE '%tổng lưu lượng%'
+              AND regexp_replace(upper(coalesce(station_name, '')), '[^A-Z0-9]+', '', 'g') = $2
+        ),
+        daily_stats AS (
+            SELECT
+                day_date,
+                MAX(value) AS max_value,
+                MIN(value) AS min_value,
+                (ARRAY_AGG(unit ORDER BY CASE WHEN unit = 'm³' THEN 0 ELSE 1 END))[1] AS unit
+            FROM raw_data
+            GROUP BY day_date
+        ),
+        series_days AS (
+            SELECT generate_series($5::date - INTERVAL '1 day', $6::date, INTERVAL '1 day')::date AS day_date
+        ),
+        daily_base AS (
+            SELECT
+                s.day_date,
+                COALESCE(ds.max_value, 0) AS max_value,
+                COALESCE(ds.min_value, 0) AS min_value,
+                ds.unit
+            FROM series_days s
+            LEFT JOIN daily_stats ds ON ds.day_date = s.day_date
+        ),
+        month_calc AS (
+            SELECT
+                day_date,
+                max_value,
+                COALESCE(unit, 'm³') AS unit,
+                CASE
+                    WHEN max_value <= 0 THEN 0
+                    WHEN min_value IS NULL OR min_value <= 0 THEN max_value
+                    ELSE max_value - min_value
+                END AS capacity
+            FROM daily_base
+            WHERE day_date BETWEEN $5::date AND $6::date
+        )
+        INSERT INTO station_capacity_daily (station_key, station_name, day_date, capacity, max_total_value, unit, updated_at)
+        SELECT
+            $2,
+            $1,
+            day_date,
+            ROUND(capacity::numeric, 2)::double precision,
+            max_value,
+            unit,
+            NOW()
+        FROM month_calc
+        ON CONFLICT (station_key, day_date)
+        DO UPDATE SET
+            station_name = EXCLUDED.station_name,
+            capacity = EXCLUDED.capacity,
+            max_total_value = EXCLUDED.max_total_value,
+            unit = EXCLUDED.unit,
+            updated_at = NOW()
+    `;
+
+    await dbModule.pool.query(upsertDailyQuery, [
+        stationName,
+        stationKey,
+        range.startTs,
+        range.endTs,
+        range.monthStartDate,
+        range.monthEndDate
+    ]);
+
+    const upsertMonthlyQuery = `
+        INSERT INTO station_capacity_monthly (station_key, station_name, month_start, capacity, unit, updated_at)
+        SELECT
+            $1,
+            $2,
+            $3::date,
+            COALESCE(ROUND(SUM(capacity)::numeric, 2), 0)::double precision,
+            COALESCE(MAX(unit), 'm³'),
+            NOW()
+        FROM station_capacity_daily
+        WHERE station_key = $1
+          AND day_date BETWEEN $3::date AND $4::date
+        ON CONFLICT (station_key, month_start)
+        DO UPDATE SET
+            station_name = EXCLUDED.station_name,
+            capacity = EXCLUDED.capacity,
+            unit = EXCLUDED.unit,
+            updated_at = NOW()
+    `;
+
+    await dbModule.pool.query(upsertMonthlyQuery, [
+        stationKey,
+        stationName,
+        range.monthStartDate,
+        range.monthEndDate
+    ]);
+
+    return { stationKey, range };
+}
+
 function calculateCapacityForStationRecords(records) {
     const now = new Date();
     const vietnamNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
@@ -803,167 +961,47 @@ app.get('/api/station-daily-capacity/:stationName', verifyToken, async (req, res
         }
 
         await dbModule.pool.query("SET TIMEZONE='Asia/Ho_Chi_Minh'");
+        const startedAt = Date.now();
+        const { stationKey, range } = await refreshStationCapacitySnapshot(stationName, year, month);
 
-        const daysInMonth = new Date(year, month, 0).getDate();
-
-        // Include the day immediately before the month to compute day-1 capacity
-        const prevMonthYear  = month === 1 ? year - 1 : year;
-        const prevMonth      = month === 1 ? 12 : month - 1;
-        const prevMonthDays  = new Date(prevMonthYear, prevMonth, 0).getDate();
-
-        const startTs = new Date(`${prevMonthYear}-${String(prevMonth).padStart(2,'0')}-${String(prevMonthDays).padStart(2,'0')}T00:00:00+07:00`);
-        const endTs   = new Date(`${year}-${String(month).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}T23:59:59+07:00`);
-
-        // Max "Tổng lưu lượng" per calendar day (VN timezone) across all 3 tables
-        // Use TRIM and case-insensitive comparison for station_name to handle variations
         const queryText = `
-            WITH daily_data AS (
-                SELECT
-                    DATE(ts AT TIME ZONE 'Asia/Ho_Chi_Minh') AS day,
-                    CAST(val AS NUMERIC) AS value,
-                    unit
-                FROM (
-                    SELECT timestamp AS ts, value AS val, unit FROM mqtt_data
-                     WHERE parameter_name ILIKE '%tổng lưu lượng%'
-                       AND (
-                           TRIM(LOWER(station_name)) = TRIM(LOWER($1))
-                           OR REGEXP_REPLACE(UPPER(COALESCE(station_name, '')), '[^A-Z0-9]+', '', 'g') = REGEXP_REPLACE(UPPER(COALESCE($1, '')), '[^A-Z0-9]+', '', 'g')
-                       )
-                       AND timestamp >= $2 AND timestamp <= $3
-                    UNION ALL
-                    SELECT timestamp, value, unit FROM tva_data
-                     WHERE parameter_name ILIKE '%tổng lưu lượng%'
-                       AND (
-                           TRIM(LOWER(station_name)) = TRIM(LOWER($1))
-                           OR REGEXP_REPLACE(UPPER(COALESCE(station_name, '')), '[^A-Z0-9]+', '', 'g') = REGEXP_REPLACE(UPPER(COALESCE($1, '')), '[^A-Z0-9]+', '', 'g')
-                       )
-                       AND timestamp >= $2 AND timestamp <= $3
-                    UNION ALL
-                    SELECT timestamp, value, unit FROM scada_data
-                     WHERE parameter_name ILIKE '%tổng lưu lượng%'
-                       AND (
-                           TRIM(LOWER(station_name)) = TRIM(LOWER($1))
-                           OR REGEXP_REPLACE(UPPER(COALESCE(station_name, '')), '[^A-Z0-9]+', '', 'g') = REGEXP_REPLACE(UPPER(COALESCE($1, '')), '[^A-Z0-9]+', '', 'g')
-                       )
-                       AND timestamp >= $2 AND timestamp <= $3
-                ) combined
-            )
             SELECT
-                day,
-                TO_CHAR(day, 'YYYY-MM-DD') AS day_str,
-                MAX(value) AS max_value,
-                (ARRAY_AGG(unit ORDER BY CASE WHEN unit = 'm³' THEN 0 ELSE 1 END))[1] AS unit
-            FROM daily_data
-            GROUP BY day
-            ORDER BY day ASC
+                EXTRACT(DAY FROM s.day_date)::int AS day,
+                TO_CHAR(s.day_date, 'YYYY-MM-DD') AS date,
+                COALESCE(d.capacity, 0)::double precision AS capacity,
+                COALESCE(d.unit, m.unit, 'm³') AS unit,
+                COALESCE(m.capacity, 0)::double precision AS monthly_capacity
+            FROM generate_series($2::date, $3::date, INTERVAL '1 day') AS s(day_date)
+            LEFT JOIN station_capacity_daily d
+                ON d.station_key = $1
+               AND d.day_date = s.day_date
+            LEFT JOIN station_capacity_monthly m
+                ON m.station_key = $1
+               AND m.month_start = $2::date
+            ORDER BY s.day_date ASC
         `;
 
-        console.log(`\n📊 ===== Query station daily capacity =====`);
-        console.log(`Station: "${stationName}"`);
-        console.log(`Period: ${year}/${month} (${daysInMonth} days)`);
-        console.log(`Date range: ${startTs.toISOString().substring(0, 10)} to ${endTs.toISOString().substring(0, 10)}`);
+        const result = await dbModule.pool.query(queryText, [
+            stationKey,
+            range.monthStartDate,
+            range.monthEndDate
+        ]);
 
-        const result = await dbModule.pool.query(queryText, [stationName, startTs.toISOString(), endTs.toISOString()]);
+        const dailyCapacity = result.rows.map(row => ({
+            day: parseInt(row.day),
+            date: row.date,
+            capacity: Math.round((parseFloat(row.capacity) || 0) * 100) / 100
+        }));
 
-        console.log(`📊 Found ${result.rows.length} day-rows with data in DB`);
-        if (result.rows.length > 0) {
-            console.log('📅 First record:', result.rows[0]);
-            console.log('📅 Last record:', result.rows[result.rows.length - 1]);
-            console.log('📅 All dates with data:', result.rows.map(r => {
-                const d = r.day_str || (r.day instanceof Date ? r.day.toISOString() : String(r.day)).substring(0, 10);
-                return `${d}=${r.max_value}`;
-            }).join(', '));
-        } else {
-            console.log('⚠️ NO DATA FOUND IN DATABASE');
-            console.log('⚠️ Possible reasons:');
-            console.log('   - Station name does not match exactly');
-            console.log('   - Parameter name is not "tổng lưu lượng"');
-            console.log('   - No data in date range');
+        const monthlyCapacity = result.rows.length > 0
+            ? Math.round((parseFloat(result.rows[0].monthly_capacity) || 0) * 100) / 100
+            : 0;
 
-            // Try to find similar station names
-            const similarStationsQuery = `
-                SELECT DISTINCT station_name FROM (
-                    SELECT station_name FROM mqtt_data
-                    UNION
-                    SELECT station_name FROM tva_data
-                    UNION
-                    SELECT station_name FROM scada_data
-                ) all_stations
-                WHERE LOWER(station_name) LIKE LOWER($1)
-                LIMIT 5
-            `;
-            try {
-                const similarResult = await dbModule.pool.query(similarStationsQuery, [`%${stationName.substring(0, 10)}%`]);
-                if (similarResult.rows.length > 0) {
-                    console.log('   Similar station names found:', similarResult.rows.map(r => r.station_name));
-                }
-            } catch (e) {
-                console.error('   Could not search for similar station names:', e.message);
-            }
-        }
+        const daysWithCapacity = dailyCapacity.filter(d => d.capacity > 0).length;
+        const unit = result.rows.find(r => r.unit)?.unit || 'm³';
+        const durationMs = Date.now() - startedAt;
 
-        // Build date → max_value map
-        const dailyMap = {};
-        let unit = 'm³';
-        result.rows.forEach(row => {
-            const dayStr = row.day_str || (row.day instanceof Date ? row.day.toISOString() : String(row.day)).substring(0, 10);
-            dailyMap[dayStr] = parseFloat(row.max_value) || 0;
-            if (row.unit) unit = row.unit;
-        });
-
-        console.log(`📅 dailyMap has ${Object.keys(dailyMap).length} unique dates`);
-
-        // Previous day's key (last day of previous month)
-        const prevDayKey = `${prevMonthYear}-${String(prevMonth).padStart(2,'0')}-${String(prevMonthDays).padStart(2,'0')}`;
-
-        console.log(`\n📊 Computing daily capacity for each day:`);
-        const dailyCapacity = [];
-        let computedDays = 0;
-
-        for (let d = 1; d <= daysInMonth; d++) {
-            const todayKey = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-            const yesterdayKey = d === 1
-                ? prevDayKey
-                : `${year}-${String(month).padStart(2,'0')}-${String(d-1).padStart(2,'0')}`;
-
-            const todayMax = dailyMap[todayKey]     || 0;
-            const prevMax  = dailyMap[yesterdayKey] || 0;
-
-            let capacity = 0;
-            let reason = '';
-
-            if (todayMax > 0) {
-                if (prevMax > 0 && todayMax > prevMax) {
-                    // Normal case: today > yesterday
-                    capacity = todayMax - prevMax;
-                    reason = 'diff';
-                } else if (prevMax === 0) {
-                    // First day with data or previous day has no data
-                    capacity = todayMax;
-                    reason = 'first';
-                } else if (todayMax <= prevMax) {
-                    // Counter reset or overflow - use today's value directly
-                    capacity = todayMax;
-                    reason = 'reset';
-                }
-
-                if (capacity > 0) {
-                    computedDays++;
-                    if (computedDays <= 5 || d === daysInMonth) {
-                        console.log(`   Day ${d}: today=${todayMax}, prev=${prevMax} → capacity=${capacity} (${reason})`);
-                    }
-                }
-            }
-
-            dailyCapacity.push({
-                day: d,
-                date: todayKey,
-                capacity: Math.round(capacity * 100) / 100
-            });
-        }
-
-        console.log(`✅ Computed capacity for ${computedDays} days out of ${daysInMonth}`);
-        console.log(`===== End query =====\n`);
+        console.log(`📊 Daily capacity ready: station=${stationName}, month=${month}/${year}, days=${dailyCapacity.length}, activeDays=${daysWithCapacity}, time=${durationMs}ms`);
 
         res.json({
             success: true,
@@ -972,18 +1010,50 @@ app.get('/api/station-daily-capacity/:stationName', verifyToken, async (req, res
             month,
             unit,
             dailyCapacity,
+            monthlyCapacity,
             debug: {
-                daysInMonth: daysInMonth,
-                daysWithRawData: result.rows.length,
-                daysWithCapacity: dailyCapacity.filter(d => d.capacity > 0).length,
+                daysInMonth: range.daysInMonth,
+                daysWithRawData: null,
+                daysWithCapacity,
                 queryRange: {
-                    start: startTs.toISOString().substring(0, 10),
-                    end: endTs.toISOString().substring(0, 10)
-                }
+                    start: range.monthStartDate,
+                    end: range.monthEndDate
+                },
+                queryTimeMs: durationMs
             }
         });
     } catch (err) {
         console.error('❌ Error fetching station daily capacity:', err.message);
+        res.status(500).json({ success: false, message: 'Lỗi server: ' + err.message });
+    }
+});
+
+/**
+ * POST /api/admin/reset-station-capacity/:stationName
+ * Reset capacity cache for a specific station (delete daily/monthly aggregates)
+ * Admin-only endpoint to clear outdated capacity calculations
+ */
+app.post('/api/admin/reset-station-capacity/:stationName', verifyToken, async (req, res) => {
+    try {
+        const stationName = decodeURIComponent(req.params.stationName).trim();
+        const stationKey = normalizeStationKey(stationName);
+
+        console.log(`🔄 Resetting capacity cache for station: ${stationName} (key: ${stationKey})`);
+
+        // Delete from both aggregate tables
+        const deleteQuery = `
+            DELETE FROM station_capacity_daily WHERE station_key = $1;
+            DELETE FROM station_capacity_monthly WHERE station_key = $1;
+        `;
+
+        // Split and execute separately since multiple statements in one query is not allowed
+        await dbModule.pool.query('DELETE FROM station_capacity_daily WHERE station_key = $1', [stationKey]);
+        await dbModule.pool.query('DELETE FROM station_capacity_monthly WHERE station_key = $1', [stationKey]);
+
+        console.log(`✅ Capacity cache cleared for station: ${stationName}`);
+        res.json({ success: true, message: `Reset capacity cache cho ${stationName}` });
+    } catch (err) {
+        console.error('❌ Error resetting capacity cache:', err.message);
         res.status(500).json({ success: false, message: 'Lỗi server: ' + err.message });
     }
 });
@@ -2967,7 +3037,7 @@ app.listen(PORT, async () => {
         }
     }, config.intervals.tva);
     
-    // Lưu dữ liệu MQTT mỗi 1 phút
+    // Lưu dữ liệu MQTT mỗi 5 phút
     setInterval(async () => {
         await saveMQTTDataToDB();
     }, config.intervals.mqtt);

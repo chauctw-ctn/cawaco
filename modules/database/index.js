@@ -101,6 +101,56 @@ function parseNumericValue(value) {
 }
 
 /**
+ * PostgreSQL báo lỗi hết dung lượng / không thể mở rộng file dữ liệu.
+ */
+function isStorageFullError(err) {
+    if (!err) return false;
+
+    // 53100: disk_full (PostgreSQL)
+    if (err.code === '53100') return true;
+
+    const message = String(err.message || '').toLowerCase();
+    return message.includes('no space left on device') ||
+           message.includes('could not extend file') ||
+           message.includes('disk full');
+}
+
+/**
+ * Insert dữ liệu, nếu DB đầy thì xóa bản ghi cũ nhất theo kiểu xoay vòng rồi thử lại 1 lần.
+ */
+async function insertWithRotation(client, tableName, insertQuery, params, rotateBatchSize = 1000) {
+    try {
+        await client.query(insertQuery, params);
+        return true;
+    } catch (err) {
+        if (!isStorageFullError(err)) {
+            throw err;
+        }
+
+        console.warn(`⚠️ DB đầy khi ghi ${tableName}. Bắt đầu xoay vòng, xóa ${rotateBatchSize} bản ghi cũ nhất...`);
+
+        const rotateResult = await client.query(
+            `DELETE FROM ${tableName}
+             WHERE id IN (
+                 SELECT id FROM ${tableName}
+                 ORDER BY timestamp ASC NULLS FIRST, id ASC
+                 LIMIT $1
+             )`,
+            [rotateBatchSize]
+        );
+
+        if (!rotateResult.rowCount) {
+            console.error(`❌ Không thể xoay vòng ${tableName}: không có bản ghi để xóa`);
+            throw err;
+        }
+
+        console.log(`♻️ Đã xoay vòng ${tableName}: xóa ${rotateResult.rowCount} bản ghi cũ, thử ghi lại...`);
+        await client.query(insertQuery, params);
+        return true;
+    }
+}
+
+/**
  * Chuẩn hóa tên parameter dựa trên giá trị và đơn vị
  * Tự động phát hiện và sửa tên parameter sai (ví dụ: "Lưu lượng" nhưng giá trị > 1000 => "Tổng lưu lượng")
  */
@@ -393,10 +443,52 @@ async function initDatabase() {
         await client.query('CREATE INDEX IF NOT EXISTS idx_scada_param_time ON scada_data(parameter_name, timestamp DESC)');
         await client.query('CREATE INDEX IF NOT EXISTS idx_scada_station_param_time ON scada_data(station_name, parameter_name, timestamp DESC)');
         await client.query('CREATE INDEX IF NOT EXISTS idx_scada_time ON scada_data(timestamp DESC)');
+
+        // Functional indexes cho truy vấn công suất theo trạm/parameter nhanh hơn
+        await client.query("CREATE INDEX IF NOT EXISTS idx_tva_station_norm_time ON tva_data ((regexp_replace(upper(coalesce(station_name, '')), '[^A-Z0-9]+', '', 'g')), timestamp DESC)");
+        await client.query("CREATE INDEX IF NOT EXISTS idx_mqtt_station_norm_time ON mqtt_data ((regexp_replace(upper(coalesce(station_name, '')), '[^A-Z0-9]+', '', 'g')), timestamp DESC)");
+        await client.query("CREATE INDEX IF NOT EXISTS idx_scada_station_norm_time ON scada_data ((regexp_replace(upper(coalesce(station_name, '')), '[^A-Z0-9]+', '', 'g')), timestamp DESC)");
+
+        await client.query("CREATE INDEX IF NOT EXISTS idx_tva_param_lower_time ON tva_data ((lower(parameter_name)), timestamp DESC)");
+        await client.query("CREATE INDEX IF NOT EXISTS idx_mqtt_param_lower_time ON mqtt_data ((lower(parameter_name)), timestamp DESC)");
+        await client.query("CREATE INDEX IF NOT EXISTS idx_scada_param_lower_time ON scada_data ((lower(parameter_name)), timestamp DESC)");
         // Drop old indexes
         await client.query('DROP INDEX IF EXISTS idx_scada_station');
         await client.query('DROP INDEX IF EXISTS idx_scada_created_at');
         await client.query('DROP INDEX IF EXISTS idx_scada_parameter');
+
+        // Bảng tổng hợp công suất ngày (phục vụ biểu đồ cột và truy vấn nhanh)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS station_capacity_daily (
+                station_key TEXT NOT NULL,
+                station_name TEXT NOT NULL,
+                day_date DATE NOT NULL,
+                capacity DOUBLE PRECISION NOT NULL DEFAULT 0,
+                max_total_value DOUBLE PRECISION NOT NULL DEFAULT 0,
+                unit TEXT DEFAULT 'm³',
+                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (station_key, day_date)
+            )
+        `);
+        await client.query('CREATE INDEX IF NOT EXISTS idx_capacity_daily_station_day ON station_capacity_daily(station_key, day_date DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_capacity_daily_day ON station_capacity_daily(day_date DESC)');
+        console.log('✅ Bảng station_capacity_daily đã sẵn sàng');
+
+        // Bảng tổng hợp công suất tháng (lưu snapshot theo tháng)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS station_capacity_monthly (
+                station_key TEXT NOT NULL,
+                station_name TEXT NOT NULL,
+                month_start DATE NOT NULL,
+                capacity DOUBLE PRECISION NOT NULL DEFAULT 0,
+                unit TEXT DEFAULT 'm³',
+                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (station_key, month_start)
+            )
+        `);
+        await client.query('CREATE INDEX IF NOT EXISTS idx_capacity_monthly_station_month ON station_capacity_monthly(station_key, month_start DESC)');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_capacity_monthly_month ON station_capacity_monthly(month_start DESC)');
+        console.log('✅ Bảng station_capacity_monthly đã sẵn sàng');
 
         // Bảng lưu thông tin trạm
         await client.query(`
@@ -548,7 +640,9 @@ async function saveTVAData(stations) {
                         const cleanValue = parseNumericValue(param.value);
                         const normalizedParamName = normalizeParameterNameByValue(param.name, cleanValue, param.unit);
                         
-                        await client.query(
+                        await insertWithRotation(
+                            client,
+                            'tva_data',
                             `INSERT INTO tva_data (station_name, parameter_name, value, unit)
                              VALUES ($1, $2, $3, $4)`,
                             [station.station, normalizedParamName, cleanValue, param.unit]
@@ -560,8 +654,6 @@ async function saveTVAData(stations) {
                 }
             }
         }
-        
-        await cleanupOldRecords('tva_data', config.database.maxRecords.tva);
         
         // Invalidate cache when new data is saved
         cache.delete('latest_stations_data');
@@ -598,7 +690,9 @@ async function saveMQTTData(stations) {
                         const cleanValue = parseNumericValue(param.value);
                         const normalizedParamName = normalizeParameterNameByValue(param.name, cleanValue, param.unit);
                         
-                        await client.query(
+                        await insertWithRotation(
+                            client,
+                            'mqtt_data',
                             `INSERT INTO mqtt_data (station_name, parameter_name, value, unit)
                              VALUES ($1, $2, $3, $4)`,
                             [station.station, normalizedParamName, cleanValue, param.unit]
@@ -610,8 +704,6 @@ async function saveMQTTData(stations) {
                 }
             }
         }
-        
-        await cleanupOldRecords('mqtt_data', config.database.maxRecords.mqtt);
         
         // Invalidate cache when new data is saved
         cache.delete('latest_stations_data');
@@ -656,7 +748,9 @@ async function saveSCADAData(stationsGrouped) {
                         const paramName = param.parameterName || param.parameter;
                         const normalizedParamName = normalizeParameterNameByValue(paramName, numericValue, param.unit);
                         
-                        await client.query(
+                        await insertWithRotation(
+                            client,
+                            'scada_data',
                             `INSERT INTO scada_data (station_name, parameter_name, value, unit)
                              VALUES ($1, $2, $3, $4)`,
                             [station.stationName || station.station, normalizedParamName, 
@@ -669,8 +763,6 @@ async function saveSCADAData(stationsGrouped) {
                 }
             }
         }
-        
-        await cleanupOldRecords('scada_data', config.database.maxRecords.scada);
         
         // Invalidate cache when new data is saved
         cache.delete('latest_stations_data');

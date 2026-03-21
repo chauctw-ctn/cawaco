@@ -1104,19 +1104,9 @@ main.sidebar-hidden {
 }
 .daily-chart-load-btn:hover { background: #0052a3; }
 
-.daily-chart-debug-btn {
-    padding: 5px 12px;
-    background: #6b7280;
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.15s;
+.daily-chart-load-btn {
     margin-left: auto;
 }
-.daily-chart-debug-btn:hover { background: #4b5563; }
 
 .daily-chart-summary {
     padding: 8px 20px 4px;

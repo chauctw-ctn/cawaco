@@ -80,7 +80,7 @@ module.exports = {
     // Cấu hình cập nhật dữ liệu định kỳ
     intervals: {
         tva: 5 * 60 * 1000,      // 5 phút
-        mqtt: 1 * 60 * 1000,     // 1 phút (chỉ kiểm tra kết nối)
+        mqtt: 5 * 60 * 1000,     // 5 phút
         scada: 5 * 60 * 1000,    // 5 phút
         cleanup: 24 * 60 * 60 * 1000 // 24 giờ
     },

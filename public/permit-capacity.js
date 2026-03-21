@@ -543,7 +543,6 @@ function openDailyChartModal(rawStationName, displayName) {
     const modal = document.getElementById('daily-chart-modal');
     if (!modal) return;
 
-    // Store station name for debug button
     modal.dataset.rawStationName = rawStationName;
     modal.dataset.displayName = displayName;
 
@@ -585,14 +584,6 @@ function openDailyChartModal(rawStationName, displayName) {
         const newBtn = loadBtn.cloneNode(true);
         loadBtn.parentNode.replaceChild(newBtn, loadBtn);
         newBtn.addEventListener('click', () => loadDailyChartData(rawStationName, displayName));
-    }
-
-    // Attach debug button handler
-    const debugBtn = document.getElementById('daily-chart-debug-btn');
-    if (debugBtn) {
-        const newDebugBtn = debugBtn.cloneNode(true);
-        debugBtn.parentNode.replaceChild(newDebugBtn, debugBtn);
-        newDebugBtn.addEventListener('click', () => showDebugData(rawStationName));
     }
 
     // Auto-load current month
@@ -643,7 +634,7 @@ async function loadDailyChartData(rawStationName, displayName) {
             month: result.month,
             year: result.year,
             totalDays: result.dailyCapacity.length,
-            daysWithData: result.dailyCapacity.filter(d => d.capacity > 0).length,
+            daysWithData: result.dailyCapacity.filter(d => Number(d.capacity) > 0).length,
             debug: result.debug
         });
 
@@ -670,8 +661,12 @@ function renderDailyChart(data, displayName) {
     clearDailyChart();
 
     const labels   = dailyCapacity.map(d => `${d.day}`);
-    const values   = dailyCapacity.map(d => d.capacity);
+    const values   = dailyCapacity.map(d => {
+        const n = Number(d.capacity);
+        return Number.isFinite(n) ? n : 0;
+    });
     const total    = values.reduce((s, v) => s + v, 0);
+    const monthlyFromServer = Number(data.monthlyCapacity || 0);
     const maxVal   = Math.max(...values, 0);
 
     // Month name in Vietnamese
@@ -684,12 +679,12 @@ function renderDailyChart(data, displayName) {
         const daysWithData = values.filter(v => v > 0).length;
         let summaryHTML =
             `${monthLabel}/${year} &nbsp;|&nbsp; ` +
-            `Tổng: <strong>${formatNumber(Math.round(total))} ${unit}</strong> &nbsp;|&nbsp; ` +
+            `Tổng tháng: <strong>${formatNumber(Math.round(monthlyFromServer || total))} ${unit}</strong> &nbsp;|&nbsp; ` +
             `Ngày cao nhất: <strong>${formatNumber(Math.round(maxVal))} ${unit}</strong> &nbsp;|&nbsp; ` +
             `Số ngày có dữ liệu: <strong>${daysWithData}/${dailyCapacity.length}</strong>`;
 
-        // Add debug info if available
-        if (data.debug) {
+        // Chỉ hiển thị debug khi backend trả về số hợp lệ
+        if (data.debug && Number.isFinite(Number(data.debug.daysWithRawData))) {
             summaryHTML += ` &nbsp;|&nbsp; ` +
                 `<span style="color: #6b7280;">DB: ${data.debug.daysWithRawData} ngày raw, ${data.debug.daysWithCapacity} ngày tính được</span>`;
         }
@@ -721,11 +716,17 @@ function renderDailyChart(data, displayName) {
                 borderColor: borderColors,
                 borderWidth: 1,
                 borderRadius: 3,
+                maxBarThickness: 18,
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -811,69 +812,3 @@ function setupDailyChartModal() {
 // Initialize chart modal setup after DOM ready
 document.addEventListener('DOMContentLoaded', setupDailyChartModal);
 
-/**
- * Show debug data from database
- */
-async function showDebugData(rawStationName) {
-    const monthSel = document.getElementById('daily-chart-month');
-    const yearSel  = document.getElementById('daily-chart-year');
-
-    const month = parseInt(monthSel?.value) || (new Date().getMonth() + 1);
-    const year  = parseInt(yearSel?.value)  || new Date().getFullYear();
-
-    try {
-        const token = localStorage.getItem('authToken');
-        const response = await fetch(
-            `/api/station-daily-capacity-debug/${encodeURIComponent(rawStationName)}?year=${year}&month=${month}`,
-            { headers: { 'Authorization': `Bearer ${token}` } }
-        );
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const result = await response.json();
-        if (!result.success) {
-            throw new Error(result.message || 'Không thể lấy dữ liệu debug');
-        }
-
-        // Format debug info
-        console.log('🔍 DEBUG DATA:', result);
-
-        let debugText = `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔍 DEBUG: Raw Data từ Database
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📊 Trạm: ${result.stationName}
-📅 Tháng: ${month}/${year}
-📌 Tổng số records: ${result.summary.totalRecords}
-📌 Số ngày có dữ liệu: ${result.summary.daysWithData}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📅 Chi tiết theo ngày:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-${result.byDay.map(day => `
-📆 ${day.date}
-   Records: ${day.recordCount}
-   Max value: ${day.maxValue}
-   Samples: ${day.sampleRecords.map(r =>
-       `\n      ${new Date(r.timestamp).toLocaleString('vi-VN')} | ${r.value} ${r.unit} [${r.source}]`
-   ).join('')}
-`).join('\n')}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-`;
-
-        console.log(debugText);
-        alert(`Debug data đã được in ra console (F12).\n\n` +
-              `Tổng records: ${result.summary.totalRecords}\n` +
-              `Ngày có dữ liệu: ${result.summary.daysWithData}\n\n` +
-              `Xem chi tiết trong Console (nhấn F12)`);
-
-    } catch (err) {
-        console.error('❌ Error fetching debug data:', err);
-        alert('Không thể lấy dữ liệu debug: ' + err.message);
-    }
-}
