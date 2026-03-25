@@ -59,24 +59,32 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 /**
- * Lấy timestamp hiện tại
- * 
- * QUAN TRỌNG:
- * - PostgreSQL TIMESTAMPTZ tự động xử lý timezone
- * - Connection pool đã set timezone = 'Asia/Ho_Chi_Minh'
- * - Chỉ cần gửi timestamp chuẩn ISO/UTC, PostgreSQL sẽ tự convert và lưu đúng
- * - Khi query, PostgreSQL trả về theo timezone session (GMT+7)
- * 
- * Trả về: ISO 8601 UTC string (JavaScript standard)
+ * Lưu thông tin trạm
  */
-function getVietnamTimestamp() {
-    // Cách 1: Đơn giản nhất - return ISO UTC, để PostgreSQL xử lý
-    return new Date().toISOString();
+async function saveStationInfo(stationId, stationName, stationType, lat, lng, client = null) {
+    const shouldRelease = !client;
+    if (!client) {
+        client = await pool.connect();
+    }
     
-    // PostgreSQL sẽ:
-    // 1. Nhận ISO timestamp (UTC)
-    // 2. Lưu internally as UTC
-    // 3. Khi query với timezone='Asia/Ho_Chi_Minh', tự động chuyển sang GMT+7
+    try {
+        await client.query(
+            `INSERT INTO stations (station_id, station_name, station_type, latitude, longitude)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (station_id) 
+             DO UPDATE SET 
+                station_name = EXCLUDED.station_name,
+                latitude = EXCLUDED.latitude,
+                longitude = EXCLUDED.longitude`,
+            [stationId, stationName, stationType, lat, lng]
+        );
+    } catch (err) {
+        console.error(`⚠️ Lỗi lưu thông tin trạm ${stationId}:`, err.message);
+    } finally {
+        if (shouldRelease) {
+            client.release();
+        }
+    }
 }
 
 /**
@@ -548,70 +556,6 @@ async function initDatabase() {
         throw err;
     } finally {
         client.release();
-    }
-}
-
-/**
- * Xóa records cũ nhất để giữ trong giới hạn
- */
-async function cleanupOldRecords(tableName, maxRecords) {
-    const client = await pool.connect();
-    
-    try {
-        const countResult = await client.query(`SELECT COUNT(*) as count FROM ${tableName}`);
-        const currentCount = parseInt(countResult.rows[0].count);
-        
-        if (currentCount <= maxRecords) {
-            return 0;
-        }
-        
-        const deleteCount = currentCount - maxRecords;
-        const deleteQuery = `
-            DELETE FROM ${tableName}
-            WHERE id IN (
-                SELECT id FROM ${tableName}
-                ORDER BY timestamp ASC
-                LIMIT $1
-            )
-        `;
-        
-        const result = await client.query(deleteQuery, [deleteCount]);
-        console.log(`🗑️ Đã xóa ${result.rowCount} records cũ từ ${tableName}`);
-        return result.rowCount;
-    } catch (err) {
-        console.error(`❌ Lỗi xóa dữ liệu cũ từ ${tableName}:`, err.message);
-        throw err;
-    } finally {
-        client.release();
-    }
-}
-
-/**
- * Lưu thông tin trạm
- */
-async function saveStationInfo(stationId, stationName, stationType, lat, lng, client = null) {
-    const shouldRelease = !client;
-    if (!client) {
-        client = await pool.connect();
-    }
-    
-    try {
-        await client.query(
-            `INSERT INTO stations (station_id, station_name, station_type, latitude, longitude)
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (station_id) 
-             DO UPDATE SET 
-                station_name = EXCLUDED.station_name,
-                latitude = EXCLUDED.latitude,
-                longitude = EXCLUDED.longitude`,
-            [stationId, stationName, stationType, lat, lng]
-        );
-    } catch (err) {
-        console.error(`⚠️ Lỗi lưu thông tin trạm ${stationId}:`, err.message);
-    } finally {
-        if (shouldRelease) {
-            client.release();
-        }
     }
 }
 
@@ -1519,9 +1463,6 @@ module.exports = {
     setVisitorCount,
     deleteTestStations,
     closeDatabase,
-    getVietnamTimestamp,
-    syncTimestamps,
-    checkTimestampStatus,
     loadCoordinateOverrides,
     saveCoordinateOverride,
     deleteCoordinateOverride,

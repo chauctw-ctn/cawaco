@@ -165,6 +165,11 @@ function initializeHeader() {
         // Notify pages/components (e.g., Leaflet map) to reflow
         window.dispatchEvent(new CustomEvent('sidebar:toggled', { detail: { open } }));
 
+        // Resize SCADA viewport if on SCADA page
+        if (typeof fitScadaViewport === 'function') {
+            setTimeout(fitScadaViewport, 50);
+        }
+
         // Resize after CSS transition ends
         setTimeout(requestMapResize, 350);
     }

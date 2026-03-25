@@ -19,10 +19,38 @@ let telegramConfig = null; // Telegram configuration
 
 /**
  * Format timestamp to Vietnamese date/time (Vietnam timezone)
+ * Uses the same logic as formatHistoryPopupDateTime for consistency
  */
-function formatDateTime(timestamp) {
-    if (!timestamp) return 'N/A';
-    const date = new Date(timestamp);
+function formatDateTime(value) {
+    if (!value) return 'N/A';
+
+    let date = null;
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        date = new Date(value);
+    } else if (typeof value === 'string') {
+        const trimmedValue = value.trim();
+        if (!trimmedValue || trimmedValue.toUpperCase() === 'N/A') {
+            return 'N/A';
+        }
+        const normalizedValue = trimmedValue.replace(',', '');
+        const localDateMatch = normalizedValue.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+
+        if (localDateMatch) {
+            const [, day, month, year, hour, minute, second] = localDateMatch;
+            date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
+        } else {
+            const parsedMs = getMeasurementTimestampMs(trimmedValue);
+            if (parsedMs !== null) {
+                date = new Date(parsedMs);
+            }
+        }
+    }
+
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+        return 'N/A';
+    }
+
     return date.toLocaleString('vi-VN', {
         timeZone: 'Asia/Ho_Chi_Minh',
         year: 'numeric',
@@ -80,17 +108,19 @@ function formatHistoryPopupDateTime(value) {
 
 /**
  * Resolve a valid timestamp for history popup rows.
+ * Uses IDENTICAL logic as getRowTimestamp() to ensure display consistency.
  */
 function getValidHistoryTimestampMs(row) {
     if (!row) return null;
 
     const nowMs = Date.now();
-
     const candidateValues = [row.timestamp, row.measurementTime, row.time];
 
     for (const value of candidateValues) {
         if (typeof value === 'number' && Number.isFinite(value)) {
             if (value > 0 && value <= nowMs) {
+                // Return raw timestamp - formatHistoryPopupDateTime() will handle timezone conversion
+                // using timeZone: 'Asia/Ho_Chi_Minh'
                 return value;
             }
             continue;
@@ -197,27 +227,17 @@ function formatDelay(minutes) {
 
 /**
  * Tính độ trễ (phút) theo thời gian đo và thời gian hiện tại.
- * Ưu tiên measurementTime; nếu không hợp lệ thì fallback về row.delayMinutes hoặc 0.
+ * Sử dụng cùng logic timestamp với popup để đảm bảo đồng bộ.
  */
 function getEffectiveDelayMinutes(row) {
     const nowMs = Date.now();
 
-    if (row && row.measurementTime) {
-        let measurementMs = null;
-
-        if (typeof row.measurementTime === 'number') {
-            measurementMs = row.measurementTime;
-        } else {
-            const parsed = Date.parse(row.measurementTime);
-            if (!Number.isNaN(parsed)) {
-                measurementMs = parsed;
-            }
-        }
-
-        if (measurementMs !== null && measurementMs <= nowMs) {
-            const diffMinutes = Math.floor((nowMs - measurementMs) / (1000 * 60));
-            if (diffMinutes >= 0) return diffMinutes;
-        }
+    // Use the same timestamp logic as getRowTimestamp
+    const rowTimestamp = getRowTimestamp(row);
+    
+    if (rowTimestamp !== null && rowTimestamp <= nowMs) {
+        const diffMinutes = Math.floor((nowMs - rowTimestamp) / (1000 * 60));
+        if (diffMinutes >= 0) return diffMinutes;
     }
 
     // Fallback: dùng delayMinutes từ API nếu có, ngược lại 0
@@ -242,6 +262,54 @@ function getMeasurementTimestampMs(value) {
 
     const parsed = Date.parse(value);
     return Number.isNaN(parsed) ? null : parsed;
+}
+
+/**
+ * Get the best timestamp value from a row (same logic as popup).
+ * Checks row.timestamp first, then row.measurementTime, then row.time.
+ * Returns the raw timestamp - timezone conversion is handled by formatDateTime().
+ */
+function getRowTimestamp(row) {
+    if (!row) return null;
+    
+    const nowMs = Date.now();
+    const candidateValues = [row.timestamp, row.measurementTime, row.time];
+
+    for (const value of candidateValues) {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            if (value > 0 && value <= nowMs) {
+                // Return raw timestamp - formatDateTime() will handle timezone conversion
+                // using timeZone: 'Asia/Ho_Chi_Minh'
+                return value;
+            }
+            continue;
+        }
+
+        if (typeof value === 'string') {
+            const trimmedValue = value.trim();
+            if (!trimmedValue || trimmedValue.toUpperCase() === 'N/A') {
+                continue;
+            }
+
+            const normalizedValue = trimmedValue.replace(',', '');
+            const localDateMatch = normalizedValue.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+
+            if (localDateMatch) {
+                const [, day, month, year, hour, minute, second] = localDateMatch;
+                const localMs = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)).getTime();
+                if (!Number.isNaN(localMs) && localMs > 0 && localMs <= nowMs) {
+                    return localMs;
+                }
+            }
+
+            const parsedMs = getMeasurementTimestampMs(trimmedValue);
+            if (parsedMs !== null && parsedMs > 0 && parsedMs <= nowMs) {
+                return parsedMs;
+            }
+        }
+    }
+
+    return null;
 }
 
 /**
@@ -881,6 +949,9 @@ function renderTable() {
             const tr = document.createElement('tr');
             tr.className = colorClass;
             
+            // Get timestamp using same logic as popup (checks timestamp, measurementTime, time)
+            const rowTimestamp = getRowTimestamp(row);
+            
             // Độ trễ hiển thị: tính theo (thời gian đo → thời gian hiện tại)
             const delayMinutes = getEffectiveDelayMinutes(row);
             const statusCellHtml = isDkgStation(row.station) ? '' : createStatusBadge(delayMinutes);
@@ -894,7 +965,7 @@ function renderTable() {
                     <td>${row.parameter || 'N/A'}</td>
                     <td>${row.value !== null && row.value !== undefined ? row.value : 'N/A'}</td>
                     <td>${row.unit || 'N/A'}</td>
-                    <td>${formatDateTime(row.measurementTime)}</td>
+                    <td>${formatDateTime(rowTimestamp)}</td>
                     <td>${formatDelay(delayMinutes)}</td>
                     <td>${statusCellHtml}</td>
                     <td rowspan="${rowCount}">${row.permit || 'N/A'}</td>
@@ -904,7 +975,7 @@ function renderTable() {
                     <td>${row.parameter || 'N/A'}</td>
                     <td>${row.value !== null && row.value !== undefined ? row.value : 'N/A'}</td>
                     <td>${row.unit || 'N/A'}</td>
-                    <td>${formatDateTime(row.measurementTime)}</td>
+                    <td>${formatDateTime(rowTimestamp)}</td>
                     <td>${formatDelay(delayMinutes)}</td>
                     <td>${statusCellHtml}</td>
                 `;

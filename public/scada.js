@@ -413,6 +413,7 @@ function fitScadaViewport() {
 
     if (!availableWidth || !availableHeight) return;
 
+    // Tính scale phù hợp để fit vào viewport
     const scale = Math.min(
         availableWidth / SCADA_CANVAS.width,
         availableHeight / SCADA_CANVAS.height
@@ -420,10 +421,14 @@ function fitScadaViewport() {
 
     const safeScale = Math.max(0.35, scale);
 
+    // Thiết lập kích thước scaler = kích thước scaled để percentage-based children render đúng
     scaler.style.width = `${SCADA_CANVAS.width * safeScale}px`;
     scaler.style.height = `${SCADA_CANVAS.height * safeScale}px`;
-    viewport.style.transform = `scale(${safeScale})`;
-    viewport.style.transformOrigin = 'top left';
+    
+    // Viewport inherit kích thước từ scaler (thông qua CSS flex/grid hoặc auto)
+    // Xóa transform vì scaler đã có kích thước đúng
+    viewport.style.transform = '';
+    viewport.style.transformOrigin = '';
 }
 
 function renderStations() {
@@ -560,5 +565,10 @@ function initScadaPage() {
     if (scadaAutoRefreshTimer) clearInterval(scadaAutoRefreshTimer);
     scadaAutoRefreshTimer = setInterval(() => loadScadaData({ silent: true }), 5 * 60 * 1000);
 }
+
+// Listen for sidebar toggle events from header.js
+window.addEventListener('sidebar:toggled', () => {
+    setTimeout(fitScadaViewport, 100);
+});
 
 document.addEventListener('DOMContentLoaded', initScadaPage);

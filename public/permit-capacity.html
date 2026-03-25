@@ -10,8 +10,8 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/logo.png">
     <title>Công Suất Theo Giấy Phép - Công ty Cổ phần Cấp nước Cà Mau</title>
-    <link rel="stylesheet" href="styles.css?v=20260307mobile">
-    <link rel="stylesheet" href="permit-capacity.css?v=20260321chartfix">
+    <link rel="stylesheet" href="styles.css?v=20260325">
+    <link rel="stylesheet" href="permit-capacity.css?v=20260325">
 </head>
 <body class="loading">
     <!-- Header will be loaded from header.html -->
@@ -358,6 +358,51 @@
         </div>
     </div>
 
+    <!-- Coordinates Config Modal -->
+    <div id="coordinates-config-modal" class="modal">
+        <div class="modal-content" style="max-width: 750px;">
+            <div class="modal-header">
+                <h2>Cấu hình tọa độ marker bản đồ</h2>
+                <button class="modal-close" id="close-coordinates-config">&times;</button>
+            </div>
+            <div style="padding: 16px 24px 0;">
+                <p style="color:#6b7280;font-size:13px;margin-bottom:12px;">
+                    Cập nhật vị trí (latitude, longitude) cho từng trạm quan trắc trên bản đồ.
+                    Nhấn <strong>Lưu</strong> ở từng dòng để áp dụng tọa độ mới. Nhấn <strong>Reset</strong> để khôi phục tọa độ gốc.
+                </p>
+                <div style="display:flex;gap:8px;margin-bottom:10px;">
+                    <input type="text" id="coord-search" placeholder="Tìm kiếm trạm..." style="flex:1;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">
+                    <select id="coord-type-filter" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#fff;">
+                        <option value="all">Tất cả nhóm</option>
+                        <option value="TVA">TVA</option>
+                        <option value="MQTT">MQTT (Tấn Lợi)</option>
+                        <option value="SCADA">SCADA (Đức Hùng)</option>
+                    </select>
+                </div>
+            </div>
+            <div style="padding: 0 24px; overflow-y:auto; max-height:480px;">
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead style="position:sticky;top:0;background:#f9fafb;z-index:1;">
+                        <tr style="border-bottom:2px solid #e5e7eb;">
+                            <th style="padding:8px 6px;text-align:left;color:#374151;font-weight:600;">Trạm</th>
+                            <th style="padding:8px 6px;text-align:center;color:#374151;font-weight:600;width:60px;">Nhóm</th>
+                            <th style="padding:8px 6px;text-align:center;color:#374151;font-weight:600;width:140px;">Latitude</th>
+                            <th style="padding:8px 6px;text-align:center;color:#374151;font-weight:600;width:140px;">Longitude</th>
+                            <th style="padding:8px 6px;text-align:center;color:#374151;font-weight:600;width:120px;">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="coordinates-table-body">
+                        <tr><td colspan="5" style="text-align:center;padding:30px;color:#9ca3af;">Đang tải...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div style="padding:12px 24px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;">
+                <span id="coord-status-msg" style="font-size:13px;color:#6b7280;"></span>
+                <button type="button" class="btn-secondary" id="close-coordinates-config-btn">Đóng</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Daily Capacity Chart Modal -->
     <div id="daily-chart-modal" class="daily-chart-modal-overlay" style="display:none;">
         <div class="daily-chart-modal-box">
@@ -404,14 +449,14 @@
     </div>
 
     <!-- Load header and sidebar first -->
-    <script src="header-loader.js?v=20260307mobile"></script>
-    <script src="sidebar-loader.js?v=20260307mobile"></script>
-    <script src="page-transition.js?v=20260307mobile"></script>
-    <script src="auth.js?v=20260307mobile"></script>
-    <script src="header.js?v=20260307mobile"></script>
-    <script src="visitor-tracker.js?v=20260307mobile"></script>
+    <script src="header-loader.js?v=202603252"></script>
+    <script src="sidebar-loader.js?v=202603252"></script>
+    <script src="page-transition.js?v=202603252"></script>
+    <script src="auth.js?v=202603252"></script>
+    <script src="header.js?v=202603252"></script>
+    <script src="visitor-tracker.js?v=202603252"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-    <script src="permit-capacity.js?v=20260321chartfix"></script>
+    <script src="permit-capacity.js?v=202603252"></script>
     <script>
         // Permit capacity page initialization
         document.addEventListener('DOMContentLoaded', async () => {
