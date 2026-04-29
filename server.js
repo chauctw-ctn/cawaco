@@ -16,7 +16,7 @@ const TELEGRAM_CONFIG_FILE = path.join(DATA_DIR, 'telegram-config.json');
 // Log DATA_DIR location for debugging
 console.log('📂 DATA_DIR for telegram config:', DATA_DIR);
 if (process.env.NODE_ENV === 'production' && !process.env.DATA_DIR) {
-    console.warn('⚠️  CẢNH BÁO: DATA_DIR chưa được set! Config telegram sẽ bị mất khi restart.');
+    //console.warn('⚠️  CẢNH BÁO: DATA_DIR chưa được set! Config telegram sẽ bị mất khi restart.');
     console.warn('   → Vui lòng mount persistent disk và set DATA_DIR=/var/data trong Render');
 }
 
